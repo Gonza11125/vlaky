@@ -1,0 +1,28 @@
+{
+  "id": "cz_175_p21",
+  "line": "175",
+  "name": "Rokycany–Nezvěstice / P21",
+  "country": "CZ",
+  "stops": [
+    {"name": "Rokycany", "km": 0.0, "lat": 49.7436, "lon": 13.5946, "kind": "station"},
+    {"name": "Rokycany předměstí", "km": 1.4, "lat": 49.7389, "lon": 13.6034, "kind": "stop"},
+    {"name": "Kamenný Újezd u Rokycan", "km": 3.5, "lat": 49.7239, "lon": 13.6151, "kind": "stop"},
+    {"name": "Nová Huť", "km": 5.1, "lat": 49.7117, "lon": 13.6282, "kind": "stop"},
+    {"name": "Hrádek u Rokycan", "km": 6.7, "lat": 49.7042, "lon": 13.6525, "kind": "stop"},
+    {"name": "Mirošov", "km": 8.7, "lat": 49.6886, "lon": 13.6599, "kind": "station"},
+    {"name": "Mirošov město", "km": 9.7, "lat": 49.6862, "lon": 13.6697, "kind": "stop"},
+    {"name": "Příkosice zastávka", "km": 11.3, "lat": 49.6766, "lon": 13.6834, "kind": "stop"},
+    {"name": "Příkosice", "km": 12.4, "lat": 49.6679, "lon": 13.6929, "kind": "station"},
+    {"name": "Mešno", "km": 14.4, "lat": 49.6546, "lon": 13.7092, "kind": "stop"},
+    {"name": "Lipnice", "km": 16.2, "lat": 49.6417, "lon": 13.7242, "kind": "stop"},
+    {"name": "Kornatice", "km": 18.5, "lat": 49.6251, "lon": 13.7417, "kind": "stop"},
+    {"name": "Kornatice rybník", "km": 20.0, "lat": 49.6131, "lon": 13.7554, "kind": "stop"},
+    {"name": "Šťáhlavice", "km": 22.6, "lat": 49.5936, "lon": 13.7794, "kind": "stop"},
+    {"name": "Nezvěstice", "km": 26.6, "lat": 49.6405, "lon": 13.5190, "kind": "station"}
+  ],
+  "speed_limits": [
+    {"start_km": 0.0, "end_km": 8.7, "speed_kmh": 80, "note": "pracovní profil"},
+    {"start_km": 8.7, "end_km": 12.4, "speed_kmh": 60, "note": "pracovní profil"},
+    {"start_km": 12.4, "end_km": 26.6, "speed_kmh": 50, "note": "pracovní profil"}
+  ]
+}
