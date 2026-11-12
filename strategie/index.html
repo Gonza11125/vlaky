@@ -38,6 +38,8 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 #tools { display: flex; gap: 6px; }
 .tbtn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; min-height: 28px; }
 .tbtn:hover { border-color: var(--brass); }
+#s-ev { display: inline-flex; gap: 5px; flex-wrap: wrap; } .ev { font-weight: 600; font-size: 12px; color: #1b1608; background: var(--bad); border-radius: 3px; padding: 0 6px; }
+.warnp { color: var(--bad) !important; font-weight: 600; }
 .tbtn.warn { border-color: var(--brass); color: var(--brass); }
 
 #msgs { position: absolute; left: var(--gl); top: 84px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: min(440px, 70%); }
@@ -88,6 +90,10 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .pick { padding: 8px 16px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel-2); }
 .pick.on { border-color: var(--brass); color: var(--brass); }
+details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color: var(--brass); font-family: var(--display); font-size: 17px; letter-spacing: .04em; padding: 4px 0; }
+#net-code { width: 5.5em; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 600 15px var(--body); letter-spacing: .2em; text-transform: uppercase; -webkit-user-select: text; user-select: text; }
+.pick:disabled { opacity: .45; cursor: default; }
+.hint { color: var(--dim); font-size: 12.5px; margin: 6px 0 0; max-width: 62ch; }
 .go.alt { background: var(--panel-2); color: var(--brass); border: 1px solid var(--brass); }
 #touchbar { display: none; position: absolute; left: var(--gl); bottom: calc(100% + 6px); flex-direction: column; gap: 6px; }
 #touchbar button { background: #1b2426EE; border: 1px solid var(--line); border-radius: 4px; padding: 0 12px; min-height: 40px; font-weight: 600; text-align: left; }
@@ -144,6 +150,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
       <span class="res"><b>Lidé</b><em id="s-pop">0/0</em></span>
       <span class="era" id="s-era">Doba kamenná</span>
       <span id="s-time">Rok 1 · Jaro</span>
+      <span id="s-ev"></span>
     </div>
     <div id="tools">
       <button class="tbtn" id="b-idle" title="Najít nečinného vesničana (klávesa tečka)">Nečinní 0</button>
@@ -170,6 +177,8 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
     <div class="card">
       <h1>Věk pokroku</h1>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
+      <details class="how">
+        <summary>Jak se hraje a ovládá</summary>
       <h2>Jak to funguje</h2>
       <ul>
         <li><b>Lidé jedí pořád.</b> Pole rodí od jara do podzimu, v zimě se žije ze zásob a z pastvin. Hlad oslabí všechny.</li>
@@ -185,10 +194,29 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
         <li><b>Klávesy:</b> WASD nebo šipky posun, Q a E otáčení, mezerník pauza, tečka nečinný vesničan, H domů, Ctrl + číslo uloží skupinu a číslo ji vyvolá.</li>
         <li><b>Dotyk:</b> ťuknutím vybereš, dalším ťuknutím dáš rozkaz (jdi, sbírej, stav, útoč). Tažením posouváš mapu, dvěma prsty přibližuješ. Víc jednotek vybereš tlačítkem Výběr tažením, dvojím ťuknutím vybereš všechny stejného druhu.</li>
       </ul>
+      </details>
       <h2>Obtížnost</h2>
-      <div class="row" id="diffs">
+      <div class="row opts" data-k="diff">
         <button class="pick" data-d="0">Lehká</button><button class="pick on" data-d="1">Střední</button><button class="pick" data-d="2">Těžká</button>
       </div>
+      <h2>Agrese soupeře</h2>
+      <div class="row opts" data-k="aggr">
+        <button class="pick" data-d="0">Mírumilovný</button><button class="pick" data-d="1">Opatrný</button><button class="pick on" data-d="2">Běžný</button><button class="pick" data-d="3">Útočný</button>
+      </div>
+      <p class="hint">Mírumilovný soupeř sám nikdy nezaútočí, jen se brání. Hodí se, když chceš hlavně budovat.</p>
+      <h2>Režim</h2>
+      <div class="row opts" data-k="real">
+        <button class="pick on" data-d="0">Klasický</button><button class="pick" data-d="1">Realistický</button>
+      </div>
+      <p class="hint">Realistický režim má bohatší grafiku s počasím a denním světlem a přidává pohromy: povodně, nemoci, požáry, sucho, mráz a kažení zásob. K nim patří nové stavby a objevy, kterými se dá bránit.</p>
+      <h2>Hra proti člověku po síti</h2>
+      <div class="row" style="align-items:center">
+        <button class="pick" id="b-host" disabled>Založit hru</button>
+        <label for="net-code" class="hint" style="margin:0">nebo kód soupeře:</label>
+        <input id="net-code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
+        <button class="pick" id="b-join" disabled>Připojit se</button>
+      </div>
+      <p class="hint" id="net-status">Zjišťuji, jestli je síť dostupná…</p>
       <div class="row" style="align-items:center"><button class="go" id="b-start">Začít novou hru</button><button class="go alt" id="b-continue" hidden>Pokračovat v uložené hře</button></div>
       <p class="lead" style="margin:10px 0 0;font-size:12.5px">Hra se ukládá sama každou chvíli a tlačítkem Uložit, vždy do tohoto prohlížeče na tomto zařízení.</p>
     </div>
@@ -218,4 +246,5 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 <script src="data.js"></script>
 <script src="world.js"></script>
 <script src="game.js"></script>
+<script src="net.js"></script>
 <script src="ui.js"></script>

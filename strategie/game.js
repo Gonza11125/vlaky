@@ -1,7 +1,13 @@
 'use strict';
 // Simulace: scéna, jednotky, budovy, boj, ekonomika, protivník.
 
-const G = { time: 0, speed: 1, paused: true, over: false, diff: 1, snow: 0 };
+const G = { time: 0, speed: 1, paused: true, over: false, diff: 1, snow: 0, aggr: 2, real: false, mode: 'ai' };
+let MY = 0;                                 // tým místního hráče
+const NET = { role: null, code: '', out: [], shots: [], log: [] };
+function say(team, text, cls) { if (team === MY) msg(text, cls); else if (G.mode === 'host') NET.out.push([text, cls || '']); }
+function sayAlert(t) { if (t.team === MY) alertAttack(t.x, t.z, t.isB); else if (G.mode === 'host') NET.out.push(['!', Math.round(t.x), Math.round(t.z), t.isB ? 1 : 0]); }
+const AGG = [0.35, 0.7, 1, 1.25], AGT = [99, 1.8, 1, 0.7];
+const aiFirstAttack = () => [600, 450, 330][G.diff] * AGT[G.aggr];
 const MAXPOP = 90;
 const teams = [], units = [], blds = [], projs = [], puffs = [], animals = [];
 const explored = new Uint8Array(N * N), vis = new Uint8Array(N * N), fogCur = new Uint8Array(N * N).fill(255);
@@ -10,7 +16,7 @@ const PRICE = { food: 30, wood: 30, stone: 45, metal: 90 };
 const byId = new Map();
 let nextId = 1;
 let scene, camera, renderer, sun, terrain, terrainBase, waterMesh;
-let unitMat, bldMat, farmMat, ghostMat, nodeMeshes = {};
+let unitMat, sickMat, bldMat, farmMat, ghostMat, grainTex, weather, nodeMeshes = {};
 const geoCache = {};
 const season = () => Math.floor(G.time / SEASON_LEN) % 4;
 const year = () => Math.floor(G.time / (SEASON_LEN * 4)) + 1;
@@ -22,7 +28,7 @@ const afford = (T, cost) => !cost || Object.keys(cost).every(k => T.res[k] >= co
 function pay(T, cost) { for (const k in cost) T.res[k] -= cost[k]; }
 function refund(T, cost, f) { for (const k in cost) T.res[k] += cost[k] * (f || 1); }
 function missing(T, cost) { return Object.keys(cost).filter(k => T.res[k] < cost[k]).map(k => RES_NAME[k].toLowerCase() + ' ' + Math.ceil(cost[k] - T.res[k])).join(', '); }
-const hasReq = (T, def) => !def.req || def.req.every(r => T.tech[r]);
+const hasReq = (T, def) => !(def.real && !G.real) && (!def.req || def.req.every(r => T.tech[r]));
 const techAvail = (T, id) => { const d = TECHS[id]; return !T.tech[id] && !T.busy[id] && T.era >= d.era && hasReq(T, d); };
 
 // ---------- scéna ----------
@@ -42,6 +48,13 @@ function initScene(canvas) {
   sun.shadow.bias = -0.0008;
   scene.add(sun, sun.target);
   unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  sickMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x9ad36a });
+  const gc = document.createElement('canvas'); gc.width = gc.height = 128; const gx = gc.getContext('2d'), gi = gx.createImageData(128, 128);
+  for (let i = 0; i < 128 * 128; i++) { const x = i % 128, y = (i / 128) | 0, v = 205 + (fbm(x / 9, y / 9, 11) - 0.5) * 60 + (hash2(x, y, 4) - 0.5) * 46; gi.data[i * 4] = v; gi.data[i * 4 + 1] = v + 4; gi.data[i * 4 + 2] = v - 6; gi.data[i * 4 + 3] = 255; }
+  gx.putImageData(gi, 0, 0); grainTex = new THREE.CanvasTexture(gc); grainTex.wrapS = grainTex.wrapT = THREE.RepeatWrapping;
+  const wp = new Float32Array(1600 * 3); for (let i = 0; i < 1600; i++) { wp[i * 3] = (Math.random() - 0.5) * 100; wp[i * 3 + 1] = Math.random() * 45; wp[i * 3 + 2] = (Math.random() - 0.5) * 100; }
+  const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
+  weather = new THREE.Points(wg, new THREE.PointsMaterial({ color: 0xffffff, size: 0.4, transparent: true, opacity: 0.85, depthWrite: false })); weather.frustumCulled = false; weather.visible = false; scene.add(weather);
   bldMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   farmMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   ghostMat = new THREE.MeshBasicMaterial({ color: 0x66ff88, transparent: true, opacity: 0.55, depthWrite: false });
@@ -62,21 +75,22 @@ function terrainColor(i, j, out) {
 }
 function buildTerrain() {
   const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(NV * NV * 3), col = new Float32Array(NV * NV * 3), idx = new Uint16Array(N * N * 6);
+  const pos = new Float32Array(NV * NV * 3), col = new Float32Array(NV * NV * 3), tuv = new Float32Array(NV * NV * 2), idx = new Uint16Array(N * N * 6);
   const c = new THREE.Color();
   for (let j = 0; j < NV; j++) for (let i = 0; i < NV; i++) {
     const k = (j * NV + i) * 3;
-    pos[k] = i * CS; pos[k + 1] = hgt[j * NV + i]; pos[k + 2] = j * CS;
+    pos[k] = i * CS; pos[k + 1] = hgt[j * NV + i]; pos[k + 2] = j * CS; tuv[(j * NV + i) * 2] = i / 5; tuv[(j * NV + i) * 2 + 1] = j / 5;
     terrainColor(i, j, c); col[k] = c.r; col[k + 1] = c.g; col[k + 2] = c.b;
   }
   let o = 0;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const a = j * NV + i, b = a + 1, d = a + NV, e = d + 1; idx[o++] = a; idx[o++] = d; idx[o++] = b; idx[o++] = b; idx[o++] = d; idx[o++] = e; }
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(tuv, 2));
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
   terrainBase = col.slice();
-  terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+  terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: G.real ? grainTex : null }));
   terrain.receiveShadow = true; scene.add(terrain);
   waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 5, WORLD * 5), new THREE.MeshPhongMaterial({ color: 0x3f7391, transparent: true, opacity: 0.84, shininess: 80, specular: 0x99bbcc }));
   waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.set(WORLD / 2, 0, WORLD / 2); waterMesh.renderOrder = 1; scene.add(waterMesh);
@@ -102,8 +116,8 @@ function updateFog() {
   if (G.reveal) { for (let i = 0; i < N * N; i++) { vis[i] = 1; if (!explored[i]) { explored[i] = 1; const id = nodeAt[i]; if (id >= 0) showNode(nodes[id]); } } }
   else {
     vis.fill(0);
-    for (const u of units) if (u.team === 0) reveal(cellOf(u.x), cellOf(u.z), SIGHT[u.def.cls]);
-    for (const b of blds) if (b.team === 0) reveal(cellOf(b.x), cellOf(b.z), !b.done ? 2 + b.size : b.type === 'tower' ? 10 : b.type === 'tc' ? 9 : b.def.wall ? 3 : 4 + b.size);
+    for (const u of units) if (u.team === MY) reveal(cellOf(u.x), cellOf(u.z), SIGHT[u.def.cls]);
+    for (const b of blds) if (b.team === MY) reveal(cellOf(b.x), cellOf(b.z), !b.done ? 2 + b.size : b.type === 'tower' ? 10 : b.type === 'tc' ? 9 : b.def.wall ? 3 : 4 + b.size);
   }
   let ch = false;
   for (let i = 0; i < N * N; i++) { const t = vis[i] ? 0 : explored[i] ? 125 : 255, c = fogCur[i]; if (c !== t) { const v = c + clamp(t - c, -50, 50); fogCur[i] = v; fogData[i * 4 + 3] = v; ch = true; } }
@@ -151,7 +165,8 @@ function buildNodes() {
   }
   for (const n of nodes) setNodeMatrix(n, 0.0001);
 }
-function depleteNode(n) { n.amt = 0; nodeAt[cidx(n.cx, n.cy)] = -1; if (n.mesh) scene.remove(n.mesh); else setNodeMatrix(n, 0.0001); }
+function dropEnt(e) { e.dead = true; byId.delete(e.id); scene.remove(e.mesh); if (e.isB) for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; } }
+function depleteNode(n) { if (G.mode === 'host') NET.log.push([0, n.id]); n.amt = 0; nodeAt[cidx(n.cx, n.cy)] = -1; if (n.mesh) scene.remove(n.mesh); else setNodeMatrix(n, 0.0001); }
 // ---------- zvěř ----------
 let deerG, meatG;
 function addAnimal(x, z) {
@@ -173,6 +188,7 @@ function killAnimal(a) {
   for (let r = 0; r <= 2 && !n; r++) for (let dy = -r; dy <= r && !n; dy++) for (let dx = -r; dx <= r && !n; dx++) n = addNode('meat', cx + dx, cy + dy);
   if (!n) return;
   addMeat(n); n.mesh.rotation.y = a.face;
+  if (G.mode === 'host') NET.log.push([1, n.cx, n.cy, r1(n.x), r1(n.z), r1(a.face)]);
   a.node = n;
 }
 function trade(T, res, buy) {
@@ -219,7 +235,7 @@ function placeBuilding(team, type, cx, cy, instant) {
 }
 function finishBuilding(b) {
   b.done = true; b.prog = 1; b.mesh.scale.y = 1;
-  if (b.team === 0 && !b.def.line) msg(b.def.name + ' – stavba dokončena.');
+  if (!b.def.line) say(b.team, b.def.name + ' – stavba dokončena.');
 }
 function killEnt(e, by) {
   if (e.dead) return; e.dead = true; byId.delete(e.id); scene.remove(e.mesh);
@@ -230,8 +246,8 @@ function killEnt(e, by) {
     for (const q of e.queue) { if (q.kind === 't') delete T.busy[q.id]; }
     if (by) teams[by.team].stats.razed++;
     for (let i = 0; i < 8; i++) puff(e.x + (Math.random() - 0.5) * e.size * 1.6, e.y + 0.5 + Math.random() * 2, e.z + (Math.random() - 0.5) * e.size * 1.6, 0x8a8172, 1.2, 1.6, 1.2);
-    if (e.team === 0 && by && !e.def.line) msg(e.def.name + ' – budova zničena!', 'bad');
-    if (e.type === 'tc') endGame(e.team !== 0);
+    if (by && !e.def.line) say(e.team, e.def.name + ' – budova zničena!', 'bad');
+    if (e.type === 'tc') endGame(e.team);
   }
 }
 function distEnt(u, t) {
@@ -270,7 +286,7 @@ function pathToB(u, b) {
   const r = findPath(cellOf(u.x), cellOf(u.z), b.cx, b.cy, b.cx + b.size - 1, b.cy + b.size - 1, 1);
   setPath(u, r.cells, null); return r.ok;
 }
-function speedOf(u) { let s = u.def.speed; if (u.type === 'vil' && teams[u.team].tech.wheel) s *= 1.1; if (teams[u.team].hungry) s *= 0.8; return s; }
+function speedOf(u) { let s = u.def.speed; if (u.type === 'vil' && teams[u.team].tech.wheel) s *= 1.1; if (teams[u.team].hungry) s *= 0.8; if (u.sick > 0) s *= 0.8; if (G.flood > 0.2 && heightAt(u.x, u.z) < G.flood - 0.1) s *= 0.5; return s; }
 function follow(u, dt) {
   if (!u.path || u.pi >= u.path.length) { u.path = null; return true; }
   let step = speedOf(u) * dt;
@@ -316,7 +332,7 @@ function hurt(t, src, base, cls, pierce, bonus) {
   t.hp -= d;
   const T = teams[t.team];
   T.hit = { x: t.x, z: t.z, time: G.time, by: src };
-  if (t.team === 0) alertAttack(t);
+  sayAlert(t);
   if (t.hp <= 0) { killEnt(t, src); return; }
   if (t.isU && src && src.isU && !src.dead && t.type !== 'vil' && (!t.order || (t.order.type === 'attack' && t.order.auto && t.order.target.isB)))
     orderAttack(t, src, true, t.order && t.order.resume);
@@ -333,6 +349,7 @@ let projGeo;
 function shoot(src, t, kind, dmg, cls, pierce, bonus) {
   if (!projGeo) projGeo = { arrow: box(0.06, 0.06, 1), shot: sph(0.08), rock: new THREE.DodecahedronGeometry(0.32, 0), ball: sph(0.22),
     mats: { arrow: new THREE.MeshBasicMaterial({ color: 0x4a3a28 }), shot: new THREE.MeshBasicMaterial({ color: 0xffe9a0 }), rock: new THREE.MeshLambertMaterial({ color: 0x8d877b }), ball: new THREE.MeshLambertMaterial({ color: 0x2a2a2e }) } };
+  if (G.mode === 'host' && NET.shots.length < 40 && !t.isAnimal) NET.shots.push([src.id, t.id, kind]);
   const sy = src.isB ? src.y + (src.type === 'tower' ? 5 : 3.6) : heightAt(src.x, src.z) + 1.5;
   const m = new THREE.Mesh(projGeo[kind], projGeo.mats[kind]); scene.add(m);
   const d = Math.hypot(t.x - src.x, t.z - src.z);
@@ -348,7 +365,7 @@ function updateProjs(dt) {
     p.m.lookAt(x, y, z); p.m.position.set(x, y, z);
     if (k >= 1) {
       scene.remove(p.m); projs.splice(i, 1);
-      hurt(p.t, p.src && !p.src.dead ? p.src : null, p.dmg, p.cls, p.pierce, p.bonus);
+      if (!p.fx) hurt(p.t, p.src && !p.src.dead ? p.src : null, p.dmg, p.cls, p.pierce, p.bonus);
       if (p.kind === 'rock' || p.kind === 'ball') for (let j = 0; j < 4; j++) puff(x + (Math.random() - 0.5), y, z + (Math.random() - 0.5), 0x9a8f7c, 0.7, 0.9, 1.5);
     }
   }
@@ -375,14 +392,15 @@ function gatherRate(u, n) {
   if (n.type !== 'bush' && T.tech.btools) r *= 1.2;
   if (n.type === 'bush' && season() === 3) r *= 0.5;
   if (T.hungry) r *= 0.6;
-  if (u.team === 1) r *= [0.8, 1, 1.3][G.diff];
+  if (u.sick > 0) r *= 0.5;
+  if (u.team === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff];
   return r;
 }
-function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.mill) r *= 1.15; if (T.hungry) r *= 0.7; if (T.id === 1) r *= [0.8, 1, 1.3][G.diff]; return r; }
+function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.mill) r *= 1.15; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff]; return r; }
 function toDrop(u, o) { o.drop = nearestDrop(u); if (!o.drop) { u.order = null; return; } o.phase = 'drop'; pathToB(u, o.drop); }
 function nextNode(u, o) {
   const n = nearestNode(o.node.type, o.node.x, o.node.z, 30);
-  if (!n) { u.order = null; u.path = null; if (u.team === 0) msg('Vesničan nemá co sbírat – ' + o.node.def.name.toLowerCase() + ' v okolí došel.'); return false; }
+  if (!n) { u.order = null; u.path = null; say(u.team, 'Vesničan nemá co sbírat – ' + o.node.def.name.toLowerCase() + ' v okolí došel.'); return false; }
   o.node = n; o.phase = 'go'; pathTo(u, n.x, n.z); return true;
 }
 function nearestWall(u, r) { let best = null, bd = r; for (const b of blds) { if (b.team === u.team || b.dead || !b.def.wall) continue; const d = distEnt(u, b); if (d < bd) { bd = d; best = b; } } return best; }
@@ -460,7 +478,7 @@ function updateUnit(u, dt) {
     case 'build': {
       const b = o.b;
       if (!b || b.dead) { u.order = null; break; }
-      if (b.done && b.hp >= b.maxHp) {
+      if (b.done && b.hp >= b.maxHp && !(b.fire > 0)) {
         if (b.type === 'farm' && farmFree(b)) { orderFarm(u, b); break; }
         let nb = null, bd = 40;
         for (const x of blds) if (x.team === u.team && !x.done && !x.dead) { const d = distEnt(u, x); if (d < bd) { bd = d; nb = x; } }
@@ -471,6 +489,7 @@ function updateUnit(u, dt) {
       if (d <= 1.7 || (end && d <= 3.2)) {
         u.path = null; faceTo(u, b); u.working = true;
         if (!b.done) { const k = dt / b.def.time; b.prog += k; b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.9 * k); b.mesh.scale.y = 0.12 + 0.88 * Math.min(1, b.prog); if (b.prog >= 1) finishBuilding(b); }
+        else if (b.fire > 0) { b.fireOut = (b.fireOut || 0) + dt * (T.n && T.n.well ? 2 : 1); if (b.fireOut > 5) { b.fire = 0; b.fireOut = 0; say(b.team, b.def.name + ': požár je uhašen.', 'good'); } }
         else b.hp = Math.min(b.maxHp, b.hp + 10 * dt);
       } else if (end) pathToB(u, b);
       break;
@@ -481,7 +500,7 @@ function updateUnit(u, dt) {
       if (b.worker !== u) { if (farmFree(b)) b.worker = u; else { u.order = null; break; } }
       if (u.path) { follow(u, dt); break; }
       const r = farmRate(T);
-      if (r > 0) { T.res.food += r * dt; u.working = true; o.w = (o.w || 0) - dt; if (o.w <= 0) { o.w = 4 + Math.random() * 4; pathTo(u, b.x + (Math.random() - 0.5) * 3.6, b.z + (Math.random() - 0.5) * 3.6); } }
+      if (r > 0 && !(G.flood > 0.2 && b.y < G.flood - 0.1)) { T.res.food += r * dt; u.working = true; o.w = (o.w || 0) - dt; if (o.w <= 0) { o.w = 4 + Math.random() * 4; pathTo(u, b.x + (Math.random() - 0.5) * 3.6, b.z + (Math.random() - 0.5) * 3.6); } }
       break;
     }
   }
@@ -529,8 +548,8 @@ function spawnFrom(b, type) {
 }
 function completeTech(T, id) {
   const d = TECHS[id]; T.tech[id] = true; delete T.busy[id];
-  if (d.setsEra) { T.era = d.setsEra; if (T.id === 0) msg('Nová epocha: ' + ERAS[T.era] + '.', 'good'); else msg('Nepřítel vstoupil do epochy ' + ERAS[T.era] + '.', 'bad'); }
-  else if (T.id === 0) msg('Vyzkoumáno: ' + d.name + '.', 'good');
+  if (d.setsEra) { T.era = d.setsEra; say(T.id, 'Nová epocha: ' + ERAS[T.era] + '.', 'good'); say(1 - T.id, 'Nepřítel vstoupil do epochy ' + ERAS[T.era] + '.', 'bad'); }
+  else say(T.id, 'Vyzkoumáno: ' + d.name + '.', 'good');
   if (id === 'masonry') for (const b of blds) if (b.team === T.id) { const k = b.hp / b.maxHp; b.maxHp = Math.round(b.def.hp * 1.25); b.hp = b.maxHp * k; }
 }
 let popWarn = 0;
@@ -544,7 +563,7 @@ function updateBuilding(b, dt) {
     if (q.t >= q.total) {
       if (q.kind === 't') { completeTech(T, q.id); b.queue.shift(); }
       else if (T.pop < T.cap) { spawnFrom(b, q.id); b.queue.shift(); }
-      else if (b.team === 0 && G.time > popWarn) { popWarn = G.time + 20; msg('Není kde bydlet – postav další domy.', 'bad'); }
+      else if (G.time > (T.popWarn || 0)) { T.popWarn = G.time + 20; say(b.team, 'Není kde bydlet – postav další domy.', 'bad'); }
     }
   }
   if (b.type === 'smelter' && T.res.ore >= 0.5) {
@@ -562,8 +581,8 @@ function knowRate(T) {
 }
 function upkeepRate(T) { let s = 0; for (const u of units) if (u.team === T.id) s += u.def.upkeep; return s / 60 * (T.tech.pottery ? 0.85 : 1); }
 function econ(T, dt) {
-  let cap = 0, past = 0, mill = 0, mkt = 0;
-  for (const b of blds) if (b.team === T.id && b.done) { cap += b.def.pop || 0; if (b.type === 'pasture') past++; else if (b.type === 'mill') mill++; else if (b.type === 'market') mkt++; }
+  let cap = 0, past = 0, mill = 0, mkt = 0; const cn = T.n = {};
+  for (const b of blds) if (b.team === T.id && b.done) { cn[b.type] = (cn[b.type] || 0) + 1; cap += b.def.pop || 0; if (b.type === 'pasture') past++; else if (b.type === 'mill') mill++; else if (b.type === 'market') mkt++; }
   T.cap = Math.min(MAXPOP, cap); T.mill = mill > 0;
   T.res.gold += Math.min(mkt, 2) * 0.15 * dt;
   T.res.know += knowRate(T) * dt;
@@ -571,15 +590,109 @@ function econ(T, dt) {
   T.res.food -= upkeepRate(T) * dt;
   if (T.res.food <= 0) {
     T.res.food = 0;
-    if (!T.hungry) { T.hungry = true; if (T.id === 0) msg('Hladomor! Zásoby jídla došly, lidé slábnou.', 'bad'); }
+    if (!T.hungry) { T.hungry = true; say(T.id, 'Hladomor! Zásoby jídla došly, lidé slábnou.', 'bad'); }
     T.starve += dt;
     if (T.starve > 4) { T.starve = 0; for (const u of units) if (u.team === T.id) { if (u.type === 'vil') u.hp = Math.max(6, u.hp - 3); else { u.hp -= 4; if (u.hp <= 0) killEnt(u, null); } } }
-  } else if (T.hungry && T.res.food > 20) { T.hungry = false; if (T.id === 0) msg('Hlad je zažehnán.', 'good'); }
+  } else if (T.hungry && T.res.food > 20) { T.hungry = false; say(T.id, 'Hlad je zažehnán.', 'good'); }
 }
+
+// ---------- realistický režim: pohromy ----------
+const EV = { season: -1, acc: 0, floodAt: 0, floodT: -1, floodMax: 0, drought: false, frost: false };
+const FLAMMABLE = b => b.done && !b.dead && !['tc', 'tower', 'wall', 'gate', 'well', 'farm', 'pasture', 'smelter'].includes(b.type);
+function foodCap(T) { const n = T.n || {}; return Math.round((300 + 250 * (n.granary || 0) + 100 * ((n.store || 0) + (n.mill || 0))) * (T.tech.pottery ? 1.3 : 1)); }
+function ignite(b) { if (b.fire > 0 || !FLAMMABLE(b)) return; b.fire = 28 + Math.random() * 14; b.fireOut = 0; say(b.team, 'Hoří! ' + b.def.name + ' je v plamenech. Pošli vesničany hasit.', 'bad'); sayAlert(b); }
+function realTick(dt) {
+  const se = season();
+  if (se !== EV.season) {
+    const first = EV.season < 0; EV.season = se; EV.drought = false; EV.frost = false;
+    if (!first || G.time > 30) {
+      if (se === 0 && Math.random() < 0.5) { EV.floodAt = G.time + 8 + Math.random() * 18; for (const T of teams) say(T.id, 'Sníh taje a voda stoupá. Stavby nízko u břehu jsou v ohrožení.', 'bad'); }
+      if (se === 1 && Math.random() < 0.35) { EV.drought = true; for (const T of teams) say(T.id, 'Sucho. Pole dají sotva polovinu úrody a snadno vzplane požár.', 'bad'); }
+      if (se === 3 && Math.random() < 0.35) { EV.frost = true; for (const T of teams) say(T.id, 'Tuhá zima. Na topení padne dvakrát víc dřeva.', 'bad'); }
+    }
+  }
+  G.rain = EV.floodAt > 0 || (EV.floodT >= 0 && EV.floodT < 35) ? 1 : 0;
+  // povodeň: stoupá 10 s, drží 25 s, opadá 15 s
+  if (EV.floodAt && G.time >= EV.floodAt) { EV.floodAt = 0; EV.floodT = 0; EV.floodMax = 0.85 + Math.random() * 0.35; }
+  if (EV.floodT >= 0) {
+    EV.floodT += dt; const t = EV.floodT;
+    G.flood = EV.floodMax * (t < 10 ? t / 10 : t < 35 ? 1 : Math.max(0, 1 - (t - 35) / 15));
+    if (t >= 50) { EV.floodT = -1; G.flood = 0; for (const T of teams) say(T.id, 'Voda opadla.', 'good'); }
+  }
+  // nemocní slábnou každým okamžikem
+  for (const u of units) if (u.sick > 0) {
+    const T = teams[u.team]; let near = false;
+    if (T.n && T.n.healer) for (const b of blds) if (b.team === u.team && b.type === 'healer' && b.done && Math.hypot(b.x - u.x, b.z - u.z) < 14) { near = true; break; }
+    u.sick -= dt * (near ? 3 : 1) * (T.tech.medicine ? 2 : 1);
+    if (!near) { u.hp -= dt * (T.tech.herbs ? 0.3 : 0.6); if (u.hp <= 0) { say(u.team, u.def.name + ' podlehl nemoci.', 'bad'); killEnt(u, null); continue; } }
+    if (u.sick <= 0) { u.sick = 0; u.imm = G.time + 150; }
+  }
+  for (const b of blds) if (b.fire > 0 && !b.dead) { b.fire -= dt; b.hp -= b.maxHp * 0.022 * dt; if (b.hp <= 0) { say(b.team, b.def.name + ' shořel.', 'bad'); killEnt(b, null); } else if (b.fire <= 0 || season() === 3) { b.fire = 0; } }
+  EV.acc += dt; if (EV.acc < 2) return; EV.acc = 0;                       // zbytek jednou za 2 s
+  const lvl = G.flood;
+  for (const T of teams) {
+    const n = T.n || {}, mine = units.filter(u => u.team === T.id);
+    // povodňové škody
+    if (lvl > 0.2) { let hit = 0; for (const b of blds) if (b.team === T.id && !b.dead && b.y < lvl - 0.1) { b.hp -= b.maxHp * 0.03 * (T.tech.dikes ? 0.3 : 1); hit++; if (b.hp <= 0) killEnt(b, null); }
+      if (hit && G.time > (T.floodWarn || 0)) { T.floodWarn = G.time + 60; say(T.id, 'Voda zaplavila tvoje stavby (' + hit + '). Dokud neopadne, ničí je.', 'bad'); } }
+    // topení
+    if (se === 3) { T.res.wood -= mine.length * 0.024 * (EV.frost ? 2 : 1); if (T.res.wood <= 0) { T.res.wood = 0; if (!T.cold) { T.cold = true; say(T.id, 'Došlo dřevo na topení. Lidé mrznou a ztrácejí síly.', 'bad'); } for (const u of mine) u.hp = Math.max(4, u.hp - 0.6); } else T.cold = false; } else T.cold = false;
+    // kažení zásob
+    const cap = foodCap(T); if (T.res.food > cap) { T.res.food -= (T.res.food - cap) * 0.03; if (G.time > (T.rotWarn || 0)) { T.rotWarn = G.time + 150; say(T.id, 'Zásoby se kazí: jídla je víc, než kolik uskladníš (' + cap + '). Postav Sýpku nebo Sklad.', 'bad'); } }
+    // nákaza: šíření a nové ohnisko
+    for (const u of mine) if (u.sick > 0) for (const v of units) if (!(v.sick > 0) && !(v.imm > G.time) && Math.abs(v.x - u.x) < 2.4 && Math.abs(v.z - u.z) < 2.4 && Math.random() < 0.1) v.sick = 40;
+    if (!mine.some(u => u.sick > 0)) {
+      let p = 0.004 + Math.max(0, mine.length - 10) * 0.0012;
+      if ((n.well || 0) * 15 >= mine.length) p *= 0.4; else if (n.well) p *= 0.7;
+      if (T.tech.sanitation) p *= 0.35; if (T.hungry || T.cold) p *= 2; if (se >= 2) p *= 1.4; if (lvl > 0.2) p *= 1.5;
+      if (G.time > 150 && G.time > (T.plagueAt || 0) && Math.random() < p) { T.plagueAt = G.time + 200; const c = mine.filter(u => !(u.imm > G.time)); for (let i = 0; i < 2 && c.length; i++) c.splice(Math.floor(Math.random() * c.length), 1)[0].sick = 40; say(T.id, 'V osadě propukla nemoc. Nemocní slábnou a nakazí každého, kdo je blízko. Pomůže Ošetřovna a odstup.', 'bad'); }
+    }
+    // požáry
+    const fl = blds.filter(b => b.team === T.id && FLAMMABLE(b));
+    if (se !== 3 && G.time > 200 && fl.length && Math.random() < (se === 1 ? 0.004 : 0.0012) * (EV.drought ? 3.5 : 1) * Math.min(3, fl.length / 6)) ignite(fl[Math.floor(Math.random() * fl.length)]);
+  }
+  for (const b of blds) if (b.fire > 0) for (const o of blds) if (o !== b && !(o.fire > 0) && FLAMMABLE(o) && distEnt(o, b) < o.size * CS / 2 + 3 && Math.random() < (EV.drought ? 0.12 : 0.06)) ignite(o);
+}
+
+// ---------- rozkazy hráče (místní i ze sítě) ----------
+function execCmd(team, c) {
+  const T = teams[team]; if (!T || G.over) return;
+  const U = l => (l || []).map(i => byId.get(i)).filter(u => u && u.isU && u.team === team && !u.dead);
+  const B = id => { const b = byId.get(id); return b && b.isB && b.team === team && !b.dead ? b : null; };
+  switch (c[0]) {
+    case 'move': formation(U(c[1]), +c[2], +c[3], (u, x, z) => orderMove(u, x, z, c[4] && u.type !== 'vil')); break;
+    case 'atk': { const t = byId.get(c[2]); if (t && t.team !== team && !t.dead) U(c[1]).forEach(u => orderAttack(u, t)); break; }
+    case 'gather': { const n = nodes[c[2]]; if (!n || n.amt <= 0 || (n.def.req && !T.tech[n.def.req])) break; U(c[1]).forEach(u => u.type === 'vil' ? orderGather(u, n) : orderMove(u, n.x, n.z)); break; }
+    case 'hunt': { const a = animals.find(a => a.id === c[2]); if (a) U(c[1]).forEach(u => orderHunt(u, a)); break; }
+    case 'build': { const b = B(c[2]); if (b) U(c[1]).forEach(u => orderBuild(u, b)); break; }
+    case 'farm': {
+      const b = B(c[2]), vils = U(c[1]).filter(u => u.type === 'vil'); if (!b || !vils.length) break;
+      const free = blds.filter(x => x.team === team && x.type === 'farm' && x.done && (x === b || Math.hypot(x.x - b.x, x.z - b.z) < 30)).sort((a, d) => Math.hypot(a.x - b.x, a.z - b.z) - Math.hypot(d.x - b.x, d.z - b.z));
+      let k = 0; for (const f of free) { if (k >= vils.length) break; if (farmFree(f) || vils.includes(f.worker)) orderFarm(vils[k++], f); }
+      if (!k) say(team, 'Na poli už někdo pracuje. Jedno pole uživí jednoho rolníka.');
+      if (season() === 3) say(team, 'Je zima, pole teď nerodí.');
+      break;
+    }
+    case 'stop': U(c[1]).forEach(orderStop); break;
+    case 'place': {
+      const def = BUILDINGS[c[1]]; if (!def || !def.cost || !hasReq(T, def) || (def.real && !G.real)) break;
+      let first = null;
+      for (const [cx, cy] of (c[2] || []).slice(0, 60)) { if (!canPlace(c[1], cx, cy)) continue; if (!afford(T, def.cost)) { say(team, 'Na celou stavbu nestačily suroviny.', 'bad'); break; } pay(T, def.cost); const nb = placeBuilding(team, c[1], cx, cy, false); first = first || nb; if (!def.line) break; }
+      if (first) U(c[3]).forEach(u => orderBuild(u, first));
+      break;
+    }
+    case 'queue': { const b = B(c[1]); if (!b || !b.done) break; const d = (c[2] === 'u' ? UNITS : TECHS)[c[3]]; if (!d || d.at !== b.type) break; const e = enqueue(b, c[2] === 'u' ? 'u' : 't', c[3]); if (e) say(team, e, 'bad'); break; }
+    case 'unq': { const b = B(c[1]); if (b) cancelQueue(b, b.queue.length - 1); break; }
+    case 'raze': { const b = B(c[1]); if (b && b.type !== 'tc') { if (!b.done) refund(T, b.def.cost, 0.75); killEnt(b, null); } break; }
+    case 'trade': { if (!(c[1] in PRICE) || !blds.some(b => b.team === team && b.type === 'market' && b.done)) break; const e = trade(T, c[1], !!c[2]); if (e) say(team, e, 'bad'); break; }
+    case 'rally': { const b = B(c[1]); if (b) b.rally = { x: +c[2], z: +c[3], node: c[4] >= 0 ? nodes[c[4]] || null : null }; break; }
+  }
+}
+function act(c) { if (G.mode === 'guest') netCmd(c); else execCmd(MY, c); }
 
 // ---------- protivník ----------
 const AI = { acc: 0, attackAt: 0, wave: 0, launch: -999 };
-const AI_TECH = ['agri', 'husbandry', 'era1', 'pottery', 'writing', 'bronze', 'wheel', 'btools', 'bweap', 'masonry', 'horses', 'era2', 'iron', 'math', 'plow', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
+const AI_TECH = ['agri', 'husbandry', 'era1', 'pottery', 'herbs', 'writing', 'bronze', 'wheel', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'plow', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
 function findSpot(type, ax, ay, margin) {
   const s = BUILDINGS[type].size;
   for (let r = 3; r < 22; r++) {
@@ -646,7 +759,8 @@ function aiTick() {
   if (!my.some(b => !b.done && b.type !== 'house')) {
     const farmT = Math.min(10, Math.ceil(nV * 0.4));
     const wish = [['barracks', 1, G.time > 100], ['farm', farmT, T.tech.agri && !winter], ['range', 1, G.time > 240], ['pasture', 2, T.tech.husbandry], ['library', 1, T.tech.writing], ['smelter', 1, T.tech.bronze], ['smithy', 1, T.tech.bronze],
-      ['library', 3, T.tech.writing && T.era >= 2], ['stable', 1, T.tech.horses && T.era >= 2], ['tower', 2, T.tech.masonry], ['smelter', 2, T.res.ore > 80], ['workshop', 1, T.tech.mechanics], ['barracks', 2, T.era >= 3]];
+      ['library', 3, T.tech.writing && T.era >= 2], ['stable', 1, T.tech.horses && T.era >= 2], ['tower', 2, T.tech.masonry], ['smelter', 2, T.res.ore > 80], ['workshop', 1, T.tech.mechanics], ['barracks', 2, T.era >= 3], ['well', 1 + (T.pop > 25 ? 1 : 0), G.real], ['granary', 1, G.real && T.tech.agri && T.res.food > 250], ['healer', 1, G.real && T.tech.herbs]];
+    for (const b of my) if (b.fire > 0 && vils.filter(v => v.order && v.order.type === 'build' && v.order.b === b).length < 2) { const v = vils.find(v => !v.order || v.order.type === 'gather'); if (v) orderBuild(v, b); }
     for (const [type, n, cond] of wish) { if (!cond || cnt(type) >= n) continue; aiBuild(type, tc.cx + 1, tc.cy + 1); break; }
   }
   // výzkum
@@ -660,7 +774,7 @@ function aiTick() {
     break;
   }
   // vojsko
-  const armyT = Math.min([18, 30, 44][D], 3 + Math.floor(G.time / 60 * [0.8, 1.2, 1.7][D]));
+  const armyT = Math.round(Math.min([18, 30, 44][D], 3 + Math.floor(G.time / 60 * [0.8, 1.2, 1.7][D])) * AGG[G.aggr]);
   if (army.length < armyT) {
     const prefs = { barracks: ['sword', 'spear'], range: ['musket', 'xbow', 'archer'], stable: ['knight', 'rider'], workshop: ['cannon', 'catapult'] };
     const siege = army.filter(u => u.def.cls === 'siege').length;
@@ -670,10 +784,10 @@ function aiTick() {
   // útok a obrana
   const home = { x: tc.x + (teams[0].tcx - tc.x) * 0.12, z: tc.z + (teams[0].tcz - tc.z) * 0.12 };
   const attacking = G.time - AI.launch < 200;
-  if (G.time >= AI.attackAt && army.length >= Math.min(armyT * 0.7, 5 + AI.wave * 3)) {
-    AI.attackAt = G.time + [260, 210, 170][D]; AI.wave++; AI.launch = G.time;
+  if (G.aggr > 0 && G.time >= AI.attackAt && army.length >= Math.min(armyT * 0.7, 5 + AI.wave * 3)) {
+    AI.attackAt = G.time + [260, 210, 170][D] * AGT[G.aggr]; AI.wave++; AI.launch = G.time;
     const tgt = aiTarget(tc);
-    if (tgt) { formation(army, tgt.x, tgt.z, (u, x, z) => orderMove(u, x, z, true)); msg('Zvědové hlásí: nepřátelské vojsko vyrazilo k tvé osadě!', 'bad'); }
+    if (tgt) { formation(army, tgt.x, tgt.z, (u, x, z) => orderMove(u, x, z, true)); say(0, 'Zvědové hlásí: nepřátelské vojsko vyrazilo k tvé osadě!', 'bad'); }
   } else {
     const hit = T.hit && G.time - T.hit.time < 5 && Math.hypot(T.hit.x - tc.x, T.hit.z - tc.z) < 60 ? T.hit : null;
     for (const u of army) {
@@ -696,26 +810,37 @@ function simStep(dt) {
   for (const b of blds) if (!b.dead) updateBuilding(b, dt);
   updateProjs(dt);
   for (const T of teams) econ(T, dt);
-  AI.acc += dt; if (AI.acc >= 1) { AI.acc = 0; aiTick(); }
+  if (G.real) realTick(dt);
+  AI.acc += dt; if (AI.acc >= 1) { AI.acc = 0; if (G.mode === 'ai') aiTick(); }
   for (let i = units.length - 1; i >= 0; i--) if (units[i].dead) units.splice(i, 1);
   for (let i = blds.length - 1; i >= 0; i--) if (blds[i].dead) blds.splice(i, 1);
 }
-function endGame(win) { if (G.over) return; G.over = true; G.paused = true; showEnd(win); }
+function endGame(loser) { if (G.over) return; G.over = true; G.loser = loser; G.paused = true; showEnd(loser !== MY); }
 
 function resetWorld() {
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
   units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
   byId.clear(); nodeMeshes = {}; nextId = 1;
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
-  Object.assign(G, { time: 0, over: false, reveal: false, snow: 0 });
+  Object.assign(G, { time: 0, over: false, reveal: false, snow: 0, flood: 0, rain: 0 });
+  Object.assign(EV, { season: -1, acc: 0, floodAt: 0, floodT: -1, floodMax: 0, drought: false, frost: false });
   Object.assign(AI, { acc: 0, wave: 0, launch: -999 });
   Object.assign(PRICE, { food: 30, wood: 30, stone: 45, metal: 90 });
+}
+function applyLook() {
+  const r = G.real;
+  renderer.toneMapping = r ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; renderer.toneMappingExposure = 1.3;
+  for (const m of [unitMat, sickMat, bldMat, farmMat]) m.needsUpdate = true;
+  const sz = G.coarse ? 1024 : r ? 4096 : 2048;
+  if (sun.shadow.mapSize.x !== sz) { sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  weather.visible = false;
 }
 function addMeat(n) { n.mesh = new THREE.Mesh(meatG || (meatG = meatGeo()), unitMat); n.mesh.position.set(n.x, heightAt(n.x, n.z), n.z); n.mesh.visible = !!explored[cidx(n.cx, n.cy)]; scene.add(n.mesh); }
 function newGame(diff, sv) {
   resetWorld();
-  G.diff = sv ? sv.G.diff : diff; AI.attackAt = [600, 450, 330][G.diff];
+  if (sv) Object.assign(G, sv.G); else G.diff = diff; AI.attackAt = aiFirstAttack();
   teams.push(mkTeam(0), mkTeam(1));
+  applyLook();
   G.seed = makeWorld(sv ? sv.seed : null); G.baseNodes = nodes.length;
   buildTerrain();
   if (sv) { loadState(sv); return; }
@@ -758,18 +883,18 @@ function saveState() {
   for (let i = 0; i < N * N; i++) if (explored[i]) bytes[i >> 3] |= 1 << (i & 7);
   for (let i = 0; i < bytes.length; i++) bits += String.fromCharCode(bytes[i]);
   return {
-    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow },
-    AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
+    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real },
+    AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, EV: Object.assign({}, EV), flood: G.flood, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
     teams: teams.map(T => ({ res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
     amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),
     meat: nodes.slice(G.baseNodes).map(n => [n.cx, n.cy, r1(n.x), r1(n.z), Math.round(n.amt), r1(n.v)]),
-    blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
-    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, face: r1(u.face), o: packOrder(u.order) })),
+    blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, fire: b.fire || 0, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
+    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, face: r1(u.face), sick: u.sick || 0, imm: u.imm || 0, o: packOrder(u.order) })),
     animals: animals.filter(a => !a.dead).map(a => [a.id, r1(a.x), r1(a.z), r1(a.hx), r1(a.hz), a.hp]),
   };
 }
 function loadState(sv) {
-  Object.assign(G, sv.G); Object.assign(AI, sv.AI); Object.assign(PRICE, sv.PRICE);
+  Object.assign(G, sv.G); Object.assign(AI, sv.AI); Object.assign(PRICE, sv.PRICE); if (sv.EV) Object.assign(EV, sv.EV); G.flood = sv.flood || 0;
   const bits = atob(sv.explored); for (let i = 0; i < N * N; i++) explored[i] = (bits.charCodeAt(i >> 3) >> (i & 7)) & 1;
   sv.teams.forEach((t, i) => Object.assign(teams[i], t));
   sv.amt.forEach((a, i) => { const n = nodes[i]; if (!n) return; n.amt = a; if (a <= 0) nodeAt[cidx(n.cx, n.cy)] = -1; });
@@ -777,13 +902,13 @@ function loadState(sv) {
   for (const m of sv.meat) { const n = { id: nodes.length, isNode: true, type: 'meat', def: NODE_DEF.meat, cx: m[0], cy: m[1], x: m[2], z: m[3], amt: m[4], inst: -1, v: m[5] }; nodes.push(n); if (n.amt > 0) { nodeAt[cidx(n.cx, n.cy)] = n.id; addMeat(n); } }
   for (const s of sv.blds) {
     nextId = s.id; const b = placeBuilding(s.team, s.type, s.cx, s.cy, s.done);
-    b.hp = s.hp; b.maxHp = s.maxHp; b.prog = s.prog; b.queue = s.queue; b.seen = s.seen; b.mesh.scale.y = s.done ? 1 : 0.12 + 0.88 * Math.min(1, s.prog);
+    b.hp = s.hp; b.maxHp = s.maxHp; b.prog = s.prog; b.queue = s.queue; b.seen = s.seen; b.fire = s.fire || 0; b.mesh.scale.y = s.done ? 1 : 0.12 + 0.88 * Math.min(1, s.prog);
     if (s.rally) b.rally = { x: s.rally.x, z: s.rally.z, node: s.rally.n >= 0 ? nodes[s.rally.n] : null };
   }
   const anim = new Map();
   for (const a of sv.animals) { nextId = a[0]; const an = addAnimal(a[1], a[2]); an.hx = a[3]; an.hz = a[4]; an.hp = a[5]; anim.set(an.id, an); }
   const pend = [];
-  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype; u.face = s.face; pend.push([u, s.o]); }
+  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype; u.face = s.face; u.sick = s.sick || 0; u.imm = s.imm || 0; pend.push([u, s.o]); }
   for (const [u, p] of pend) {
     const o = u.order = unpackOrder(u, p, anim); if (!o) continue;
     if (o.type === 'move') pathTo(u, o.x, o.z);

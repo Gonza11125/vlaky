@@ -67,10 +67,16 @@ const BUILDINGS = {
               desc: 'Kamenná zeď. Pěchota ji bourá pomalu, obléhací stroje rychle. Klikni na začátek a pak na konec úseku.' },
   gate:     { name: 'Brána', size: 1, hp: 700, time: 12, wall: true, gate: true, cost: { wood: 40 },
               desc: 'Tvoji lidé projdou, nepřítel ne. Postav ji do mezery v hradbě.' },
+  granary:  { name: 'Sýpka', size: 2, hp: 600, time: 20, real: true, req: ['agri'], cost: { wood: 70 },
+              desc: 'Suchý sklad na obilí. Uskladní dalších 250 jídla; co se nevejde, to se kazí.' },
+  well:     { name: 'Studna', size: 1, hp: 400, time: 14, real: true, cost: { wood: 10, stone: 40 },
+              desc: 'Čistá voda snižuje riziko nákazy a je po ruce při hašení požárů. Jedna studna stačí asi pro 15 lidí.' },
+  healer:   { name: 'Ošetřovna', size: 2, hp: 500, time: 24, real: true, req: ['herbs'], cost: { wood: 70, stone: 20 },
+              desc: 'Nemocní v okolí se uzdraví třikrát rychleji a nemoc jim neubírá životy. Léčí i raněné.' },
   tower:    { name: 'Věž', size: 1, hp: 900, time: 26, req: ['masonry'], atk: 8, range: 12, cd: 1.5, cost: { wood: 20, stone: 90 },
               desc: 'Kamenná strážní věž. Sama střílí na nepřátele v dosahu.' },
 };
-const BUILD_ORDER = ['house', 'store', 'farm', 'mill', 'pasture', 'barracks', 'range', 'palisade', 'gate', 'library', 'smelter', 'smithy', 'market', 'stable', 'workshop', 'wall', 'tower'];
+const BUILD_ORDER = ['house', 'store', 'farm', 'mill', 'pasture', 'barracks', 'range', 'palisade', 'gate', 'library', 'smelter', 'smithy', 'market', 'stable', 'workshop', 'wall', 'tower', 'granary', 'well', 'healer'];
 
 // era = nejnižší epocha, ve které jde technologii zkoumat; setsEra = postup do epochy
 const TECHS = {
@@ -80,6 +86,8 @@ const TECHS = {
                desc: 'V pálených nádobách se zásoby nekazí. Spotřeba jídla −15 %.' },
   husbandry: { name: 'Chov dobytka', era: 0, at: 'tc', cost: { know: 25, food: 50 }, time: 25,
                desc: 'Ochočené ovce a kozy. Odemyká Pastvinu, která živí i v zimě.' },
+  herbs:     { name: 'Bylinkářství', era: 0, at: 'tc', real: true, cost: { know: 20 }, time: 20,
+               desc: 'Odvary a obklady. Nemoc ubírá o polovinu méně životů. Odemyká Ošetřovnu.' },
   era1:      { name: 'Doba bronzová', era: 0, at: 'tc', setsEra: 1, req: ['agri'], cost: { know: 50, food: 150 }, time: 40,
                desc: 'Usedlý život a přebytky úrody uživí řemeslníky. Postup do další epochy.' },
 
@@ -95,6 +103,8 @@ const TECHS = {
                desc: 'Kůň pod sedlem. Odemyká Stáj a Jezdce.' },
   currency:  { name: 'Ražba mincí', era: 1, at: 'tc', cost: { know: 35, wood: 40 }, time: 25,
                desc: 'Kov se stejnou vahou a značkou vládce. Odemyká Tržiště.' },
+  dikes:     { name: 'Hráze', era: 1, at: 'tc', real: true, cost: { know: 40, stone: 80 }, time: 30,
+               desc: 'Náspy a odvodňovací strouhy. Povodeň ničí stavby jen třetinovou silou.' },
   btools:    { name: 'Kovové nástroje', era: 1, at: 'smithy', cost: { know: 30, metal: 30 }, time: 25,
                desc: 'Sekery, krumpáče a dláta z kovu. Těžba dřeva, kamene a rudy +20 %.' },
   bweap:     { name: 'Kovové hroty', era: 1, at: 'smithy', cost: { know: 35, metal: 40 }, time: 25,
@@ -110,6 +120,8 @@ const TECHS = {
                desc: 'Geometrie a počty. Vědění +25 %, základ pro mechaniku.' },
   mechanics: { name: 'Mechanika', era: 2, at: 'library', req: ['math'], cost: { know: 100, wood: 100 }, time: 40,
                desc: 'Páka, kladka a torzní pružina. Odemyká Dílnu a Katapult.' },
+  medicine:  { name: 'Medicína', era: 2, at: 'library', real: true, cost: { know: 90 }, time: 35,
+               desc: 'Lékaři popisují příznaky a oddělují nemocné. Nemoc trvá o polovinu kratší dobu.' },
   era3:      { name: 'Středověk', era: 2, at: 'tc', setsEra: 3, req: ['iron', 'math'], cost: { know: 260, food: 500, metal: 150, gold: 120 }, time: 60,
                desc: 'Postup do další epochy.' },
 
@@ -123,6 +135,8 @@ const TECHS = {
                desc: 'Ocelový luk s napínákem. Odemyká Kušiníka.' },
   university:{ name: 'Univerzity', era: 3, at: 'library', cost: { know: 150, stone: 150, gold: 80 }, time: 45,
                desc: 'Učenci se sdružují a přou. Vědění +40 %.' },
+  sanitation:{ name: 'Kanalizace', era: 3, at: 'tc', real: true, cost: { know: 120, stone: 150 }, time: 40,
+               desc: 'Stoky odvádějí splašky od studní. Nákaza propuká mnohem vzácněji.' },
   era4:      { name: 'Novověk', era: 3, at: 'tc', setsEra: 4, req: ['steel', 'university'], cost: { know: 500, food: 700, metal: 300, gold: 250 }, time: 70,
                desc: 'Postup do poslední epochy.' },
 
