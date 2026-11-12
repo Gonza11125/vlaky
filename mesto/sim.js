@@ -90,7 +90,7 @@ function servProblem(type, x, y) {
   if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
   if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
   for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
-  if (d.water && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
+  if (d.coast && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
   if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
   let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
   if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
@@ -102,7 +102,7 @@ function placeServ(type, x, y) {
   if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
   if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
   for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
-  if (d.water && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
+  if (d.coast && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
   if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
   let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
   if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
@@ -230,7 +230,7 @@ function analysis() {
       - poll[k] * 0.55 - crime[k] * 0.25 - Math.max(0, nearTraf - 0.7) * 10 - (flood[k] ? 15 : 0);
     lv[k] = clamp(v, 0, 100);
     if (!isBuilt(k) || zone[k] === 3) { crime[k] *= 0.9; continue; }
-    const cr = (8 + T.unemp * 90 + (1 - (zone[k] === 1 ? eduT[k] : T.eduRate)) * 12 + (100 - lv[k]) * 0.18 + S.radical * 0.12) * (dens[k] ? 1.2 : 1) * (1 - Math.min(1, cov.police[k] * polF) * 0.75) * crimeMul;
+    const cr = (8 + T.unemp * 90 + (1 - (zone[k] === 1 ? eduT[k] : T.eduRate)) * 12 + (100 - lv[k]) * 0.18 + S.radical * 0.12) * (dens[k] ? 1.2 : 1) * (1 - Math.min(1, cov.police[k] * polF) * 0.75) * crimeMul * Math.min(1, 0.35 + pop / 6000);
     crime[k] = clamp(cr, 0, 100); crS += crime[k] * occ[k]; crW += occ[k];
     if (zone[k] === 1) {
       const h = 52 + cov.health[k] * 10 + cov.edu[k] * 7 + Math.min(1, cov.police[k]) * 6 + Math.min(1, cov.park[k]) * 9 + lv[k] * 0.12 - poll[k] * 0.35 - crime[k] * 0.3 - Math.max(0, nearTraf - 0.8) * 8 - (pw[k] ? 0 : 15) - (wt[k] ? 0 : 15);
@@ -243,7 +243,7 @@ function analysis() {
   // zdraví
   let hs = 0; for (let k = 0; k < NN; k++) if (zone[k] === 1 && isBuilt(k)) hs += Math.min(1, cov.health[k]) * occ[k];
   const sewOk = pop < 8000 ? 1 : Math.min(1, T.sCap / pop);
-  T.healthT = clamp((pop ? hs / pop : 0.8) * 60 + sewOk * 25 + 15 - T.pollR * 0.3 - (S.epi ? S.epi.sick * 300 : 0), 0, 100);
+  T.healthT = clamp((pop ? hs / pop : 0.8) * 60 + sewOk * 25 + 15 + Math.max(0, 1 - pop / 4000) * 30 - T.pollR * 0.3 - (S.epi ? S.epi.sick * 300 : 0), 0, 100);
   // svoboda a globální nálada
   let fr = 100; for (const p in S.pol) if (S.pol[p] && POLICY_FREEDOM[p]) fr += POLICY_FREEDOM[p]; if (S.martial > 0) fr -= 30;
   T.freedomT = clamp(fr, 0, 100);
@@ -251,9 +251,9 @@ function analysis() {
   T.mods = mods; T.happyT = clamp(T.localHappy + mods.reduce((a, m) => a + m[1], 0), 0, 100);
   // poptávka
   const tx = z => (S.tax[z] - 9) * 0.045, rec = S.recession > 0 ? 1 : 0;
-  const Ct = pop * 0.15, Ot = pop * 0.2 * T.eduRate, It = Math.max(pop * 0.12, work - Ct - Ot), free = (work * 1.03 - jobsCap) / (work + 300);
+  const Ct = pop * 0.2, Ot = pop * 0.22 * T.eduRate, It = Math.max(pop * 0.12, work - Ct - Ot), free = (work * 1.03 - jobsCap) / (work + 300);
   T.dem = {
-    1: clamp(0.7 * (jobsCap * 0.97 - work) / (work + 300) + (S.happy - 55) / 90 - tx('R') + (pop < 300 ? 0.4 : 0) - (S.short.food ? 0.3 : 0), -1, 1),
+    1: clamp(0.7 * (jobsCap * 0.97 - work) / (work + 300) + (S.happy - 50) / 110 - tx('R') + (pop < 300 ? 0.4 : 0) - (S.short.food ? 0.3 : 0), -1, 1),
     2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
     3: clamp(0.5 * (It - cap[3]) / (cap[3] + 150) + 0.6 * free + (pop > 0 && pop < 300 ? 0.3 : 0) - tx('I') - (S.pol.ecolaw ? 0.15 : 0) - (S.pol.minwage ? 0.08 : 0) - rec * 0.25, -1, 1),
     4: clamp(0.5 * (Ot - cap[4]) / (cap[4] + 150) + 0.6 * free - tx('O') + (S.pol.bizsupport ? 0.15 : 0) + (S.techs.banking ? 0.1 : 0) - rec * 0.2 - (S.short.tech ? 0.25 : 0), -1, 1),
@@ -363,13 +363,13 @@ function firesDay() {
     if (chance(c * 0.5 + (S.techs.firecode ? 0.08 : 0))) { fire[k] = 0; markDirty(k); continue; }
     fire[k]++;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (chance(0.11 * (1 - c * 0.8) * (S.heat > 0 ? 1.6 : 1))) igniteTile(n, true); }
-    if (fire[k] > 5 + (k % 4)) destroyTile(k, 'shořel');
+    if (fire[k] > 5 + (k % 4)) destroyTile(k, 'shořela');
   }
   if (burning.length >= 6 && !S.inc.some(i => i.type === 'bigfire')) { const k = burning[0]; addInc({ type: 'bigfire', x: k % N, y: (k / N) | 0 }); }
 }
 function destroyTile(k, why) {
   fire[k] = 0;
-  if (bld[k]) { const b = blds.get(bld[k]); if (b.type === 'townhall') { b.off = 60; covDirty = true; note('Radnice je těžce poškozená. Úřad dva měsíce nefunguje.', 'bad', k); return; } removeBuilding(b); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) { const t = idx(i, j); ruin[t] = 40; lvl[t] = 0; markDirty(t); } covDirty = true; note(SERV[b.type].name + ' ' + (why || 'byla zničena') + '.', 'bad', k); return; }
+  if (bld[k]) { const b = blds.get(bld[k]); if (b.type === 'townhall') { b.off = 60; covDirty = true; note('Radnice je těžce poškozená. Úřad dva měsíce nefunguje.', 'bad', k); return; } removeBuilding(b); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) { const t = idx(i, j); ruin[t] = 40; lvl[t] = 0; markDirty(t); } covDirty = true; note('Budova „' + SERV[b.type].name + '“ ' + (why || 'byla zničena') + '.', 'bad', k); return; }
   if (!lvl[k]) return;
   const lost = zone[k] === 1 ? occ[k] : 0;
   lvl[k] = 0; occ[k] = 0; aband[k] = 0; ruin[k] = 35 + ((k * 7) % 20); markDirty(k);
@@ -632,7 +632,7 @@ function monthlyTrade() {
   // smlouvy se sousedy
   for (const n of S.nb) { const c = n.contract; if (!c || n.war) continue;
     const q = Math.min(c.q, tradeCapLeft());
-    if (c.sell) { const s = Math.min(q, Math.max(0, S.stock[c.g])); S.stock[c.g] -= s; out.net += s * c.price; out.sold[c.g] += s; S.tradeUsed += s; if (s < c.q * 0.8) { n.rel -= 3; note(n.name + ': nedodal jsi smluvené ' + GOODS[c.g].name.toLowerCase() + '.', 'bad'); } else n.rel += 0.6; }
+    if (c.sell) { const s = Math.min(q, Math.max(0, S.stock[c.g])); S.stock[c.g] -= s; out.net += s * c.price; out.sold[c.g] += s; S.tradeUsed += s; if (s < c.q * 0.8) { n.rel -= 3; note('Město ' + n.name + ' si stěžuje: nedodal jsi smluvené ' + GOODS[c.g].name.toLowerCase() + '.', 'bad'); } else n.rel += 0.6; }
     else { S.stock[c.g] += q; out.net -= q * c.price; out.bought[c.g] += q; S.tradeUsed += q; n.rel += 0.6; }
     if (--c.months <= 0) { n.contract = null; note('Smlouva s městem ' + n.name + ' vypršela.'); }
   }
@@ -701,7 +701,7 @@ function quake() {
   covDirty = true; S.mood -= 3;
   FX.push({ t: 'shake', s: mag });
   addInc({ type: 'quake', x: W.cx, y: W.cy, size: n });
-  note('Zemětřesení o síle ' + (4 + mag * 2).toFixed(1).replace('.', ',') + '! Zřítilo se ' + n + ' budov.', 'bad');
+  note('Zemětřesení o síle ' + (4 + mag * 2).toFixed(1).replace('.', ',') + '! Zřícených budov: ' + n + '.', 'bad');
 }
 function storm() {
   const y0 = Math.random() * N, ang = (Math.random() - 0.5) * 1.2; let n = 0;
@@ -709,7 +709,7 @@ function storm() {
     if (ter[k] === 3 && chance(0.4)) { ter[k] = 0; markDirty(k); }
     if (isBuilt(k) && !dens[k] && chance(0.25)) { destroyTile(k); n++; } } }
   FX.push({ t: 'storm', y0, ang });
-  note('Vichřice prošla městem a poničila ' + n + ' budov.', 'bad');
+  note('Vichřice prošla městem. Zničených budov: ' + n + '.', 'bad');
 }
 function startEpidemic() {
   S.epi = { sick: 0.008, imm: 0, dead: 0, campaign: 0 };
@@ -802,7 +802,7 @@ function neighborsMonthly() {
     if (n.rel < -40 && chance(0.06 * N0.aggr * k)) neighborSabotage(i);
     if (n.rel < -75 && N0.aggr > 0.3 && !S.asks.some(a => a.kind === 'ultimatum') && chance(0.18 * N0.aggr * k)) {
       const sum = Math.round(Math.max(1000000, T.pop * 60) / 100000) * 100000;
-      ask({ kind: 'ultimatum', nb: i, sum, title: 'Ultimátum: ' + n.name, text: n.name + ' obviňuje tvé město z nepřátelství a žádá odškodné ' + money(sum) + '. Jinak hrozí válkou. Jejich armáda má asi ' + fmt(n.strength) + ' vojáků, tvoje ' + fmt(S.soldiers) + '.',
+      ask({ kind: 'ultimatum', nb: i, sum, title: 'Ultimátum: ' + n.name, text: 'Město ' + n.name + ' obviňuje tvé město z nepřátelství a žádá odškodné ' + money(sum) + '. Jinak hrozí válkou. Jejich armáda má asi ' + fmt(n.strength) + ' vojáků, tvoje ' + fmt(S.soldiers) + '.',
         opts: [{ id: 'pay', label: 'Zaplatit ' + money(sum), hint: 'Napětí opadne.' }, { id: 'apologize', label: 'Veřejně se omluvit', hint: 'Vztahy se zlepší, doma to někoho naštve.' }, { id: 'refuse', label: 'Odmítnout', hint: 'Válka.' }] });
     }
   });
@@ -810,8 +810,8 @@ function neighborsMonthly() {
 function neighborSabotage(i) {
   const n = S.nb[i], found = T.intel > 0 && chance(0.5 + 0.3 * Math.min(1, T.intel));
   const plants = [...blds.values()].filter(b => SERV[b.type].power && b.ok);
-  if (plants.length && chance(0.5)) { const b = pickOne(plants); b.off = 20; covDirty = true; FX.push({ t: 'boom', k: idx(b.x, b.y), small: true }); note('Sabotáž! ' + SERV[b.type].name + ' je mimo provoz.' + (found ? ' Tajná služba ukazuje na ' + n.name + '.' : ''), 'bad', idx(b.x, b.y)); }
-  else { S.radical += 4; note('Ve městě se šíří štvavé letáky a falešné zprávy.' + (found ? ' Stojí za tím ' + n.name + '.' : ''), 'bad'); }
+  if (plants.length && chance(0.5)) { const b = pickOne(plants); b.off = 20; covDirty = true; FX.push({ t: 'boom', k: idx(b.x, b.y), small: true }); note('Sabotáž! ' + SERV[b.type].name + ' je mimo provoz.' + (found ? ' Tajná služba ukazuje na město ' + n.name + '.' : ''), 'bad', idx(b.x, b.y)); }
+  else { S.radical += 4; note('Ve městě se šíří štvavé letáky a falešné zprávy.' + (found ? ' Stojí za tím město ' + n.name + '.' : ''), 'bad'); }
   if (found) n.rel -= 5;
 }
 function nbAction(i, act) {
@@ -819,25 +819,25 @@ function nbAction(i, act) {
   const disc = p => chance(p * (1 - 0.4 * Math.min(1, T.intel)));
   switch (act) {
     case 'gift': if (S.day - n.gift < 180) return 'Dar jsi posílal nedávno.'; if (!canAfford(300000)) return 'Nemáš dost peněz.'; spend(300000); n.rel += 8 * dip; n.gift = S.day; note('Dar městu ' + n.name + ' potěšil.', 'good'); break;
-    case 'visit': if (S.day - n.visit < 90) return 'Návštěva byla nedávno.'; if (!canAfford(60000)) return 'Nemáš dost peněz.'; spend(60000); n.rel += 3 * dip; n.visit = S.day; note('Přátelská návštěva v ' + n.name + '.', 'good'); break;
+    case 'visit': if (S.day - n.visit < 90) return 'Návštěva byla nedávno.'; if (!canAfford(60000)) return 'Nemáš dost peněz.'; spend(60000); n.rel += 3 * dip; n.visit = S.day; note('Přátelská návštěva ve městě ' + n.name + '.', 'good'); break;
     case 'insult': n.rel -= 15; S.mood += 1; note('Ostrá diplomatická nóta městu ' + n.name + '. Doma potlesk, u sousedů pobouření.'); break;
-    case 'propaganda': if (!T.intel) return 'Potřebuješ tajnou službu.'; if (!canAfford(200000)) return 'Nemáš dost peněz.'; spend(200000); if (n.war) n.strength *= 0.92; if (disc(0.3)) { n.rel -= 25; note(n.name + ' odhalilo tvou propagandu!', 'bad'); } else note('Propaganda v ' + n.name + ' běží nenápadně.'); break;
+    case 'propaganda': if (!T.intel) return 'Potřebuješ tajnou službu.'; if (!canAfford(200000)) return 'Nemáš dost peněz.'; spend(200000); if (n.war) n.strength *= 0.92; if (disc(0.3)) { n.rel -= 25; note('Město ' + n.name + ' odhalilo tvou propagandu!', 'bad'); } else note('Propaganda ve městě ' + n.name + ' běží nenápadně.'); break;
     case 'sabotage': if (!T.intel) return 'Potřebuješ tajnou službu.'; if (!canAfford(600000)) return 'Nemáš dost peněz.'; spend(600000);
       if (n.war) n.strength *= 0.8; else S.priceBoost = { g: 'goods', until: S.day + 120 };
-      if (disc(0.4)) { n.rel -= 35; note('Sabotáž v ' + n.name + ' byla odhalena!', 'bad'); } else note('Sabotáž v ' + n.name + ' se povedla. ' + (n.war ? 'Jejich armáda je oslabená.' : 'Jejich továrny stojí a ceny zboží porostou.'), 'good'); break;
+      if (disc(0.4)) { n.rel -= 35; note('Sabotáž ve městě ' + n.name + ' byla odhalena!', 'bad'); } else note('Sabotáž ve městě ' + n.name + ' se povedla. ' + (n.war ? 'Jejich armáda je oslabená.' : 'Jejich továrny stojí a ceny zboží porostou.'), 'good'); break;
     case 'burn': if (!T.intel) return 'Potřebuješ tajnou službu.'; if (!canAfford(1200000)) return 'Nemáš dost peněz.'; spend(1200000);
       n.strength *= 0.85;
-      if (disc(0.45)) { n.rel -= 70; note('Agenti byli dopadeni při zapalování radnice v ' + n.name + '! Město zuří.', 'bad'); if (S.opts.wars && N0.aggr > 0.3 && n.rel < -60 && chance(0.6)) startWar(i, true); }
-      else { n.rel -= 5; note('Radnice v ' + n.name + ' lehla popelem. Viní z toho místní radikály, ale něco tuší.'); } break;
+      if (disc(0.45)) { n.rel -= 70; note('Agenti byli dopadeni při zapalování radnice ve městě ' + n.name + '! Sousedé zuří.', 'bad'); if (S.opts.wars && N0.aggr > 0.3 && n.rel < -60 && chance(0.6)) startWar(i, true); }
+      else { n.rel -= 5; note('Radnice ve městě ' + n.name + ' lehla popelem. Viní z toho místní radikály, ale něco tuší.'); } break;
     case 'war': if (!S.opts.wars) return 'Války jsou v nastavení vypnuté.'; if (n.rel > -30) return 'Vztahy nejsou tak špatné, aby lidé válku pochopili.'; startWar(i, false); S.mood -= 4; break;
     case 'peace': { if (!n.war) return null; const w = n.war; const sum = Math.round(w.score * 40000);
       if (w.score > 15 || chance(0.25 + n.wear * 0.4)) { endWar(i, w.score >= 0 ? 'win' : 'draw'); if (sum > 0) S.money += sum; }
-      else { const pay = Math.round(Math.max(500000, -sum) / 100000) * 100000; ask({ kind: 'peace', nb: i, sum: -pay, title: 'Mírové podmínky', text: n.name + ' přijme mír, když zaplatíš ' + money(pay) + '.', opts: [{ id: 'accept', label: 'Přijmout a zaplatit' }, { id: 'reject', label: 'Odmítnout' }] }); }
+      else { const pay = Math.round(Math.max(500000, -sum) / 100000) * 100000; ask({ kind: 'peace', nb: i, sum: -pay, title: 'Mírové podmínky', text: 'Město ' + n.name + ' přijme mír, když zaplatíš ' + money(pay) + '.', opts: [{ id: 'accept', label: 'Přijmout a zaplatit' }, { id: 'reject', label: 'Odmítnout' }] }); }
       break; }
     case 'counter': { if (!n.war) return null; const ours = S.soldiers * 0.4 * budF('army') * (0.5 + S.armyLoy / 200);
       if (ours < 20) return 'Na protiútok nemáš dost vojáků.';
       const win = chance(clamp(ours / (n.strength * 0.5 + 1), 0.1, 0.85));
-      if (win) { n.strength *= 0.7; n.war.score += 15; S.soldiers -= ours * 0.15; S.glory += 4; n.wear += 0.2; note('Protiútok na ' + n.name + ' uspěl! Jejich armáda ustupuje.', 'good'); }
+      if (win) { n.strength *= 0.7; n.war.score += 15; S.soldiers -= ours * 0.15; S.glory += 4; n.wear += 0.2; note('Protiútok na město ' + n.name + ' uspěl! Jejich armáda ustupuje.', 'good'); }
       else { S.soldiers -= ours * 0.4; n.war.score -= 10; S.mood -= 3; note('Protiútok selhal a stál mnoho životů.', 'bad'); }
       break; }
     case 'contract': return 'Použij formulář smlouvy.';
@@ -846,7 +846,7 @@ function nbAction(i, act) {
   return null;
 }
 function signContract(i, g, sell, q) {
-  const n = S.nb[i]; if (n.war) return 'S nepřítelem obchodovat nejde.'; if (n.rel < -20) return n.name + ' s tebou nechce obchodovat.';
+  const n = S.nb[i]; if (n.war) return 'S nepřítelem obchodovat nejde.'; if (n.rel < -20) return 'Město ' + n.name + ' s tebou nechce obchodovat.';
   n.contract = { g, sell, q, price: Math.round(S.price[g] * (sell ? 1.06 : 0.94)), months: 12 };
   n.rel += 6; note('Smlouva s městem ' + n.name + ': ' + (sell ? 'prodej' : 'nákup') + ' ' + q + ' ' + GOODS[g].unit + ' ' + GOODS[g].name.toLowerCase() + ' měsíčně za ' + money(n.contract.price) + '/' + GOODS[g].unit + '.', 'good');
   return null;
@@ -854,7 +854,7 @@ function signContract(i, g, sell, q) {
 function startWar(i, theyStarted) {
   const n = S.nb[i]; if (n.war) return;
   n.war = { day: S.day, score: 0, next: S.day + 12 + Math.round(Math.random() * 10), start: n.strength }; n.contract = null; n.wear = 0; S.mood += 3;
-  note((theyStarted ? n.name + ' vyhlásilo tvému městu válku!' : 'Vyhlásil jsi válku městu ' + n.name + '.') + ' Hlídej si armádu.', 'bad');
+  note((theyStarted ? 'Město ' + n.name + ' vyhlásilo tvému městu válku!' : 'Vyhlásil jsi válku městu ' + n.name + '.') + ' Hlídej si armádu.', 'bad');
 }
 function endWar(i, res) {
   const n = S.nb[i]; n.war = null; n.rel = -20; n.strength = Math.round(NEIGHBORS[i].pop / 300 * 0.8);
@@ -871,14 +871,14 @@ function warDay() {
       const t = warTarget();
       const side = NEIGHBORS[i].side;
       addInc({ type: 'assault', nb: i, x: t.x, y: t.y, size: men, side, eta: S.day + 5 });
-      note(n.name + ' posílá ' + fmt(men) + ' vojáků na tvé město! Dorazí za 5 dní.', 'bad', idx(t.x, t.y));
+      note('Město ' + n.name + ' posílá na tebe ' + fmt(men) + ' vojáků. Dorazí za 5 dní.', 'bad', idx(t.x, t.y));
       w.next = S.day + 18 + Math.round(Math.random() * 20);
     }
     for (const a of S.inc.filter(x => x.type === 'assault' && x.nb === i && S.day >= x.eta)) battle(a, n);
     n.wear += 0.004;
     if ((n.strength < w.start * 0.35 || n.wear > 1.2) && !S.asks.some(a => a.kind === 'peace')) {
       const sum = Math.round(Math.max(0, w.score) * 40000 / 100000) * 100000;
-      ask({ kind: 'peace', nb: i, sum, title: 'Nabídka míru', text: n.name + ' nabízí mír' + (sum > 0 ? ' a odškodné ' + money(sum) : '') + '.', opts: [{ id: 'accept', label: 'Přijmout mír' }, { id: 'reject', label: 'Bojovat dál' }] });
+      ask({ kind: 'peace', nb: i, sum, title: 'Nabídka míru', text: 'Město ' + n.name + ' nabízí mír' + (sum > 0 ? ' a odškodné ' + money(sum) : '') + '.', opts: [{ id: 'accept', label: 'Přijmout mír' }, { id: 'reject', label: 'Bojovat dál' }] });
       n.wear = 0.6;
     }
   });
@@ -900,7 +900,7 @@ function battle(a, n) {
     let d = 0; for (let t = 0; t < 6; t++) { const kk = randomNear(a.x, a.y, 3, kk => lvl[kk] || bld[kk]); if (kk >= 0) { destroyTile(kk, 'byla zničena při útoku'); d++; } }
     S.soldiers = Math.max(0, S.soldiers - a.size * 0.3); n.strength -= a.size * 0.25; n.war.score -= 12; S.mood -= 4;
     for (let t = 0; t < 2; t++) { const kk = randomNear(a.x, a.y, 3, kk => lvl[kk]); if (kk >= 0) igniteTile(kk, true); }
-    note('Nepřítel prorazil obranu a poničil ' + d + ' budov.', 'bad', k);
+    note('Nepřítel prorazil obranu. Zničených budov: ' + d + '.', 'bad', k);
   }
   n.strength = Math.max(10, n.strength);
 }
@@ -908,6 +908,10 @@ function battle(a, n) {
 // ---------- rádce ----------
 function advisor() {
   const tip = (key, text, every) => { if (S.day - (S.tips[key] || -9999) < (every || 180)) return; S.tips[key] = S.day; note(text, 'tip'); };
+  let zt = 0, zNoAcc = 0; for (let k = 0; k < NN; k++) if (zone[k]) { zt++; if (!acc[k]) zNoAcc++; }
+  if (zt && !T.pCap) tip('nopower', 'Zóny čekají na elektřinu. Postav elektrárnu u silnice (záložka Energie).', 45);
+  if (zt && !T.wCap) tip('nowater', 'Zóny čekají na vodu. Postav vodárnu u silnice (záložka Voda a odpad).', 45);
+  if (zNoAcc > zt * 0.3 && zt > 8) tip('noroad', 'Část zón je daleko od silnice napojené na dálnici. Parcela musí mít silnici nejvýš dvě políčka daleko.', 60);
   if (T.pDem > T.pCap * 0.95 && T.pDem > 0) tip('power', 'Elektřiny je málo. Postav další elektrárnu, než začnou výpadky.', 90);
   if (T.wDem > T.wCap * 0.95 && T.wDem > 0) tip('water', 'Vody je málo. Postav další vodárnu.', 90);
   if (T.gDem > T.gCap && T.pop > 300) tip('garbage', 'Odpadky se hromadí. Město potřebuje skládku.');

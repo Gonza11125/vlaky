@@ -159,7 +159,7 @@ function genCity(size, techs) {
     if (size >= 2 && free() >= 1 && !isInd(b) && !has('school', b.x0, b.y0, 15)) put('school', b, 3, 3);
     if (!isInd(b) && free() >= 1 && hash2(b.x0, b.y0, 5) < 0.18) put('park', b, 1, 1);
   }
-  if (size === 1) { put('clinic', byDist[1] || byDist[0], 3, 0); put('police', byDist[1] || byDist[0], 0, 0); put('school', byDist[2] || byDist[0], 3, 3); put('park', byDist[0], 0, 0); }
+  if (size === 1) { put('school', byDist[2] || byDist[1] || byDist[0], 3, 3); put('park', byDist[0], 0, 0); }
   const outer = byDist.filter(b => !b.used).reverse(), indBlocks = outer.filter(isInd), anyOuter = outer.slice();
   const pick = (want, size_, filter) => { const ok = b => !b.used && (!filter || filter(b)); return want.find(ok) || anyOuter.find(ok) || null; };
   // náhradní místo podél silnice za okrajem zástavby (pro vesnice a malá města)
@@ -171,7 +171,7 @@ function genCity(size, techs) {
       for (const [dx, dy] of [[0, 1], [0, -sz], [1, 0], [-sz, 0], [-1, 1], [-1, -sz]]) { const bx = x + dx, by = y + dy; if (canBuildAt(bx, by, sz, false) && !(by <= cy && by + sz > cy)) return addBuilding(t, bx, by); } }
     return null;
   };
-  const placeBig = (t, list, filter) => { for (;;) { const b = pick(list, SERV[t].size, bb => !bb.noBig && (!filter || filter(bb))); if (!b) return ['coal', 'gas', 'pump', 'dump'].includes(t) ? placeAlong(t) : null; const r = put(t, b, 0, 0); if (r) { b.used = 16; return r; } b.noBig = true; } };
+  const placeBig = (t, list, filter) => { for (;;) { const b = pick(list, SERV[t].size, bb => !bb.noBig && (!filter || filter(bb))); if (!b) return ['coal', 'gas', 'wind', 'pump', 'dump'].includes(t) ? placeAlong(t) : null; const r = put(t, b, 0, 0); if (r) { b.used = 16; return r; } b.noBig = true; } };
   if (size >= 3) { placeBig('hospital', [], b => b.d < 0.6); placeBig('highschool', [], b => b.d < 0.6); placeBig('station', indBlocks); placeBig('policehq', [], b => b.d < 0.5); placeBig('bigpark', [], b => b.d < 0.5); placeBig('bus', [], b => b.d < 0.4); placeBig('warehouse', indBlocks); }
   if (size >= 4) {
     placeBig('university', [], b => b.d > 0.3 && b.d < 0.7); placeBig('barracks', anyOuter); placeBig('stadium', [], b => b.d > 0.5);
@@ -205,13 +205,11 @@ function genCity(size, techs) {
   const capK = k => ZONES[zone[k]].cap[dens[k]][lvl[k]];
   for (let k = 0; k < NN; k++) if (lvl[k]) { if (zone[k] === 1) capR += capK(k); else capJ += capK(k); }
   const resT = []; for (let k = 0; k < NN; k++) if (lvl[k] && zone[k] === 1) resT.push(k);
-  resT.sort((a, b) => hash2(a, 2, 9) - hash2(b, 2, 9));
-  for (const k of resT) {
-    if (capJ >= capR * 0.5) break;
-    const before = capK(k); const r = hash2(k, 5, 5);
-    zone[k] = r < 0.55 ? 2 : r < (size >= 3 ? 0.8 : 0.6) ? 4 : 3; if (zone[k] === 4 && size < 3) zone[k] = 2;
-    capR -= before; capJ += capK(k);
-  }
+  const dc = k => Math.hypot(k % N - cx, ((k / N) | 0) - cy) + hash2(k, 2, 9) * 3;
+  resT.sort((a, b) => dc(a) - dc(b));
+  const deficit = Math.max(0, capR * 0.5 - capJ), share = size >= 3 ? { 3: 0.5, 2: 0.3, 4: 0.2 } : { 3: 0.55, 2: 0.45, 4: 0 };
+  const conv = (z, list) => { let got = 0; for (const k of list) { if (got >= deficit * share[z] || zone[k] !== 1) { if (got >= deficit * share[z]) break; continue; } const before = capK(k); zone[k] = z; dens[k] = z === 3 ? dens[k] && size >= 4 ? 1 : 0 : dens[k]; if (lvl[k] > (dens[k] ? 5 : 3)) lvl[k] = 3; const c = capK(k); capR -= before; capJ += c; got += c; } };
+  conv(3, resT.slice().reverse()); conv(2, resT); conv(4, resT);
   for (let pass = 0; pass < 5 && capJ > capR * 0.62; pass++) {
     const f = 1 - capR * 0.55 / capJ;
     for (let k = 0; k < NN; k++) if (lvl[k] > 1 && zone[k] > 1 && hash2(k, pass, 3) < f) { capJ -= capK(k); lvl[k]--; capJ += capK(k); }
@@ -222,8 +220,8 @@ function genCity(size, techs) {
   for (let k = 0; k < NN; k++) if (lvl[k]) { const c = ZONES[zone[k]].cap[dens[k]][lvl[k]]; if (zone[k] === 1) res += c; else jobs += c; }
   const needP = res * PW_RES + jobs * PW_JOB, needW = res * WT_RES + jobs * WT_JOB;
   let haveP = 0, haveW = 0, haveG = 0;
-  const pType = size >= 4 && techs.includes('gasturb') ? 'gas' : 'coal';
-  while (haveP < needP * 1.45) { const b = placeBig(pType, indBlocks.length ? indBlocks : anyOuter); if (!b) break; haveP += SERV[pType].power; }
+  const pType = needP < 300 && techs.includes('wind') ? 'wind' : size >= 4 && techs.includes('gasturb') ? 'gas' : 'coal';
+  while (haveP < needP * 1.45) { const b = pType === 'wind' ? placeAlong('wind') : placeBig(pType, indBlocks.length ? indBlocks : anyOuter); if (!b) break; haveP += SERV[pType].power * (pType === 'wind' ? 0.6 : 1); }
   const riverBlocks = anyOuter.filter(b => nearWater(b.x0 + 1, b.y0 + 1, 4, 2));
   const pumpBlocks = riverBlocks.concat(anyOuter.filter(b => !riverBlocks.includes(b)));
   for (const b of pumpBlocks) {

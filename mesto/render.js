@@ -122,7 +122,7 @@ function paintTile(k) {
   else if (ruin[k]) hex = TERR.ruin;
   else if (bld[k]) { const t = blds.get(bld[k]).type; hex = ['park', 'bigpark', 'university', 'stadium', 'solar', 'airport', 'dike'].includes(t) ? TERR.garden : TERR.lot; }
   else if (zone[k] && lvl[k]) hex = zone[k] === 1 && !dens[k] ? TERR.garden : zone[k] === 3 ? TERR.ind : TERR.lot;
-  else if (zone[k]) { _col2.setHex(TERR.grass).lerp(new THREE.Color(ZONES[zone[k]].hex), 0.45); hex = _col2.getHex(); }
+  else if (zone[k]) { _col2.setHex(ZONES[zone[k]].hex).lerp(new THREE.Color(0xf4f1e6), 0.42); if ((x + y) % 2) _col2.multiplyScalar(0.95); hex = _col2.getHex(); }
   else if (ter[k] === 3) hex = TERR.forest; else if (ter[k] === 2) hex = TERR.sand;
   _col2.setHex(hex); const f = 0.96 + hash2(x, y, 3) * 0.06;
   for (let v = 0; v < 4; v++) { c[k * 12 + v * 3] = _col2.r * f; c[k * 12 + v * 3 + 1] = _col2.g * f; c[k * 12 + v * 3 + 2] = _col2.b * f; }

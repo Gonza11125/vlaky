@@ -26,7 +26,7 @@ const SPEC = ['Zboží', 'Potraviny', 'Technologie'];
 // ---------- služby a stavby ----------
 // cost = cena stavby, up = měsíční provoz, r = dosah v dlaždicích, size = strana čtverce
 const SERV = {
-  townhall:  { name: 'Radnice', cat: 'gov', size: 2, cost: 800000, up: 30000, unique: true, desc: 'Sídlo vedení města. Bez radnice nejde vybírat daně. Je to i první cíl demonstrací.' },
+  townhall:  { name: 'Radnice', cat: 'gov', size: 2, cost: 800000, up: 15000, unique: true, desc: 'Sídlo vedení města. Bez radnice nejde vybírat daně. Je to i první cíl demonstrací.' },
   coal:      { name: 'Uhelná elektrárna', cat: 'power', size: 2, cost: 1200000, up: 45000, power: 1200, fuel: 0.06, poll: 40, desc: 'Levná a spolehlivá, ale silně znečišťuje a pálí palivo, které se musí dovážet.' },
   gas:       { name: 'Plynová elektrárna', cat: 'power', size: 2, cost: 2000000, up: 60000, power: 1800, fuel: 0.045, poll: 14, req: 'gasturb', desc: 'Čistší než uhlí a výkonnější. Také potřebuje palivo.' },
   wind:      { name: 'Větrná elektrárna', cat: 'power', size: 1, cost: 420000, up: 6000, power: 90, req: 'wind', desc: 'Bez paliva a bez kouře. Výkon kolísá s větrem.' },
@@ -55,7 +55,7 @@ const SERV = {
   bus:       { name: 'Autobusové depo', cat: 'trans', size: 1, cost: 400000, up: 15000, r: 9, transit: 0.5, desc: 'Městská doprava ulehčí silnicím.' },
   metro:     { name: 'Stanice metra', cat: 'trans', size: 1, cost: 2500000, up: 40000, r: 12, transit: 1, req: 'metro', desc: 'Rychlá podzemní doprava. Výrazně ubere aut.' },
   station:   { name: 'Nákladové nádraží', cat: 'trans', size: 2, cost: 2500000, up: 40000, trade: 4000, desc: 'Vyveze a doveze 4 000 jednotek zboží měsíčně.' },
-  port:      { name: 'Přístav', cat: 'trans', size: 3, cost: 5000000, up: 80000, trade: 12000, water: true, desc: 'Velká obchodní kapacita. Musí stát u vody.' },
+  port:      { name: 'Přístav', cat: 'trans', size: 3, cost: 5000000, up: 80000, trade: 12000, coast: true, desc: 'Velká obchodní kapacita. Musí stát u vody.' },
   airport:   { name: 'Letiště', cat: 'trans', size: 4, cost: 15000000, up: 200000, trade: 3000, tourism: 1, req: 'aviation', desc: 'Turisté, obchod a prestiž. Hluk sníží cenu pozemků okolo.' },
   warehouse: { name: 'Městské sklady', cat: 'trans', size: 2, cost: 600000, up: 9000, store: 6000, desc: 'Uskladní dalších 6 000 jednotek od každé suroviny.' },
   dike:      { name: 'Protipovodňová hráz', cat: 'gov', size: 1, cost: 25000, up: 200, req: 'flood', line: true, desc: 'Hráz podél řeky. Zastaví vodu, když lemuje celý břeh.' },
