@@ -223,14 +223,14 @@ function genCity(size, techs) {
   const needP = res * PW_RES + jobs * PW_JOB, needW = res * WT_RES + jobs * WT_JOB;
   let haveP = 0, haveW = 0, haveG = 0;
   const pType = size >= 4 && techs.includes('gasturb') ? 'gas' : 'coal';
-  while (haveP < needP * 1.25) { const b = placeBig(pType, indBlocks.length ? indBlocks : anyOuter); if (!b) break; haveP += SERV[pType].power; }
+  while (haveP < needP * 1.45) { const b = placeBig(pType, indBlocks.length ? indBlocks : anyOuter); if (!b) break; haveP += SERV[pType].power; }
   const riverBlocks = anyOuter.filter(b => nearWater(b.x0 + 1, b.y0 + 1, 4, 2));
   const pumpBlocks = riverBlocks.concat(anyOuter.filter(b => !riverBlocks.includes(b)));
   for (const b of pumpBlocks) {
-    if (haveW >= needW * 1.25) break; if ((b.used || 0) >= 12) continue;
-    for (let n = 0; n < 4 && haveW < needW * 1.25; n++) { const p = put('pump', b, n, 3); if (p) haveW += SERV.pump.water * (nearWater(p.x, p.y, 1, 2) ? 1.5 : 1); }
+    if (haveW >= needW * 1.45) break; if ((b.used || 0) >= 12) continue;
+    for (let n = 0; n < 4 && haveW < needW * 1.45; n++) { const p = put('pump', b, n, 3); if (p) haveW += SERV.pump.water * (nearWater(p.x, p.y, 1, 2) ? 1.5 : 1); }
   }
-  while (haveW < needW * 1.25) { const p = placeAlong('pump'); if (!p) break; haveW += SERV.pump.water * (nearWater(p.x, p.y, 1, 2) ? 1.5 : 1); }
+  while (haveW < needW * 1.45) { const p = placeAlong('pump'); if (!p) break; haveW += SERV.pump.water * (nearWater(p.x, p.y, 1, 2) ? 1.5 : 1); }
   while (haveG < (res + jobs * 0.5) * 1.1) { const b = placeBig('dump', anyOuter.slice().reverse()); if (!b) break; haveG += SERV.dump.garbage; }
   if (size >= 4) { const pb = riverBlocks.find(b => !b.used && nearWater(b.x0 + 1, b.y0 + 1, 3, 1)); if (pb) { pb.used = 16; put('port', pb, 0, 0); } }
   // zbylé parcely v nepoužitých blocích dostanou zónu bydlení

@@ -84,6 +84,18 @@ function setZone(x, y, z, d) {
   if (ter[k] === 3) ter[k] = 0;
   zone[k] = z; dens[k] = d; markDirty(k); return 1;
 }
+function servProblem(type, x, y) {
+  const d = SERV[type];
+  if (d.req && !S.techs[d.req]) return 'Nejdřív musíš vyzkoumat: ' + TECHS[d.req].name + '.';
+  if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
+  if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
+  for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
+  if (d.water && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
+  if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
+  let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
+  if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
+  return null;
+}
 function placeServ(type, x, y) {
   const d = SERV[type];
   if (d.req && !S.techs[d.req]) return 'Nejdřív musíš vyzkoumat: ' + TECHS[d.req].name + '.';
@@ -304,7 +316,7 @@ function growTile(k) {
   if (!zone[k] || fire[k] || bld[k]) return;
   const z = zone[k], D = T.dem ? T.dem[z] : 0, ok = acc[k] && pw[k] && wt[k] && !flood[k];
   if (lvl[k] && !aband[k] && chance(fireRate(k))) igniteTile(k);
-  if (!ok) { if (lvl[k] && !aband[k]) { bad[k] = Math.min(250, bad[k] + 6); if (bad[k] >= 54) { aband[k] = 1; occ[k] = 0; markDirty(k); } } return; }
+  if (!ok) { if (lvl[k] && !aband[k]) { bad[k] = Math.min(250, bad[k] + 6); if (bad[k] >= 96) { aband[k] = 1; occ[k] = 0; markDirty(k); } } return; }
   bad[k] = 0;
   if (aband[k]) { if (D > 0.05 && chance(0.25)) { aband[k] = 0; markDirty(k); } return; }
   const top = dens[k] ? (S.techs.skyscraper ? 5 : 4) : 3;
