@@ -35,7 +35,15 @@ $('tools').onclick = e => {
   else G.cat = G.cat === k ? null : k;
   drawRail(); drawSub();
 };
-function setTool(t) { G.tool = t; G.drag = null; showPreview([]); showGhost(null); if (t.kind === 'select') { G.cat = G.cat === 'maps' ? 'maps' : null; } drawRail(); }
+function setTool(t) { G.tool = t; G.drag = null; showPreview([]); showGhost(null); if (t.kind === 'select') { G.cat = G.cat === 'maps' ? 'maps' : null; } drawRail(); drawToolChip(); }
+// štítek aktivního nástroje (hlavně pro dotyk): co dělá a tlačítko Hotovo
+function drawToolChip() {
+  const c = $('toolchip'), t = G.tool; if (!G.playing || t.kind === 'select') { c.hidden = true; return; }
+  const name = t.kind === 'road' ? 'Silnice' : t.kind === 'zone' ? ZONES[t.z].short + (t.d ? ' – hustá' : ' – řídká') : t.kind === 'dezone' ? 'Zrušit zónu' : t.kind === 'demolish' ? 'Bourat' : SERV[t.type].name;
+  const touch = RS.coarse || window.innerWidth < 860, drag = t.kind !== 'build' || SERV[t.type].line;
+  c.innerHTML = '<span><b>' + name + '</b> <small>' + (touch ? (drag ? 'táhni prstem, mapu posuneš dvěma' : 'klepni na místo stavby') : (drag ? 'táhni myší, Esc ukončí' : 'klikni na místo, Esc ukončí')) + '</small></span><button class="btn pri" id="tc-done">Hotovo</button>';
+  c.hidden = false; $('tc-done').onclick = () => { setTool({ kind: 'select' }); G.cat = null; drawRail(); drawSub(); };
+}
 function drawSub() {
   const s = $('sub'); if (!G.cat) { s.hidden = true; return; } s.hidden = false;
   let h = '';
@@ -187,7 +195,9 @@ function updateTop() {
 
 // ---------- panely ----------
 const PANELS = {};
-document.querySelectorAll('.tab').forEach(b => b.onclick = () => G.panel === b.dataset.p ? closePanel() : openPanel(b.dataset.p));
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => { document.body.classList.remove('tabsopen'); G.panel === b.dataset.p ? closePanel() : openPanel(b.dataset.p); });
+$('b-manage').onclick = () => { const o = document.body.classList.toggle('tabsopen'); $('b-manage').setAttribute('aria-expanded', o); if (o) { G.cat = null; drawRail(); drawSub(); } };
+$('b-mini').onclick = () => { document.body.classList.toggle('minion'); };
 $('pclose').onclick = closePanel;
 function openPanel(p, arg) { G.panel = p; G.parg = arg; $('panel').hidden = false; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.p === p)); renderPanel(); if (window.innerWidth < 860) { G.cat = null; drawRail(); drawSub(); } }
 function closePanel() { G.panel = null; $('panel').hidden = true; document.querySelectorAll('.tab').forEach(b => b.classList.remove('on')); }
@@ -201,7 +211,7 @@ function meter(v, col) { return '<div class="meter" style="width:100%;height:8px
 
 // informace o políčku
 PANELS.info = {
-  title: a => { const k = idx(a.x, a.y); if (bld[k]) return SERV[blds.get(bld[k]).type].name; if (road[k]) return ter[k] === 1 ? 'Most' : 'Silnice'; if (zone[k]) return ZONES[zone[k]].name; return ter[k] === 1 ? 'Voda' : ter[k] === 3 ? 'Les' : 'Volný pozemek'; },
+  title: a => { const k = idx(a.x, a.y); if (bld[k]) return SERV[blds.get(bld[k]).type].name; if (road[k]) return ter[k] === 1 ? 'Most' : 'Silnice'; if (zone[k]) return ZONES[zone[k]].name; return ter[k] === 1 ? 'Voda' : ter[k] === 3 ? 'Les' : ter[k] === 4 ? 'Pole' : ter[k] === 5 ? 'Zahrada' : 'Volný pozemek'; },
   html: a => {
     const k = idx(a.x, a.y); let h = '';
     if (bld[k]) {
@@ -238,6 +248,8 @@ PANELS.info = {
     h += row('Cena pozemku', Math.round(lv[k])) + row('Znečištění', Math.round(poll[k]));
     if (fpl[k]) h += '<p>Záplavové území u řeky. Při povodni sem dojde voda, pokud ji nezastaví hráz.</p>';
     if (ter[k] === 3) h += '<p>Les. Při stavbě se vykácí.</p>';
+    if (ter[k] === 4) h += '<p>Pole. Při stavbě se zastaví.</p>';
+    if (ter[k] === 5) h += '<p>Zahrada. Při stavbě zmizí.</p>';
     return h;
   },
   bind: a => { const b = $('i-demo'); if (b) b.onclick = () => { const e = demolish(a.x, a.y); if (e) toast(e, 'bad'); closePanel(); refreshNow(); }; },
@@ -519,7 +531,7 @@ const mbase = document.createElement('canvas'); mbase.width = N; mbase.height = 
 function drawMiniBase() {
   const c = mbase.getContext('2d'), img = c.createImageData(N, N);
   for (let k = 0; k < NN; k++) {
-    let col = ter[k] === 1 ? [79, 166, 220] : ter[k] === 3 ? [96, 160, 76] : ter[k] === 2 ? [234, 219, 165] : [143, 207, 104];
+    let col = ter[k] === 1 ? [62, 110, 134] : ter[k] === 3 ? [70, 105, 58] : ter[k] === 2 ? [160, 150, 115] : ter[k] === 4 ? [196, 178, 112] : ter[k] === 5 ? [104, 140, 76] : [112, 140, 80];
     if (road[k]) col = [80, 85, 95]; else if (bld[k]) col = [150, 140, 170]; else if (zone[k]) { const z = new THREE.Color(ZONES[zone[k]].hex); const f = lvl[k] ? 0.85 : 0.55; col = [z.r * 255 * f + (lvl[k] ? 0 : 143 * 0.45), z.g * 255 * f + (lvl[k] ? 0 : 207 * 0.45), z.b * 255 * f + (lvl[k] ? 0 : 104 * 0.45)]; }
     if (fire[k]) col = [255, 110, 40]; if (flood[k]) col = [60, 120, 230]; if (ruin[k]) col = [160, 150, 135];
     img.data.set([col[0], col[1], col[2], 255], k * 4);
@@ -561,6 +573,7 @@ $('s-go').onclick = () => {
 };
 function showStart() { G.playing = false; $('start').hidden = false; drawStart(); closePanel(); G.cat = null; drawSub(); }
 function startPlaying() {
+  document.body.classList.remove('tabsopen', 'minion');
   rebuildAll(); drawMiniBase(); RS.overlay = null; setOverlay(null);
   for (const el of mkEls.values()) el.remove(); mkEls.clear(); $('feed').innerHTML = '';
   G.playing = true; G.demo = false; G.acc = 0; G.lastAuto = S.day; $('start').hidden = true; $('over').hidden = true;

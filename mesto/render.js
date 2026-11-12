@@ -116,6 +116,7 @@ function resizeRender(w, h) {
 }
 
 // ---------- terén ----------
+const CROPS = [0xc9b26a, 0x6f8f45, 0xd6c48a, 0xd2c24c, 0x7a6248];
 const TERR = { grass: 0x627d47, forest: 0x4a6337, sand: 0x8f8a6c, bed: 0x3e5a5e, lot: 0xa9a59d, ind: 0x98948b, garden: 0x5d7a44, ruin: 0x7d766b, flood: 0x4b6f80, road: 0x5e5f5f };
 function buildTerrainMesh() {
   const geo = new THREE.BufferGeometry(), pos = new Float32Array(NN * 12), col = new Float32Array(NN * 12), nor = new Float32Array(NN * 12), uv = new Float32Array(NN * 8), ind = new Uint32Array(NN * 6);
@@ -151,8 +152,8 @@ function paintTile(k) {
   else if (bld[k]) { const t = blds.get(bld[k]).type; hex = ['park', 'bigpark', 'university', 'stadium', 'solar', 'airport', 'dike'].includes(t) ? TERR.garden : TERR.lot; }
   else if (zone[k] && lvl[k]) hex = zone[k] === 1 && !dens[k] ? TERR.garden : zone[k] === 3 ? TERR.ind : TERR.lot;
   else if (zone[k]) { _col2.setHex(TERR.grass).lerp(new THREE.Color(ZONES[zone[k]].hex), 0.38); hex = _col2.getHex(); }
-  else if (ter[k] === 3) hex = TERR.forest; else if (ter[k] === 2) hex = TERR.sand;
-  lin(hex); const f = 0.97 + hash2(x, y, 3) * 0.04;
+  else if (ter[k] === 3) hex = TERR.forest; else if (ter[k] === 2) hex = TERR.sand; else if (ter[k] === 4) hex = 0x7a7050; else if (ter[k] === 5) hex = TERR.garden;
+  lin(hex); const f = 0.88 + fbm(x * 0.12, y * 0.12, 5) * 0.2 + hash2(x, y, 3) * 0.02;
   for (let v = 0; v < 4; v++) { c[k * 12 + v * 3] = _col2.r * f; c[k * 12 + v * 3 + 1] = _col2.g * f; c[k * 12 + v * 3 + 2] = _col2.b * f; }
   RS.terrDirty = true;
 }
@@ -166,8 +167,14 @@ function faceRoad(x, y, s) {
   for (const [dx, dy, r] of sides) { let n = 0; for (let t = 0; t < s; t++) for (let d = 0; d < 2; d++) { const xx = dx ? x + dx + (dx > 0 ? d : -d) : x + t, yy = dy ? y + dy + (dy > 0 ? d : -d) : y + t; if (inb(xx, yy) && road[idx(xx, yy)]) n += d ? 1 : 3; } if (n > best) { best = n; br = r; } }
   return br;
 }
-function zoneKey(k) { const z = zone[k], d = dens[k], l = lvl[k], v = vari[k] % (z === 1 || z === 2 ? 5 : 3), s = z === 3 ? spec[k] : 0; return 'Z' + z + d + l + v + s; }
-function zoneGeo(key) { const z = +key[1], d = +key[2], l = +key[3], v = +key[4], s = +key[5]; return z === 1 ? mRes(d, l, v) : z === 2 ? mCom(d, l, v) : z === 3 ? mInd(d, l, s, v, key) : mOff(d, l, v); }
+// silnice mimo zástavbu nebo ve vesnici je venkovská
+function isRural(x, y) {
+  let town = 0, any = 0;
+  for (let j = y - 3; j <= y + 3; j++) for (let i = x - 3; i <= x + 3; i++) { if (!inb(i, j)) continue; const t = idx(i, j); if (zone[t] && lvl[t]) { any++; if (sty[t] >= 1) town++; } else if (bld[t]) { const bb = blds.get(bld[t]); if (bb && !['church', 'townhall', 'school', 'wind', 'pump', 'dump'].includes(bb.type)) town++; } }
+  return town < 2;
+}
+function zoneKey(k) { const z = zone[k], d = dens[k], l = lvl[k], v = vari[k] % (z === 1 || z === 2 ? 5 : 3), s = z === 3 ? spec[k] : 0, st = Math.min(2, sty[k]); return 'Z' + z + d + l + v + s + st; }
+function zoneGeo(key) { const z = +key[1], d = +key[2], l = +key[3], v = +key[4], s = +key[5], st = +key[6]; return z === 1 ? mRes(d, l, v, st) : z === 2 ? mCom(d, l, v, st) : z === 3 ? mInd(d, l, s, v, key, st) : mOff(d, l, v); }
 function tint(k) {
   if (aband[k]) return _col2.setRGB(0.45, 0.42, 0.4);
   const f = 0.9 + (vari[k] % 7) * 0.017; return _col2.setRGB(f, f, f);
@@ -177,7 +184,7 @@ function refreshTile(k) {
   const ts = treeH[k]; if (ts) { for (const t of ts) if (t.b) t.b.remove(t); treeH[k] = null; }
   paintTile(k);
   const x = k % N, y = (k / N) | 0, wx = tileX(x), wz = tileZ(y);
-  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1; tileH[k] = batch((br ? 'BR' : 'RD') + m, () => mRoad(m, br), MATS, { shadow: !br ? false : true }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
+  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, ru = !br && isRural(x, y); tileH[k] = batch((br ? 'BR' : ru ? 'RR' : 'RD') + m, () => mRoad(m, br, ru), MATS, { shadow: !br ? false : true }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
   if (bld[k]) return;
   if (ruin[k] && !lvl[k]) { tileH[k] = batch('RUB', mRubble).add({ k }, mtx(wx, 0, wz, (vari[k] % 4) * 1.57)); return; }
   if (zone[k] && lvl[k]) {
@@ -186,6 +193,8 @@ function refreshTile(k) {
     if (SMOKE[key] && !aband[k]) smokers.set(k, { key, x: wx, z: wz, ry });
     return hh;
   }
+  if (ter[k] === 4) { const c = fieldCrop(x, y), p = parcel(x, y); tileH[k] = batch('FIELD', mField, MATS, { shadow: false }).add({ k }, mtx(wx, 0.02, wz, (p[0] + p[1]) % 2 ? Math.PI / 2 : 0), lin(CROPS[c])); return; }
+  if (ter[k] === 5) { const v = vari[k] % 3; tileH[k] = batch('GARD' + v, () => mGarden(v)).add({ k }, mtx(wx, 0, wz, (vari[k] >> 2) % 4 * Math.PI / 2)); return; }
   if (ter[k] === 3) {
     const n = 1 + (vari[k] % 3), arr = treeH[k] = [];
     for (let i = 0; i < n; i++) { const v = (vari[k] + i * 3) % 3, ox = (hash2(x, y, i) - 0.5) * 2.6, oz = (hash2(y, x, i + 5) - 0.5) * 2.6, s = 0.8 + hash2(x + i, y, 9) * 0.6;

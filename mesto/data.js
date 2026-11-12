@@ -50,6 +50,7 @@ const SERV = {
   institute: { name: 'Výzkumný ústav', cat: 'edu', size: 2, cost: 3000000, up: 110000, rp: 25, needs: 'university', desc: 'Jen výzkum. Potřebuje ve městě univerzitu.' },
   park:      { name: 'Park', cat: 'fun', size: 1, cost: 80000, up: 2000, r: 5, park: 0.6, desc: 'Zeleň zvedá cenu pozemků a náladu lidí.' },
   bigpark:   { name: 'Městský park', cat: 'fun', size: 2, cost: 320000, up: 8000, r: 8, park: 1, desc: 'Velký park s jezírkem.' },
+  church:    { name: 'Kostel', cat: 'fun', size: 2, cost: 1500000, up: 6000, r: 7, park: 0.5, desc: 'Dominanta obce. Zvedá cenu pozemků a náladu v okolí.' },
   plaza:     { name: 'Náměstí', cat: 'fun', size: 1, cost: 150000, up: 3000, r: 4, park: 0.4, shop: 1, desc: 'Místo pro trhy a setkávání. Pomáhá obchodům kolem.' },
   stadium:   { name: 'Stadion', cat: 'fun', size: 3, cost: 5000000, up: 80000, r: 40, park: 0.3, happy: 4, desc: 'Celé město je o něco spokojenější. Fanoušci ale umí i demonstrovat.' },
   bus:       { name: 'Autobusové depo', cat: 'trans', size: 1, cost: 400000, up: 15000, r: 9, transit: 0.5, desc: 'Městská doprava ulehčí silnicím.' },

@@ -27,9 +27,9 @@ function markDirty(k) { dirty.add(k); }
 function newGame(o) {
   const seed = (Math.random() * 1e9) | 0;
   genTerrain(seed);
-  computeWaterDist();
   const techs = TECH_LEVELS[o.tech].techs;
   genCity(o.size, techs);
+  computeWaterDist();
   for (const k in S) delete S[k];
   Object.assign(S, {
     v: 1, name: o.name || 'Nové Město', day: 0, money: STARTS[o.size].money, loan: 0,
@@ -81,7 +81,7 @@ function setZone(x, y, z, d) {
   if (lvl[k] && zone[k] !== z) { if (!canAfford(DEMOLISH_COST)) return -1; spend(DEMOLISH_COST); }
   if (zone[k] !== z) { lvl[k] = 0; occ[k] = 0; aband[k] = 0; }
   if (dens[k] !== d && lvl[k] > (d ? 5 : 3)) lvl[k] = 3;
-  if (ter[k] === 3) ter[k] = 0;
+  if (ter[k] >= 3) ter[k] = 0;
   zone[k] = z; dens[k] = d; markDirty(k); return 1;
 }
 function servProblem(type, x, y) {
@@ -323,7 +323,7 @@ function growTile(k) {
   const need = lvl[k] < top ? LV_NEED[dens[k]][lvl[k] + 1] : 999;
   const eduOk = z !== 4 || lvl[k] < 1 || T.eduRate > 0.22 + lvl[k] * 0.07;
   if (D > 0 && lvl[k] < top && lv[k] >= need && eduOk && chance(0.1 + D * 0.45)) {
-    lvl[k]++; vari[k] = (vari[k] + 37) & 255;
+    lvl[k]++; vari[k] = (vari[k] + 37) & 255; sty[k] = styleFor(k);
     if (lvl[k] === 1 && z === 3) spec[k] = S.techs.hightech && T.eduRate > 0.35 && chance(0.3) ? 2 : chance(0.35) ? 1 : 0;
     markDirty(k); FX.push({ t: 'grow', k });
   } else if (lvl[k] > 1 && (D < -0.45 || lv[k] < LV_NEED[dens[k]][lvl[k]] - 15) && chance(0.06)) { lvl[k]--; occ[k] = Math.min(occ[k], capOf(k)); markDirty(k); }
@@ -335,6 +335,15 @@ function growTile(k) {
   else { target = c * (T.jobFill || 0); if (strikeOn(z)) target *= 0.5; }
   if (z === 1 && S.epi) target *= 1 - S.epi.sick * 0.2;
   occ[k] = lerp(occ[k], target, 0.35);
+}
+// ráz nové budovy podle okolí: vesnice, městečko a předměstí, nebo velkoměsto
+function styleFor(k) {
+  const x = k % N, y = (k / N) | 0; let b = 0, h = 0;
+  for (let j = y - 4; j <= y + 4; j++) for (let i = x - 4; i <= x + 4; i++) if (inb(i, j)) { const t = idx(i, j); if (zone[t] && lvl[t]) { b++; if (dens[t]) h++; } else if (bld[t] || road[t]) b += 0.3; }
+  const u = (b + h * 2) / 81;
+  if (!dens[k] && (T.pop < 2500 || u < 0.32)) return 0;
+  if (T.pop < 20000 || u < 0.75) return 1;
+  return 2;
 }
 const strikeOn = z => S.inc.some(i => i.type === 'strike' && i.zone === z);
 function fireRate(k) {
@@ -959,7 +968,7 @@ function saveGame() {
   return { S: JSON.parse(JSON.stringify(S)), t, f, blds: [...blds.values()], nextBid, W: Object.assign({}, W), saved: Date.now() };
 }
 function loadGame(sv) {
-  for (const k in TILE_ARRAYS) TILE_ARRAYS[k].set(unb64(sv.t[k], Uint8Array));
+  for (const k in TILE_ARRAYS) { if (sv.t[k]) TILE_ARRAYS[k].set(unb64(sv.t[k], Uint8Array)); else TILE_ARRAYS[k].fill(k === 'sty' ? 1 : 0); }
   for (const k in FLOAT_ARRAYS) FLOAT_ARRAYS[k].set(unb64(sv.f[k], Float32Array));
   blds.clear(); bld.fill(0);
   for (const b of sv.blds) { blds.set(b.id, b); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) bld[idx(i, j)] = b.id; }

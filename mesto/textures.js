@@ -1,9 +1,11 @@
 'use strict';
 // Realistické materiály: textury fasád, střech, asfaltu, trávy a vody kreslené v prohlížeči.
 
-const MK = { plain: 0, res: 1, office: 2, panel: 3, brick: 4, tile: 5, metal: 6, shop: 7, roof: 8, asphalt: 9, leaf: 10, glass: 11, paint: 12, lawn: 13, water: 14, stone: 15 };
+const MK = { plain: 0, res: 1, office: 2, panel: 3, brick: 4, tile: 5, metal: 6, shop: 7, roof: 8, asphalt: 9, leaf: 10, glass: 11, paint: 12, lawn: 13, water: 14, stone: 15, wood: 16, pave: 17, field: 18, soil: 19 };
 // měřítko UV: [šířka jednoho opakování, výška] ve světových jednotkách
-const MUV = { plain: [6, 6], res: [1.6, 1.25], office: [1.5, 1.1], panel: [1.75, 1.15], brick: [2.4, 2.4], tile: [1.4, 0.9], metal: [1.2, 3], shop: [2.2, 1.6], roof: [3, 3], asphalt: [4, 4], leaf: [1.2, 1.2], glass: [4, 4], paint: [4, 4], lawn: [4, 4], water: [3, 3], stone: [1.6, 1.25] };
+const MUV = { plain: [6, 6], res: [1.6, 1.25], office: [1.5, 1.1], panel: [1.75, 1.15], brick: [2.4, 2.4], tile: [1.4, 0.9], metal: [1.2, 3], shop: [2.2, 1.6], roof: [3, 3], asphalt: [4, 4], leaf: [1.2, 1.2], glass: [4, 4], paint: [4, 4], lawn: [4, 4], water: [3, 3], stone: [1.6, 1.25], wood: [1.6, 1.6], pave: [1.6, 1.6], field: [4, 4], soil: [1.5, 1.5] };
+// kolik oken (sloupců a pater) obsahuje jedna textura fasády
+const TREP = { res: [4, 4], stone: [4, 4], panel: [4, 4], office: [4, 4] };
 const MKN = Object.keys(MK);
 const FACADE = new Set([MK.res, MK.office, MK.panel, MK.brick, MK.shop, MK.stone]);
 
@@ -27,34 +29,48 @@ function normalOf(src, str) {
 function tex(c, srgb) { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; if (srgb) t.encoding = THREE.sRGBEncoding; return t; }
 function grad(x, x0, y0, x1, y1, stops) { const g = x.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
 
-// okno: rám, sklo s odleskem, parapet; zároveň kreslí do mapy drsnosti
-function windowAt(x, rx, X, Y, W, H, glassTop, glassBot) {
+// okno: rám, sklo s odleskem, parapet, náhodně záclony, žaluzie nebo truhlík; kreslí i mapu drsnosti
+function windowAt(x, rx, X, Y, W, H, glassTop, glassBot, vary) {
   x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(X - 3, Y - 3, W + 6, H + 8);
   x.fillStyle = '#f4f3ef'; x.fillRect(X - 5, Y - 5, W + 10, H + 10);
   x.fillStyle = grad(x, X, Y, X + W * 0.4, Y + H, [[0, glassTop], [0.55, glassBot], [1, glassBot]]); x.fillRect(X, Y, W, H);
   x.fillStyle = 'rgba(255,255,255,0.18)'; x.beginPath(); x.moveTo(X, Y); x.lineTo(X + W * 0.55, Y); x.lineTo(X, Y + H * 0.6); x.closePath(); x.fill();
   x.fillStyle = '#eceae4'; x.fillRect(X + W / 2 - 3, Y, 6, H); x.fillRect(X, Y + H * 0.38 - 3, W, 6);
+  if (vary) {
+    const r = rr();
+    if (r < 0.28) { x.fillStyle = 'rgba(236,230,214,0.82)'; x.fillRect(X + 3, Y + 3, W * 0.28, H - 6); x.fillRect(X + W * 0.72 - 3, Y + 3, W * 0.28, H - 6); }
+    else if (r < 0.48) { x.fillStyle = 'rgba(220,214,200,0.9)'; const hb = H * (0.25 + rr() * 0.5); for (let yy = Y + 2; yy < Y + hb; yy += 5) x.fillRect(X + 2, yy, W - 4, 3); }
+    else if (r < 0.58) { x.fillStyle = 'rgba(10,14,20,0.55)'; x.fillRect(X + W / 2 + 3, Y + 2, W / 2 - 5, H - 4); }
+    else if (r < 0.68) { x.fillStyle = 'rgba(250,240,210,0.35)'; x.fillRect(X + 2, Y + H * 0.45, W - 4, H * 0.5); }
+    x.fillStyle = '#eceae4'; x.fillRect(X + W / 2 - 3, Y, 6, H); x.fillRect(X, Y + H * 0.38 - 3, W, 6);
+    if (rr() < 0.18) { x.fillStyle = '#7a5a3e'; x.fillRect(X - 2, Y + H + 2, W + 4, 9); for (let i = 0; i < 9; i++) { x.fillStyle = ['#c8372d', '#e05a8a', '#f0c040', '#5f8a3a'][(rr() * 4) | 0]; x.beginPath(); x.arc(X + 4 + rr() * (W - 8), Y + H + 1, 3 + rr() * 2, 0, 6.29); x.fill(); } }
+  }
   x.fillStyle = '#d9d6cf'; x.fillRect(X - 9, Y + H + 4, W + 18, 8);
   if (rx) { rx.fillStyle = '#2a2a2a'; rx.fillRect(X, Y, W, H); }
 }
 function makeTextures() {
   const T = {};
   // omítka s okny (bydlení)
-  { const s = 256, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d');
+  { const s = 1024, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d');
     x.fillStyle = '#ecebe6'; x.fillRect(0, 0, s, s); noiseFill(x, s, 0, 10, 0); rx.fillStyle = '#e6e6e6'; rx.fillRect(0, 0, s, s);
-    windowAt(x, rx, 70, 58, 116, 128, '#7d93a6', '#2b3846');
+    x.fillStyle = 'rgba(0,0,0,0.05)'; for (let f = 0; f < 4; f++) x.fillRect(0, f * 256 + 250, s, 6);
+    for (let f = 0; f < 4; f++) for (let b = 0; b < 4; b++) windowAt(x, rx, b * 256 + 70, f * 256 + 58, 116, 128, '#7d93a6', '#2b3846', true);
     T.res = { map: tex(c, true), roughnessMap: tex(r) }; }
   // kámen a světlá omítka veřejných budov
-  { const s = 256, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d');
-    x.fillStyle = '#efeadf'; x.fillRect(0, 0, s, s); noiseFill(x, s, 0, 12, 4); x.fillStyle = 'rgba(0,0,0,0.08)'; for (let y = 0; y < s; y += 32) x.fillRect(0, y, s, 2);
-    rx.fillStyle = '#e0e0e0'; rx.fillRect(0, 0, s, s); windowAt(x, rx, 78, 40, 100, 160, '#8a9eb0', '#2a3644');
+  { const s = 1024, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d');
+    x.fillStyle = '#efeadf'; x.fillRect(0, 0, s, s); noiseFill(x, s, 0, 12, 4); x.fillStyle = 'rgba(0,0,0,0.07)'; for (let y = 0; y < s; y += 32) x.fillRect(0, y, s, 2);
+    rx.fillStyle = '#e0e0e0'; rx.fillRect(0, 0, s, s);
+    for (let f = 0; f < 4; f++) { x.fillStyle = 'rgba(0,0,0,0.12)'; x.fillRect(0, f * 256 + 240, s, 10); x.fillStyle = 'rgba(255,255,255,0.35)'; x.fillRect(0, f * 256 + 236, s, 4);
+      for (let b = 0; b < 4; b++) { x.fillStyle = 'rgba(0,0,0,0.1)'; x.fillRect(b * 256 + 66, f * 256 + 26, 124, 12); windowAt(x, rx, b * 256 + 78, f * 256 + 46, 100, 160, '#8a9eb0', '#2a3644', true); } }
     T.stone = { map: tex(c, true), roughnessMap: tex(r) }; }
   // prosklená fasáda kanceláří
-  { const s = 256, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d');
-    x.fillStyle = grad(x, 0, 0, 0, s, [[0, '#a9bfd0'], [0.5, '#6f8ca5'], [1, '#4b6680']]); x.fillRect(0, 0, s, s);
-    for (let i = 0; i < 40; i++) { x.fillStyle = 'rgba(255,255,255,' + (rr() * 0.08) + ')'; x.fillRect(rr() * s, rr() * s * 0.8, 20 + rr() * 80, 6 + rr() * 20); }
-    x.fillStyle = '#39424d'; x.fillRect(0, s - 46, s, 46); x.fillStyle = '#2b3138'; x.fillRect(0, 0, 6, s); x.fillRect(s / 2 - 3, 0, 6, s - 46); x.fillRect(0, s - 48, s, 4);
-    rx.fillStyle = '#141414'; rx.fillRect(0, 0, s, s); rx.fillStyle = '#909090'; rx.fillRect(0, s - 46, s, 46);
+  { const s = 1024, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d'), u = 256;
+    x.fillStyle = grad(x, 0, 0, s * 0.3, s, [[0, '#b3c6d4'], [0.5, '#7590a8'], [1, '#4d6882']]); x.fillRect(0, 0, s, s);
+    for (let i = 0; i < 160; i++) { x.fillStyle = 'rgba(255,255,255,' + (rr() * 0.07) + ')'; x.fillRect(rr() * s, rr() * s, 20 + rr() * 120, 6 + rr() * 30); }
+    for (let f = 0; f < 4; f++) for (let b = 0; b < 8; b++) { const t = rr(); if (t < 0.25) { x.fillStyle = 'rgba(225,228,230,0.45)'; x.fillRect(b * 128 + 4, f * u + 4, 120, u * 0.3 + rr() * u * 0.4); } else if (t < 0.4) { x.fillStyle = 'rgba(10,18,28,0.35)'; x.fillRect(b * 128 + 4, f * u + 4, 120, u - 54); } }
+    rx.fillStyle = '#141414'; rx.fillRect(0, 0, s, s);
+    for (let f = 0; f < 4; f++) { x.fillStyle = '#39424d'; x.fillRect(0, f * u + u - 46, s, 46); rx.fillStyle = '#909090'; rx.fillRect(0, f * u + u - 46, s, 46); x.fillStyle = '#2b3138'; x.fillRect(0, f * u + u - 48, s, 4); }
+    x.fillStyle = '#2b3138'; for (let b = 0; b < 8; b++) x.fillRect(b * 128, 0, 5, s);
     T.office = { map: tex(c, true), roughnessMap: tex(r) }; }
   // panelový dům
   { const s = 256, c = cnv(s), x = c.getContext('2d'), r = cnv(s), rx = r.getContext('2d'), h = cnv(s), hx = h.getContext('2d');
@@ -62,7 +78,11 @@ function makeTextures() {
     hx.fillStyle = '#fff'; hx.fillRect(0, 0, s, s); hx.fillStyle = '#000'; hx.fillRect(0, 0, s, 4); hx.fillRect(0, 0, 4, s);
     x.fillStyle = 'rgba(60,60,60,0.45)'; x.fillRect(0, 0, s, 3); x.fillRect(0, 0, 3, s);
     windowAt(x, rx, 52, 70, 152, 100, '#7a8fa2', '#2c3846');
-    T.panel = { map: tex(c, true), roughnessMap: tex(r), normalMap: tex(normalOf(h, 3)) }; }
+    const c4 = cnv(1024), x4 = c4.getContext('2d'), r4 = cnv(1024), rx4 = r4.getContext('2d'), h4 = cnv(1024), hx4 = h4.getContext('2d');
+    const tones = ['#e4e2dc', '#ddd9cf', '#e9e4d8', '#d6d8d6'];
+    for (let f = 0; f < 4; f++) for (let b = 0; b < 4; b++) { x4.drawImage(c, b * 256, f * 256); x4.fillStyle = tones[(f + b * 3 + (rr() * 2 | 0)) % 4]; x4.globalAlpha = 0.25; x4.fillRect(b * 256, f * 256, 256, 256); x4.globalAlpha = 1;
+      windowAt(x4, null, b * 256 + 52, f * 256 + 70, 152, 100, '#7a8fa2', '#2c3846', true); rx4.drawImage(r, b * 256, f * 256); hx4.drawImage(h, b * 256, f * 256); }
+    T.panel = { map: tex(c4, true), roughnessMap: tex(r4), normalMap: tex(normalOf(h4, 3)) }; }
   // cihly
   { const s = 256, c = cnv(s), x = c.getContext('2d'), h = cnv(s), hx = h.getContext('2d');
     x.fillStyle = '#d8d2c8'; x.fillRect(0, 0, s, s); hx.fillStyle = '#000'; hx.fillRect(0, 0, s, s);
@@ -99,6 +119,17 @@ function makeTextures() {
   { const s = 128, c = cnv(s), x = c.getContext('2d'); x.fillStyle = '#d8dccf'; x.fillRect(0, 0, s, s);
     for (let i = 0; i < 220; i++) { const v = 150 + rr() * 105; x.fillStyle = 'rgb(' + (v * 0.9) + ',' + v + ',' + (v * 0.8) + ')'; x.beginPath(); x.ellipse(rr() * s, rr() * s, 3 + rr() * 6, 2 + rr() * 4, rr() * 3, 0, 6.29); x.fill(); }
     T.leaf = { map: tex(c, true), normalMap: tex(normalOf(c, 4)) }; }
+  // prkna, dlažba, brázdy pole, hlína
+  { const s = 256, c = cnv(s), x = c.getContext('2d'), h = cnv(s), hx = h.getContext('2d');
+    for (let i = 0; i < 16; i++) { const v = 170 + rr() * 70; x.fillStyle = 'rgb(' + v + ',' + (v * 0.93) + ',' + (v * 0.85) + ')'; x.fillRect(i * 16, 0, 16, s); x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(i * 16, 0, 2, s); hx.fillStyle = '#fff'; hx.fillRect(i * 16 + 2, 0, 14, s); hx.fillStyle = '#000'; hx.fillRect(i * 16, 0, 2, s); }
+    noiseFill(x, s, 0, 16, 0); T.wood = { map: tex(c, true), normalMap: tex(normalOf(h, 2)) }; }
+  { const s = 256, c = cnv(s), x = c.getContext('2d'), h = cnv(s), hx = h.getContext('2d'); hx.fillStyle = '#000'; hx.fillRect(0, 0, s, s);
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) { const v = 200 + rr() * 40; x.fillStyle = 'rgb(' + v + ',' + (v * 0.98) + ',' + (v * 0.94) + ')'; x.fillRect(col * 32 + 1, row * 32 + 1, 30, 30); hx.fillStyle = '#fff'; hx.fillRect(col * 32 + 2, row * 32 + 2, 28, 28); }
+    noiseFill(x, s, 0, 14, 0); T.pave = { map: tex(c, true), normalMap: tex(normalOf(h, 1.5)) }; }
+  { const s = 256, c = cnv(s), x = c.getContext('2d'), h = cnv(s), hx = h.getContext('2d');
+    for (let py = 0; py < s; py++) { const v = Math.sin(py / s * Math.PI * 32) * 0.5 + 0.5, g = 170 + v * 70; x.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')'; x.fillRect(0, py, s, 1); hx.fillStyle = 'rgb(' + Math.round(v * 255) + ',0,0)'; hx.fillRect(0, py, s, 1); }
+    noiseFill(x, s, 0, 30, 2); T.field = { map: tex(c, true), normalMap: tex(normalOf(h, 2.5)) }; }
+  { const c = plainTex('#c9b9a4', 40, 2, 128); T.soil = { map: tex(c, true), normalMap: tex(normalOf(c, 2)) }; }
   // vlny na vodě
   { const s = 256, h = cnv(s), x = h.getContext('2d'), img = x.createImageData(s, s);
     for (let py = 0; py < s; py++) for (let px = 0; px < s; px++) { const u = px / s * 6.283, v = py / s * 6.283; const val = Math.sin(u * 3 + v * 2) * 0.3 + Math.sin(u * 7 - v * 5) * 0.2 + Math.sin(u * 13 + v * 11) * 0.12 + Math.sin(u * 2 - v * 9) * 0.2; const g = (val * 0.5 + 0.5) * 255; const i = (py * s + px) * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = g; img.data[i + 3] = 255; }
@@ -124,5 +155,9 @@ function makeMaterials(T, env) {
   M[MK.lawn] = S({ map: T.lawn.map, normalMap: T.lawn.normalMap, roughness: 0.95, envMapIntensity: 0.4 });
   M[MK.water] = S({ normalMap: T.water.normalMap, roughness: 0.06, metalness: 0.1, envMapIntensity: 1.3 });
   M[MK.stone] = S({ map: T.stone.map, roughnessMap: T.stone.roughnessMap, roughness: 1, envMapIntensity: 0.8 });
+  M[MK.wood] = S({ map: T.wood.map, normalMap: T.wood.normalMap, roughness: 0.9 });
+  M[MK.pave] = S({ map: T.pave.map, normalMap: T.pave.normalMap, roughness: 0.9 });
+  M[MK.field] = S({ map: T.field.map, normalMap: T.field.normalMap, roughness: 1, envMapIntensity: 0.3 });
+  M[MK.soil] = S({ map: T.soil.map, normalMap: T.soil.normalMap, roughness: 1, envMapIntensity: 0.3 });
   return M;
 }

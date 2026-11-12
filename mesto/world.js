@@ -2,13 +2,14 @@
 // Mapa: dlaždice, řeka, lesy, silniční síť a generátor hotového města.
 
 const NN = N * N;
-const ter = new Uint8Array(NN);      // 0 tráva, 1 voda, 2 písek, 3 les
+const ter = new Uint8Array(NN);      // 0 tráva, 1 voda, 2 písek, 3 les, 4 pole, 5 zahrada
 const road = new Uint8Array(NN);
 const zone = new Uint8Array(NN);     // 0–4
 const dens = new Uint8Array(NN);     // 0 nízká, 1 vysoká
 const lvl = new Uint8Array(NN);      // 0 = prázdná parcela
 const vari = new Uint8Array(NN);
 const spec = new Uint8Array(NN);     // průmysl: 0 zboží, 1 potraviny, 2 technologie
+const sty = new Uint8Array(NN);      // ráz zástavby: 0 vesnice, 1 městečko a předměstí, 2 velkoměsto
 const bld = new Int32Array(NN);      // id služby
 const ruin = new Uint8Array(NN);     // dny do odklizení trosek
 const fire = new Uint8Array(NN);     // dny hoření
@@ -21,7 +22,7 @@ const eduT = new Float32Array(NN);   // vzdělanost obyvatel dlaždice
 const conn = new Uint8Array(NN), acc = new Uint8Array(NN), pw = new Uint8Array(NN), wt = new Uint8Array(NN);
 const lv = new Float32Array(NN), poll = new Float32Array(NN), crime = new Float32Array(NN), traf = new Float32Array(NN), hap = new Float32Array(NN);
 const cov = { police: new Float32Array(NN), fire: new Float32Array(NN), health: new Float32Array(NN), edu: new Float32Array(NN), park: new Float32Array(NN), transit: new Float32Array(NN) };
-const TILE_ARRAYS = { ter, road, zone, dens, lvl, vari, spec, ruin, fire, flood, fpl, aband, bad };
+const TILE_ARRAYS = { ter, road, zone, dens, lvl, vari, spec, sty, ruin, fire, flood, fpl, aband, bad };
 const FLOAT_ARRAYS = { occ, eduT, lv, poll, crime, hap };
 
 const idx = (x, y) => y * N + x;
@@ -47,7 +48,7 @@ const blds = new Map();   // id -> { id, type, x, y, size, ... }
 let nextBid = 1;
 const W = { seed: 0, hwY: 0, cx: 0, cy: 0 };
 
-function clearTile(k) { zone[k] = 0; dens[k] = 0; lvl[k] = 0; aband[k] = 0; occ[k] = 0; bad[k] = 0; ruin[k] = 0; fire[k] = 0; if (ter[k] === 3) ter[k] = 0; }
+function clearTile(k) { zone[k] = 0; dens[k] = 0; lvl[k] = 0; aband[k] = 0; occ[k] = 0; bad[k] = 0; ruin[k] = 0; fire[k] = 0; if (ter[k] >= 3) ter[k] = 0; }
 function canBuildAt(x, y, size, allowZone) {
   for (let j = y; j < y + size; j++) for (let i = x; i < x + size; i++) {
     if (!inb(i, j)) return false; const k = idx(i, j);
@@ -92,7 +93,7 @@ function computeConn() {
 
 // ---------- terén ----------
 function genTerrain(seed) {
-  srand(seed); ter.fill(0); fpl.fill(0); road.fill(0); zone.fill(0); dens.fill(0); lvl.fill(0); bld.fill(0);
+  srand(seed); ter.fill(0); fpl.fill(0); road.fill(0); zone.fill(0); dens.fill(0); lvl.fill(0); bld.fill(0); sty.fill(0);
   ruin.fill(0); fire.fill(0); flood.fill(0); aband.fill(0); bad.fill(0); occ.fill(0); eduT.fill(0);
   for (let k = 0; k < NN; k++) vari[k] = (rnd() * 256) | 0;
   blds.clear(); nextBid = 1;
@@ -118,20 +119,56 @@ function genTerrain(seed) {
     const f = fbm(x * 0.07 + 30, y * 0.07 + 30, seed + 7);
     if (f > 0.58 || (f > 0.5 && hash2(x, y, seed + 2) < 0.25)) ter[k] = 3;
   }
+  // pole: obdélníkové lány s různými plodinami
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const k = idx(x, y); if (ter[k]) continue;
+    const p = parcel(x, y);
+    if (hash2(p[0], p[1], seed + 31) < 0.55 && Math.hypot(x - W.cx, y - W.cy) > 5) ter[k] = 4;
+  }
 }
+// lán pole: [sloupec, řádek]; plodina a směr řádků se odvozují z lánu
+function parcel(x, y) { const row = Math.floor(y / 5); return [Math.floor((x + (row % 3) * 2) / 6), row]; }
+function fieldCrop(x, y) { const p = parcel(x, y); return Math.floor(hash2(p[0], p[1], W.seed + 7) * 5); }
 function layRoad(x, y) { const k = idx(x, y); if (bld[k]) return; clearTile(k); road[k] = 1; }
+
+// ---------- vesnice podél hlavní silnice ----------
+function genVillage(techs) {
+  const cx = W.cx, cy = W.cy, L = 12, lane = cx + 4;
+  for (let y = cy - 8; y < cy; y++) if (ter[idx(lane, y)] !== 1) layRoad(lane, y);
+  const free = (x, y) => inb(x, y) && ter[idx(x, y)] !== 1 && !road[idx(x, y)] && !bld[idx(x, y)] && !zone[idx(x, y)];
+  // náves: kostel, obecní úřad a rybník
+  if (canBuildAt(cx - 3, cy - 3, 2, false)) addBuilding('church', cx - 3, cy - 3);
+  if (canBuildAt(cx + 1, cy - 3, 2, false)) addBuilding('townhall', cx + 1, cy - 3);
+  for (const [x, y] of [[cx - 1, cy + 2], [cx, cy + 2], [cx - 1, cy + 3], [cx, cy + 3]]) if (free(x, y)) { clearTile(idx(x, y)); ter[idx(x, y)] = 1; }
+  if (canBuildAt(cx + 5, cy + 1, 1, false)) addBuilding('school', cx + 5, cy + 1);
+  const house = (x, y, z) => { if (!free(x, y)) return false; const k = idx(x, y); clearTile(k); zone[k] = z || 1; dens[k] = 0; lvl[k] = 1 + (hash2(x, y, 5) < 0.45 ? 1 : 0); sty[k] = 0; return true; };
+  const garden = (x, y) => { if (!free(x, y)) return; const k = idx(x, y); ter[k] = 5; };
+  // domy po obou stranách hlavní silnice, za nimi zahrady
+  for (let x = cx - L; x <= cx + L; x++) for (const s of [-1, 1]) {
+    const y = cy + s; if (hash2(x, y, 11) < 0.12 || (x >= cx - 3 && x <= cx + 2 && s < 0)) continue;
+    if (house(x, y)) { garden(x, y + s); if (hash2(x, y, 13) < 0.55) garden(x, y + 2 * s); }
+  }
+  // boční ulička na sever
+  for (let y = cy - 7; y <= cy - 2; y++) for (const s of [-1, 1]) { const x = lane + s; if (house(x, y)) garden(x + s, y); }
+  // hospoda a obchod na návsi, statek na kraji vesnice
+  for (const [x, y] of [[cx - 2, cy + 1], [cx + 1, cy + 1]]) { const k = idx(x, y); if (zone[k] === 1) zone[k] = 2; }
+  for (let x = cx + L - 2; x <= cx + L; x++) for (const y of [cy + 1, cy + 2]) { const k = idx(x, y); if (!inb(x, y) || ter[k] === 1 || road[k] || bld[k]) continue; clearTile(k); zone[k] = 3; dens[k] = 0; lvl[k] = 1 + (hash2(x, y, 4) < 0.5 ? 1 : 0); spec[k] = 1; sty[k] = 0; }
+  // kolem vesnice louky a pole
+  for (let y = cy - 10; y <= cy + 10; y++) for (let x = cx - L - 4; x <= cx + L + 4; x++) { if (!inb(x, y)) continue; const k = idx(x, y); if (ter[k] === 0 && !road[k] && !zone[k] && !bld[k] && Math.abs(y - cy) > 2 && hash2(x >> 2, y >> 2, 3) < 0.7) ter[k] = 4; }
+}
 
 // ---------- generátor hotového města ----------
 function genCity(size, techs) {
   const st = STARTS[size], cx = W.cx, cy = W.cy;
   // dálnice ze západního okraje
-  const hwEnd = st.r ? cx : 12;
-  for (let x = 0; x <= hwEnd; x++) layRoad(x, cy);
+  const village = size === 1, hwEnd = village ? cx + 13 : st.r ? cx : 12;
+  for (let x = 0; x <= hwEnd; x++) { if (ter[idx(x, cy)] === 1 && village) break; layRoad(x, cy); }
   for (let x = 0; x <= hwEnd + 2; x++) for (const y of [cy - 1, cy + 1]) if (ter[idx(x, y)] === 3) ter[idx(x, y)] = 0;
   if (!st.r) { for (const [x, y] of [[8, cy + 1], [8, cy - 2], [5, cy + 1], [5, cy - 2]]) if (canBuildAt(x, y, 2, false)) { addBuilding('townhall', x, y); break; } return; }
   const R = st.r, sp = 5;
   const blocks = [];
-  const B = Math.ceil(R / sp) + 1;
+  const B = village ? 0 : Math.ceil(R / sp) + 1;
+  if (village) genVillage(techs);
   for (let by = -B; by < B; by++) for (let bx = -B; bx < B; bx++) {
     const x0 = cx + bx * sp, y0 = cy + by * sp, mx = x0 + 2.5, my = y0 + 2.5;
     const d = Math.hypot(mx - cx, my - cy), lim = R * (0.82 + 0.36 * fbm(bx * 0.4 + 5, by * 0.4 + 5, W.seed + 11));
@@ -156,7 +193,7 @@ function genCity(size, techs) {
   const has = (t, x, y, dist) => { for (const b of blds.values()) if (b.type === t && Math.hypot(b.x - x, b.y - y) < dist) return true; return false; };
   const put = (t, b, ox, oy) => { const s = SERV[t].size, x = b.x0 + 1 + (ox || 0), y = b.y0 + 1 + (oy || 0); if (!canBuildAt(x, y, s, true)) return null; b.used = (b.used || 0) + s * s; return addBuilding(t, x, y); };
   const byDist = blocks.slice().sort((a, b) => a.d - b.d);
-  put('townhall', byDist[0], 1, 1); byDist[0].core = true;
+  if (!village) { put('townhall', byDist[0], 1, 1); byDist[0].core = true; if (size >= 2) { const cb = byDist.find(b => !b.core && (b.used || 0) === 0); if (cb) { put('church', cb, 0, 0); } } }
   const indAng = Math.PI * 0.8;  // průmysl na jihozápadě
   const isInd = b => b.d > 0.4 && Math.abs(Math.atan2(Math.sin(b.ang - indAng), Math.cos(b.ang - indAng))) < 0.75;
   for (const b of byDist) {
@@ -168,7 +205,6 @@ function genCity(size, techs) {
     if (size >= 2 && free() >= 1 && !isInd(b) && !has('school', b.x0, b.y0, 15)) put('school', b, 3, 3);
     if (!isInd(b) && free() >= 1 && hash2(b.x0, b.y0, 5) < 0.18) put('park', b, 1, 1);
   }
-  if (size === 1) { put('school', byDist[2] || byDist[1] || byDist[0], 3, 3); put('park', byDist[0], 0, 0); }
   const outer = byDist.filter(b => !b.used).reverse(), indBlocks = outer.filter(isInd), anyOuter = outer.slice();
   const pick = (want, size_, filter) => { const ok = b => !b.used && (!filter || filter(b)); return want.find(ok) || anyOuter.find(ok) || null; };
   // náhradní místo podél silnice za okrajem zástavby (pro vesnice a malá města)
@@ -223,7 +259,16 @@ function genCity(size, techs) {
     const f = 1 - capR * 0.55 / capJ;
     for (let k = 0; k < NN; k++) if (lvl[k] > 1 && zone[k] > 1 && hash2(k, pass, 3) < f) { capJ -= capK(k); lvl[k]--; capJ += capK(k); }
   }
-  for (let k = 0; k < NN; k++) if (zone[k] === 3 && lvl[k]) spec[k] = hash2(k % N, (k / N) | 0, 6) < 0.35 ? 1 : (techs.includes('hightech') && hash2(k, 0, 7) < 0.2 ? 2 : 0);
+  for (let k = 0; k < NN; k++) if (zone[k] === 3 && lvl[k]) spec[k] = village ? 1 : hash2(k % N, (k / N) | 0, 6) < 0.35 ? 1 : (techs.includes('hightech') && hash2(k, 0, 7) < 0.2 ? 2 : 0);
+  // ráz zástavby: historické jádro, předměstí, sídliště a vesnické okraje
+  for (let k = 0; k < NN; k++) {
+    if (!zone[k]) continue;
+    const d = Math.hypot(k % N - cx, ((k / N) | 0) - cy) / Math.max(1, R);
+    if (village) sty[k] = 0;
+    else if (size === 2) sty[k] = !dens[k] && zone[k] === 1 && d > 0.85 ? 0 : 1;
+    else sty[k] = d < 0.16 ? 1 : (!dens[k] && zone[k] !== 4 ? (d > 1.0 ? 0 : 1) : 2);
+    if (!village && !dens[k] && zone[k] === 1 && d > 0.6 && hash2(k, 4, 2) < 0.12) { zone[k] = 0; lvl[k] = 0; ter[k] = 5; }
+  }
   // elektřina, voda a odpad podle velikosti
   let res = 0, jobs = 0;
   for (let k = 0; k < NN; k++) if (lvl[k]) { const c = ZONES[zone[k]].cap[dens[k]][lvl[k]]; if (zone[k] === 1) res += c; else jobs += c; }
