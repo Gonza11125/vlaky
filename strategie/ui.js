@@ -23,13 +23,14 @@ function showEnd(win) {
   $('end-title').textContent = win ? 'Vítězství' : 'Porážka';
   const s = ME().stats, m = Math.floor(G.time / 60);
   $('end-text').textContent = (win ? 'Nepřátelské Sídlo padlo. ' : 'Tvoje Sídlo padlo. ') + 'Hra trvala ' + m + ' min (rok ' + year() + '), dosáhl jsi epochy ' + ERAS[ME().era] + '. Zabito nepřátel: ' + s.kills + ', zbořeno budov: ' + s.razed + ', vlastní ztráty: ' + s.lost + '.';
-  $('end').hidden = false; G.reveal = true;
+  $('end').hidden = false; G.reveal = true; clearSave(); showSaveOffer();
 }
 function costHTML(cost) { return Object.keys(cost || {}).map(k => '<i class="dot ' + k + '"></i>' + cost[k]).join(''); }
 
 // ---------- kamera a výběr v prostoru ----------
 function resize() {
-  W = view.clientWidth; H = view.clientHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = view.clientWidth; H = view.clientHeight; DPR = Math.min(window.devicePixelRatio || 1, G.coarse ? 1.5 : 2);
+  $('msgs').style.top = ($('top').offsetHeight + 8) + 'px';
   if (!W || !H) return;
   renderer.setPixelRatio(DPR); renderer.setSize(W, H, false);
   camera.aspect = W / H; camera.updateProjectionMatrix();
@@ -52,9 +53,9 @@ function groundAt(sx, sy) {
   const o = ray.ray.origin, d = ray.ray.direction; if (d.y >= 0) return null;
   const t = -o.y / d.y; return new THREE.Vector3(o.x + d.x * t, 0, o.z + d.z * t);
 }
-function pickAt(sx, sy) {
+function pickAt(sx, sy, touch) {
   const out = { unit: null, bld: null, node: null, animal: null, pt: groundAt(sx, sy) };
-  let bd = Math.max(16, pxPerUnit() * 0.9);
+  let bd = touch ? Math.max(30, pxPerUnit() * 1.2) : Math.max(16, pxPerUnit() * 0.9);
   for (const a of animals) { if (!a.mesh.visible) continue; const p = toScreen(a.x, heightAt(a.x, a.z) + 0.9, a.z); const d = Math.hypot(p.x - sx, p.y - sy); if (p.ok && d < bd) { bd = d; out.animal = a; } }
   for (const u of units) { if (!u.mesh.visible) continue; const p = toScreen(u.x, heightAt(u.x, u.z) + 0.9, u.z); if (!p.ok) continue; const d = Math.hypot(p.x - sx, p.y - sy); if (d < bd) { bd = d; out.unit = u; out.animal = null; } }
   if (out.pt && out.pt.x >= 0 && out.pt.z >= 0 && out.pt.x < WORLD && out.pt.z < WORLD) {
@@ -154,6 +155,11 @@ function confirmPlace(keep) {
 
 // ---------- ukazatel (myš i dotyk) ----------
 const groups = {};
+let boxMode = false;
+function setBoxMode(on) { boxMode = on; $('t-box').classList.toggle('on', on); }
+$('t-box').onclick = () => { setBoxMode(!boxMode); if (boxMode) msg('Táhni prstem přes jednotky, které chceš vybrat.'); };
+$('t-army').onclick = () => { const l = units.filter(u => u.team === 0 && u.type !== 'vil'); if (l.length) setSel(l); else msg('Zatím nemáš žádné vojáky.'); };
+$('t-none').onclick = () => { if (placing) cancelPlacing(); setSel([]); setBoxMode(false); };
 const ptrs = new Map(); let drag = null, pinch = null, lastClick = { t: 0, id: 0 };
 view.addEventListener('contextmenu', e => e.preventDefault());
 view.addEventListener('pointerdown', e => {
@@ -162,7 +168,7 @@ view.addEventListener('pointerdown', e => {
   ptrs.set(e.pointerId, { x, y });
   const touch = e.pointerType !== 'mouse';
   if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 }; drag = null; $('box').hidden = true; return; }
-  drag = { x0: x, y0: y, x, y, moved: false, touch, btn: e.button, mode: touch ? 'pan' : e.button === 0 ? (placing ? 'none' : 'box') : e.button === 1 ? 'pan' : 'cmd', shift: e.shiftKey, ctrl: e.ctrlKey };
+  drag = { x0: x, y0: y, x, y, moved: false, touch, btn: e.button, mode: touch ? (boxMode && !placing ? 'box' : 'pan') : e.button === 0 ? (placing ? 'none' : 'box') : e.button === 1 ? 'pan' : 'cmd', shift: e.shiftKey, ctrl: e.ctrlKey };
 });
 view.addEventListener('pointermove', e => {
   const r = view.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
@@ -197,6 +203,7 @@ function boxSelect(x0, y0, x1, y1, add) {
   const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), b = Math.max(y0, y1);
   const list = units.filter(u => { if (u.team !== 0) return false; const p = toScreen(u.x, heightAt(u.x, u.z) + 0.8, u.z); return p.ok && p.x >= l && p.x <= r && p.y >= t && p.y <= b; });
   if (list.length) setSel(add ? [...new Set([...ownUnits(), ...list])] : list);
+  setBoxMode(false);
 }
 function click(x, y, d) {
   if (placing) {
@@ -205,7 +212,7 @@ function click(x, y, d) {
     if (d.touch && !placing.line) { $('place').hidden = false; return; }
     confirmPlace(d.shift); return;
   }
-  const p = pickAt(x, y);
+  const p = pickAt(x, y, d.touch);
   if (d.btn === 2) { command(p, d.ctrl); return; }
   const target = p.unit || p.animal || p.bld || p.node;
   if (d.touch) {
@@ -370,8 +377,37 @@ $('b-tech').onclick = () => {
 };
 $('b-tech-close').onclick = () => { $('techs').hidden = true; };
 $('diffs').onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of $('diffs').children) x.classList.toggle('on', x === b); G.diff = +b.dataset.d; };
-$('b-start').onclick = () => { AI.attackAt = [600, 450, 330][G.diff]; $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
-$('b-again').onclick = () => location.reload();
+$('b-start').onclick = () => { if (G.time > 0) startFresh(); AI.attackAt = [600, 450, 330][G.diff]; $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
+$('b-again').onclick = () => { $('end').hidden = true; startFresh(); $('start').hidden = false; G.paused = true; };
+
+// ---------- uložení ----------
+const SAVE_KEY = 'vek-pokroku-save-1';
+function readSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return s && s.v === 1 ? s : null; } catch (_) { return null; } }
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (_) { } }
+function doSave(quiet) {
+  if (G.over || !$('start').hidden) return false;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(Object.assign(saveState(), { cam: { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw } }))); if (!quiet) msg('Hra uložena. Příště ji najdeš na úvodní obrazovce.', 'good'); return true; }
+  catch (e) { if (!quiet) msg('Uložení se nepovedlo: prohlížeč nedovolil zápis.', 'bad'); return false; }
+}
+function resetView() { sel = []; cmdSig = ''; rings.length = 0; markers.length = 0; ghost = null; placing = null; $('place').hidden = true; lastSeason = -1; snowShown = -1; baseT = 0; acc = 0; lastAlert = -99; ping = null; for (const k in groups) delete groups[k]; }
+function startFresh() { resetView(); newGame(G.diff); cam.x = ME().tcx; cam.z = ME().tcz + 4; cam.yaw = 0; cam.dist = view.clientWidth < 760 ? 84 : 62; }
+function continueSave() {
+  const sv = readSave(); if (!sv) return;
+  resetView();
+  try { newGame(0, sv); } catch (e) { clearSave(); startFresh(); msg('Uloženou hru se nepodařilo načíst, začíná nová.', 'bad'); $('start').hidden = true; G.paused = false; return; }
+  if (sv.cam) Object.assign(cam, sv.cam);
+  $('b-speed').textContent = G.speed + '×'; $('start').hidden = true; G.paused = false; $('b-pause').textContent = 'Pauza'; $('b-pause').classList.remove('warn');
+  msg('Hra načtena.', 'good');
+}
+function showSaveOffer() {
+  const sv = readSave(), el = $('b-continue'); el.hidden = !sv; if (!sv) return;
+  el.textContent = 'Pokračovat v uložené hře (rok ' + (Math.floor(sv.G.time / (SEASON_LEN * 4)) + 1) + ', ' + ERAS[sv.teams[0].era].toLowerCase() + ')';
+}
+$('b-save').onclick = () => doSave(false);
+$('b-continue').onclick = continueSave;
+setInterval(() => { if (!G.paused) doSave(true); }, 45000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) doSave(true); });
+addEventListener('pagehide', () => doSave(true));
 
 // ---------- vykreslení ----------
 function ring(i) {
@@ -446,7 +482,9 @@ function frame(now) {
 function boot() {
   initScene(view);
   newGame(1);
+  showSaveOffer();
   cam.x = ME().tcx; cam.z = ME().tcz + 4; if (view.clientWidth < 760) cam.dist = 84;
+  document.addEventListener('gesturestart', e => e.preventDefault());
   resize(); applySnow(0); snowShown = 0;
   addEventListener('resize', resize);
   window.GAME = { G, teams, units, blds, cam };

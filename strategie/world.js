@@ -183,17 +183,18 @@ function nearestFree(cx, cy, maxR) {
   return null;
 }
 
-function makeWorld() {
-  let seed = (Math.random() * 1e9) | 0;
+function makeWorld(fixed) {
+  let seed = fixed != null ? fixed : (Math.random() * 1e9) | 0;
   for (let tries = 0; tries < 40; tries++, seed += 101) {
     srand(seed);
     const land = genHeights(seed);
     if (land < 0.55) continue;
-    occ.fill(0); resv.fill(0); bAt.fill(0);
+    occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); PT = -1;
     const a = STARTS[0], b = STARTS[1];
     if (findPath(a.cx - 1, a.cy + 1, b.cx - 1, b.cy + 1, b.cx - 1, b.cy + 1, 0).ok) break;
   }
   genNodes(seed);
+  return seed;
 }
 
 // ---------- geometrie ----------

@@ -28,7 +28,8 @@ const techAvail = (T, id) => { const d = TECHS[id]; return !T.tech[id] && !T.bus
 // ---------- scéna ----------
 function initScene(canvas) {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  G.coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, G.coarse ? 1.5 : 2));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x9db7c6);
@@ -36,7 +37,7 @@ function initScene(canvas) {
   camera = new THREE.PerspectiveCamera(35, 1, 1, 900);
   scene.add(new THREE.HemisphereLight(0xe3ecf5, 0x6d6450, 0.72));
   sun = new THREE.DirectionalLight(0xfff1da, 0.9);
-  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  sun.castShadow = true; sun.shadow.mapSize.set(G.coarse ? 1024 : 2048, G.coarse ? 1024 : 2048);
   const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 320;
   sun.shadow.bias = -0.0008;
   scene.add(sun, sun.target);
@@ -171,7 +172,7 @@ function killAnimal(a) {
   const cx = cellOf(a.x), cy = cellOf(a.z); let n = null;
   for (let r = 0; r <= 2 && !n; r++) for (let dy = -r; dy <= r && !n; dy++) for (let dx = -r; dx <= r && !n; dx++) n = addNode('meat', cx + dx, cy + dy);
   if (!n) return;
-  n.mesh = new THREE.Mesh(meatG, unitMat); n.mesh.position.set(n.x, heightAt(n.x, n.z), n.z); n.mesh.rotation.y = a.face; n.mesh.visible = !!explored[cidx(n.cx, n.cy)]; scene.add(n.mesh);
+  addMeat(n); n.mesh.rotation.y = a.face;
   a.node = n;
 }
 function trade(T, res, buy) {
@@ -701,10 +702,24 @@ function simStep(dt) {
 }
 function endGame(win) { if (G.over) return; G.over = true; G.paused = true; showEnd(win); }
 
-function newGame(diff) {
-  G.diff = diff; AI.attackAt = [600, 450, 330][diff];
+function resetWorld() {
+  for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
+  units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
+  byId.clear(); nodeMeshes = {}; nextId = 1;
+  occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
+  Object.assign(G, { time: 0, over: false, reveal: false, snow: 0 });
+  Object.assign(AI, { acc: 0, wave: 0, launch: -999 });
+  Object.assign(PRICE, { food: 30, wood: 30, stone: 45, metal: 90 });
+}
+function addMeat(n) { n.mesh = new THREE.Mesh(meatG || (meatG = meatGeo()), unitMat); n.mesh.position.set(n.x, heightAt(n.x, n.z), n.z); n.mesh.visible = !!explored[cidx(n.cx, n.cy)]; scene.add(n.mesh); }
+function newGame(diff, sv) {
+  resetWorld();
+  G.diff = sv ? sv.G.diff : diff; AI.attackAt = [600, 450, 330][G.diff];
   teams.push(mkTeam(0), mkTeam(1));
-  makeWorld(); buildTerrain(); buildNodes();
+  G.seed = makeWorld(sv ? sv.seed : null); G.baseNodes = nodes.length;
+  buildTerrain();
+  if (sv) { loadState(sv); return; }
+  buildNodes();
   STARTS.forEach((s, t) => {
     const b = placeBuilding(t, 'tc', s.cx, s.cy, true);
     teams[t].tcx = b.x; teams[t].tcz = b.z;
@@ -712,6 +727,72 @@ function newGame(diff) {
   });
   terrain.geometry.computeVertexNormals(); terrainDirty = false;
   for (const h of herds) for (let i = 0; i < h.n; i++) { const x = cellC(h.cx) + (Math.random() - 0.5) * 8, z = cellC(h.cy) + (Math.random() - 0.5) * 8; if (inMap(cellOf(x), cellOf(z)) && walk[cidx(cellOf(x), cellOf(z))]) addAnimal(x, z); }
+  for (const T of teams) econ(T, 0);
+  updateFog();
+}
+
+// ---------- uložení a načtení ----------
+const r1 = v => Math.round(v * 10) / 10;
+function packOrder(o) {
+  if (!o) return null;
+  const p = { type: o.type };
+  if (o.type === 'move' || o.type === 'amove') { p.x = r1(o.x); p.z = r1(o.z); }
+  else if (o.type === 'attack') { p.t = o.target.id; p.auto = o.auto; p.resume = packOrder(o.resume); }
+  else if (o.type === 'gather') { p.n = o.node.id; p.phase = o.phase; p.d = o.drop ? o.drop.id : 0; }
+  else if (o.type === 'build' || o.type === 'farm') p.b = o.b.id;
+  else if (o.type === 'hunt') p.a = o.animal.id;
+  return p;
+}
+function unpackOrder(u, p, anim) {
+  if (!p) return null;
+  const o = { type: p.type };
+  if (p.type === 'move' || p.type === 'amove') { o.x = p.x; o.z = p.z; }
+  else if (p.type === 'attack') { o.target = byId.get(p.t); o.resume = unpackOrder(u, p.resume, anim); if (!o.target) return o.resume; o.auto = p.auto; o.ox = u.x; o.oz = u.z; o.rt = 0; }
+  else if (p.type === 'gather') { o.node = nodes[p.n]; if (!o.node) return null; o.phase = p.phase; o.drop = byId.get(p.d) || null; }
+  else if (p.type === 'build' || p.type === 'farm') { o.b = byId.get(p.b); if (!o.b) return null; }
+  else if (p.type === 'hunt') { o.animal = anim.get(p.a); o.rt = 0; if (!o.animal) return null; }
+  return o;
+}
+function saveState() {
+  let bits = ''; const bytes = new Uint8Array(Math.ceil(N * N / 8));
+  for (let i = 0; i < N * N; i++) if (explored[i]) bytes[i >> 3] |= 1 << (i & 7);
+  for (let i = 0; i < bytes.length; i++) bits += String.fromCharCode(bytes[i]);
+  return {
+    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow },
+    AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
+    teams: teams.map(T => ({ res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
+    amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),
+    meat: nodes.slice(G.baseNodes).map(n => [n.cx, n.cy, r1(n.x), r1(n.z), Math.round(n.amt), r1(n.v)]),
+    blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
+    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, face: r1(u.face), o: packOrder(u.order) })),
+    animals: animals.filter(a => !a.dead).map(a => [a.id, r1(a.x), r1(a.z), r1(a.hx), r1(a.hz), a.hp]),
+  };
+}
+function loadState(sv) {
+  Object.assign(G, sv.G); Object.assign(AI, sv.AI); Object.assign(PRICE, sv.PRICE);
+  const bits = atob(sv.explored); for (let i = 0; i < N * N; i++) explored[i] = (bits.charCodeAt(i >> 3) >> (i & 7)) & 1;
+  sv.teams.forEach((t, i) => Object.assign(teams[i], t));
+  sv.amt.forEach((a, i) => { const n = nodes[i]; if (!n) return; n.amt = a; if (a <= 0) nodeAt[cidx(n.cx, n.cy)] = -1; });
+  buildNodes();
+  for (const m of sv.meat) { const n = { id: nodes.length, isNode: true, type: 'meat', def: NODE_DEF.meat, cx: m[0], cy: m[1], x: m[2], z: m[3], amt: m[4], inst: -1, v: m[5] }; nodes.push(n); if (n.amt > 0) { nodeAt[cidx(n.cx, n.cy)] = n.id; addMeat(n); } }
+  for (const s of sv.blds) {
+    nextId = s.id; const b = placeBuilding(s.team, s.type, s.cx, s.cy, s.done);
+    b.hp = s.hp; b.maxHp = s.maxHp; b.prog = s.prog; b.queue = s.queue; b.seen = s.seen; b.mesh.scale.y = s.done ? 1 : 0.12 + 0.88 * Math.min(1, s.prog);
+    if (s.rally) b.rally = { x: s.rally.x, z: s.rally.z, node: s.rally.n >= 0 ? nodes[s.rally.n] : null };
+  }
+  const anim = new Map();
+  for (const a of sv.animals) { nextId = a[0]; const an = addAnimal(a[1], a[2]); an.hx = a[3]; an.hz = a[4]; an.hp = a[5]; anim.set(an.id, an); }
+  const pend = [];
+  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype; u.face = s.face; pend.push([u, s.o]); }
+  for (const [u, p] of pend) {
+    const o = u.order = unpackOrder(u, p, anim); if (!o) continue;
+    if (o.type === 'move') pathTo(u, o.x, o.z);
+    else if (o.type === 'gather') { if (o.phase === 'drop' && o.drop) pathToB(u, o.drop); else if (o.phase !== 'work') { o.phase = 'go'; pathTo(u, o.node.x, o.node.z); } }
+    else if (o.type === 'farm') o.b.worker = u;
+  }
+  nextId = sv.nextId;
+  for (let i = 0; i < N * N; i++) if (explored[i] && nodeAt[i] >= 0) showNode(nodes[nodeAt[i]]);
+  terrain.geometry.computeVertexNormals(); terrainDirty = false;
   for (const T of teams) econ(T, 0);
   updateFog();
 }
