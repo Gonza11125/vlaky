@@ -128,7 +128,7 @@ function genCity(size, techs) {
   const hwEnd = st.r ? cx : 12;
   for (let x = 0; x <= hwEnd; x++) layRoad(x, cy);
   for (let x = 0; x <= hwEnd + 2; x++) for (const y of [cy - 1, cy + 1]) if (ter[idx(x, y)] === 3) ter[idx(x, y)] = 0;
-  if (!st.r) return;
+  if (!st.r) { for (const [x, y] of [[8, cy + 1], [8, cy - 2], [5, cy + 1], [5, cy - 2]]) if (canBuildAt(x, y, 2, false)) { addBuilding('townhall', x, y); break; } return; }
   const R = st.r, sp = 5;
   const blocks = [];
   const B = Math.ceil(R / sp) + 1;

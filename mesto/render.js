@@ -188,7 +188,7 @@ function syncBuildings() {
 function mRotor() { const b = new GB(); b.sph(0.32, PAL.white, 0, 0, 0.75, 1, 1, 1, 0); for (let i = 0; i < 3; i++) b.add(new THREE.BoxGeometry(0.28, 4.4, 0.08), PAL.white, Math.sin(i * 2.094) * 2.2, Math.cos(i * 2.094) * 2.2, 0.8, 0, 0, -i * 2.094); return b.geo(); }
 function rebuildAll() {
   for (const b of batches.values()) b.clear();
-  tileH.fill(null); treeH.fill(null); servH.clear(); RS.martial = []; smokers.clear(); anims.length = 0; cars.length = 0; vehicles.length = 0; crowd.clear();
+  tileH.fill(null); treeH.fill(null); servH.clear(); RS.martial = []; for (const p of parts) if (p.h.b) pB.remove(p.h); parts.length = 0; smokers.clear(); anims.length = 0; cars.length = 0; vehicles.length = 0; crowd.clear();
   for (let k = 0; k < NN; k++) refreshTile(k);
   syncBuildings(); RS.roadsDirty = true;
 }

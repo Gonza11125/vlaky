@@ -600,7 +600,7 @@ function monthly() {
   const tIn = Object.values(inc).reduce((a, b) => a + b, 0), tOut = Object.values(exp).reduce((a, b) => a + b, 0);
   S.money += tIn - tOut + trade.net;
   S.last = { inc, exp, byCat, trade, net: tIn - tOut + trade.net, day: S.day };
-  if (!hall && pop > 0) note('Radnice nefunguje, vybíráš jen 40 % daní.', 'bad');
+  if (!hall && pop > 0) note([...blds.values()].some(b => b.type === 'townhall') ? 'Radnice nefunguje, vybíráš jen 40 % daní.' : 'Ve městě chybí radnice, vybíráš jen 40 % daní. Postav ji v záložce Správa.', 'bad');
   // výzkum
   const rp = T.rp + T.fil[4] * 0.003;
   if (S.research) { S.rp += rp; const t = TECHS[S.research]; if (S.rp >= t.cost) { S.techs[S.research] = true; note('Vyzkoumáno: ' + t.name + '. ' + t.desc, 'good'); S.rp -= t.cost; S.research = null; covDirty = true; } }

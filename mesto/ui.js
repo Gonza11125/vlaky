@@ -10,7 +10,7 @@ const DAY_SEC = [0, 0.8, 0.32, 0.1];
 // ---------- zprávy ----------
 UIH.note = m => {
   if (!G.playing) return;
-  const el = document.createElement('div'); el.className = 'note ' + m.cls + (m.k >= 0 ? ' go' : ''); el.textContent = m.text;
+  const el = document.createElement('div'); el.className = 'note ' + m.cls + (m.k >= 0 ? ' jump' : ''); el.textContent = m.text;
   if (m.k >= 0) el.onclick = () => focusTile(m.k % N, (m.k / N) | 0);
   const f = $('feed'); f.appendChild(el); while (f.children.length > 5) f.firstChild.remove();
   setTimeout(() => el.remove(), m.cls === 'tip' ? 11000 : 8000);
