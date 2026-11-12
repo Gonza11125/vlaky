@@ -23,7 +23,7 @@ function showEnd(win) {
   $('end-title').textContent = win ? 'Vítězství' : 'Porážka';
   const s = ME().stats, m = Math.floor(G.time / 60);
   $('end-text').textContent = (win ? 'Nepřátelské Sídlo padlo. ' : 'Tvoje Sídlo padlo. ') + 'Hra trvala ' + m + ' min (rok ' + year() + '), dosáhl jsi epochy ' + ERAS[ME().era] + '. Zabito nepřátel: ' + s.kills + ', zbořeno budov: ' + s.razed + ', vlastní ztráty: ' + s.lost + '.';
-  $('end').hidden = false;
+  $('end').hidden = false; G.reveal = true;
 }
 function costHTML(cost) { return Object.keys(cost || {}).map(k => '<i class="dot ' + k + '"></i>' + cost[k]).join(''); }
 
@@ -53,16 +53,17 @@ function groundAt(sx, sy) {
   const t = -o.y / d.y; return new THREE.Vector3(o.x + d.x * t, 0, o.z + d.z * t);
 }
 function pickAt(sx, sy) {
-  const out = { unit: null, bld: null, node: null, pt: groundAt(sx, sy) };
+  const out = { unit: null, bld: null, node: null, animal: null, pt: groundAt(sx, sy) };
   let bd = Math.max(16, pxPerUnit() * 0.9);
-  for (const u of units) { const p = toScreen(u.x, heightAt(u.x, u.z) + 0.9, u.z); if (!p.ok) continue; const d = Math.hypot(p.x - sx, p.y - sy); if (d < bd) { bd = d; out.unit = u; } }
+  for (const a of animals) { if (!a.mesh.visible) continue; const p = toScreen(a.x, heightAt(a.x, a.z) + 0.9, a.z); const d = Math.hypot(p.x - sx, p.y - sy); if (p.ok && d < bd) { bd = d; out.animal = a; } }
+  for (const u of units) { if (!u.mesh.visible) continue; const p = toScreen(u.x, heightAt(u.x, u.z) + 0.9, u.z); if (!p.ok) continue; const d = Math.hypot(p.x - sx, p.y - sy); if (d < bd) { bd = d; out.unit = u; out.animal = null; } }
   if (out.pt && out.pt.x >= 0 && out.pt.z >= 0 && out.pt.x < WORLD && out.pt.z < WORLD) {
     const cx = cellOf(out.pt.x), cy = cellOf(out.pt.z);
-    out.bld = byId.get(bAt[cidx(cx, cy)]) || null;
+    out.bld = byId.get(bAt[cidx(cx, cy)]) || null; if (out.bld && !out.bld.mesh.visible) out.bld = null;
     let nd = 1.9;
-    for (let j = cy - 1; j <= cy + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) { if (!inMap(i, j)) continue; const id = nodeAt[cidx(i, j)]; if (id < 0) continue; const n = nodes[id], d = Math.hypot(n.x - out.pt.x, n.z - out.pt.z); if (d < nd) { nd = d; out.node = n; } }
+    for (let j = cy - 1; j <= cy + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) { if (!inMap(i, j)) continue; const id = nodeAt[cidx(i, j)]; if (id < 0 || !explored[cidx(i, j)]) continue; const n = nodes[id], d = Math.hypot(n.x - out.pt.x, n.z - out.pt.z); if (d < nd) { nd = d; out.node = n; } }
   }
-  if (!out.bld) { let best = 1e9; for (const b of blds) { if (b.type === 'farm' || b.type === 'pasture') continue; const p = toScreen(b.x, b.y + 1.6, b.z); const d = Math.hypot(p.x - sx, p.y - sy); if (d < b.size * CS * 0.42 * pxPerUnit() && d < best) { best = d; out.bld = b; } } }
+  if (!out.bld) { let best = 1e9; for (const b of blds) { if (b.type === 'farm' || b.type === 'pasture' || !b.mesh.visible) continue; const p = toScreen(b.x, b.y + 1.6, b.z); const d = Math.hypot(p.x - sx, p.y - sy); if (d < b.size * CS * 0.42 * pxPerUnit() && d < best) { best = d; out.bld = b; } } }
   return out;
 }
 function marker(x, z, color) {
@@ -75,7 +76,7 @@ const ownUnits = () => sel.filter(e => e.isU && e.team === 0 && !e.dead);
 function setSel(list) { sel = list; amoveMode = false; razeArm = 0; cmdSig = ''; }
 function command(p, forceA) {
   const own = ownUnits();
-  if (!p.pt && !p.unit) return;
+  if (!p.pt && !p.unit && !p.animal) return;
   if (!own.length) {
     const b = sel[0];
     if (b && b.isB && b.team === 0 && p.pt) { b.rally = { x: p.pt.x, z: p.pt.z, node: p.node || null }; marker(p.pt.x, p.pt.z, 0xffe08a); }
@@ -84,6 +85,7 @@ function command(p, forceA) {
   const vils = own.filter(u => u.type === 'vil');
   const enemy = (p.unit && p.unit.team !== 0) ? p.unit : (p.bld && p.bld.team !== 0 ? p.bld : null);
   if (enemy) { own.forEach(u => orderAttack(u, enemy)); marker(enemy.x, enemy.z, 0xff6a50); return; }
+  if (p.animal && vils.length) { vils.forEach(u => orderHunt(u, p.animal)); marker(p.animal.x, p.animal.z, 0xff6a50); return; }
   if (p.bld && p.bld.team === 0) {
     const b = p.bld;
     if (vils.length && (!b.done || b.hp < b.maxHp)) { vils.forEach(u => orderBuild(u, b)); marker(b.x, b.z, 0x8fe08a); return; }
@@ -96,7 +98,7 @@ function command(p, forceA) {
     }
   }
   if (p.node && vils.length) {
-    if (p.node.def.req && !ME().tech[p.node.def.req]) { msg('Rudu zatím neumíš těžit. Vyzkoumej Hornictví a tavení.', 'bad'); return; }
+    if (p.node.def.req && !ME().tech[p.node.def.req]) { msg(p.node.def.name + ': těžit to zatím neumíš. Vyzkoumej v Sídle Hornictví a tavení.', 'bad'); return; }
     vils.forEach(u => orderGather(u, p.node)); own.filter(u => u.type !== 'vil').forEach(u => orderMove(u, p.node.x, p.node.z));
     marker(p.node.x, p.node.z, 0x8fe08a); return;
   }
@@ -110,18 +112,29 @@ function startPlacing(type) {
   const def = BUILDINGS[type];
   if (!afford(ME(), def.cost)) { msg('Chybí: ' + missing(ME(), def.cost) + '.', 'bad'); return; }
   cancelPlacing();
-  ghost = new THREE.Mesh(geoFor('b', type, 0), ghostMat); ghost.visible = false; scene.add(ghost);
-  placing = { type, cx: -1, cy: -1, ok: false, set: false };
+  ghost = []; placing = { type, line: !!def.line, anchor: null, cells: [], cx: -1, cy: -1, ok: false, set: false };
+  if (def.line) msg('Klikni na začátek úseku a pak na jeho konec. Pravým tlačítkem nebo Esc skončíš.');
 }
-function cancelPlacing() { if (ghost) scene.remove(ghost); ghost = null; placing = null; $('place').hidden = true; }
+function cancelPlacing() { if (ghost) ghost.forEach(g => { scene.remove(g); g.material.dispose(); }); ghost = null; placing = null; $('place').hidden = true; cmdSig = ''; }
+function lineCells(a, b) {
+  const out = []; let x = a.cx, y = a.cy; const dx = Math.abs(b.cx - x), dy = Math.abs(b.cy - y), sx = x < b.cx ? 1 : -1, sy = y < b.cy ? 1 : -1; let err = dx - dy;
+  for (let i = 0; i < 60; i++) { out.push({ cx: x, cy: y }); if (x === b.cx && y === b.cy) break; const e2 = 2 * err; if (e2 > -dy) { err -= dy; x += sx; } if (e2 < dx) { err += dx; y += sy; } }
+  return out;
+}
 function moveGhost(sx, sy) {
   const pt = groundAt(sx, sy); if (!pt || !placing) return false;
   const s = BUILDINGS[placing.type].size;
   placing.cx = Math.round(pt.x / CS - s / 2); placing.cy = Math.round(pt.z / CS - s / 2); placing.set = true;
-  placing.ok = canPlace(placing.type, placing.cx, placing.cy);
-  let h = 0; if (inMap(placing.cx, placing.cy) && inMap(placing.cx + s - 1, placing.cy + s - 1)) h = cellH(placing.cx + (s >> 1), placing.cy + (s >> 1));
-  ghost.position.set((placing.cx + s / 2) * CS, h + 0.1, (placing.cy + s / 2) * CS); ghost.visible = true;
-  ghostMat.color.setHex(placing.ok ? 0x66ff88 : 0xff5544);
+  const here = { cx: placing.cx, cy: placing.cy };
+  placing.cells = placing.line && placing.anchor ? lineCells(placing.anchor, here) : [here];
+  placing.ok = false;
+  placing.cells.forEach((c, i) => {
+    if (!ghost[i]) { ghost[i] = new THREE.Mesh(geoFor('b', placing.type, 0), ghostMat.clone()); scene.add(ghost[i]); }
+    c.ok = canPlace(placing.type, c.cx, c.cy); if (c.ok) placing.ok = true;
+    const h = inMap(c.cx, c.cy) && inMap(c.cx + s - 1, c.cy + s - 1) ? cellH(c.cx + (s >> 1), c.cy + (s >> 1)) : 0;
+    ghost[i].position.set((c.cx + s / 2) * CS, h + 0.1, (c.cy + s / 2) * CS); ghost[i].visible = true; ghost[i].material.color.setHex(c.ok ? 0x66ff88 : 0xff5544);
+  });
+  for (let i = placing.cells.length; i < ghost.length; i++) ghost[i].visible = false;
   return true;
 }
 function confirmPlace(keep) {
@@ -129,16 +142,18 @@ function confirmPlace(keep) {
   const def = BUILDINGS[placing.type];
   if (!placing.ok) { msg('Tady stavět nejde. Místo musí být volné a rovné.', 'bad'); return; }
   if (!afford(ME(), def.cost)) { msg('Chybí: ' + missing(ME(), def.cost) + '.', 'bad'); cancelPlacing(); return; }
-  pay(ME(), def.cost);
-  const b = placeBuilding(0, placing.type, placing.cx, placing.cy, false);
-  ownUnits().filter(u => u.type === 'vil').forEach(u => orderBuild(u, b));
-  const type = placing.type;
-  if (keep && afford(ME(), def.cost)) { placing.ok = false; placing.set = false; ghost.visible = false; $('place').hidden = true; }
+  if (placing.line && !placing.anchor) { placing.anchor = { cx: placing.cx, cy: placing.cy }; return; }
+  let first = null, short = false;
+  for (const c of placing.cells) { if (!c.ok || !canPlace(placing.type, c.cx, c.cy)) continue; if (!afford(ME(), def.cost)) { short = true; break; } pay(ME(), def.cost); const b = placeBuilding(0, placing.type, c.cx, c.cy, false); first = first || b; }
+  if (short) msg('Na celý úsek nestačily suroviny.', 'bad');
+  if (first) ownUnits().filter(u => u.type === 'vil').forEach(u => orderBuild(u, first));
+  if (placing.line && !short) { placing.anchor = placing.cells[placing.cells.length - 1]; placing.set = false; ghost.forEach(g => { g.visible = false; }); return; }
+  if (keep && afford(ME(), def.cost)) { placing.ok = false; placing.set = false; ghost.forEach(g => { g.visible = false; }); $('place').hidden = true; }
   else cancelPlacing();
-  return type;
 }
 
 // ---------- ukazatel (myš i dotyk) ----------
+const groups = {};
 const ptrs = new Map(); let drag = null, pinch = null, lastClick = { t: 0, id: 0 };
 view.addEventListener('contextmenu', e => e.preventDefault());
 view.addEventListener('pointerdown', e => {
@@ -187,12 +202,12 @@ function click(x, y, d) {
   if (placing) {
     if (d.btn === 2) { cancelPlacing(); return; }
     if (!moveGhost(x, y)) return;
-    if (d.touch) { $('place').hidden = false; return; }
+    if (d.touch && !placing.line) { $('place').hidden = false; return; }
     confirmPlace(d.shift); return;
   }
   const p = pickAt(x, y);
   if (d.btn === 2) { command(p, d.ctrl); return; }
-  const target = p.unit || p.bld || p.node;
+  const target = p.unit || p.animal || p.bld || p.node;
   if (d.touch) {
     const own = ownUnits();
     if (own.length) {
@@ -220,6 +235,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Period') idleVil();
   if (e.code === 'KeyH') { cam.x = ME().tcx; cam.z = ME().tcz; }
   if (e.code.startsWith('Arrow')) e.preventDefault();
+  if (/^Digit[1-9]$/.test(e.code)) { const k = e.code.slice(5); if (e.ctrlKey || e.metaKey) { e.preventDefault(); groups[k] = ownUnits(); msg('Skupina ' + k + ' uložena.'); } else if (groups[k]) { const l = groups[k].filter(u => !u.dead); if (l.length) setSel(l); } }
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -232,15 +248,16 @@ function drawMiniBase() {
     const k = (j * NV + i) * 3, o = (j * N + i) * 4; let r = col[k], g = col[k + 1], b = col[k + 2];
     if (cellH(i, j) < 0.1) { r = 0.25; g = 0.45; b = 0.57; }
     const nid = nodeAt[cidx(i, j)]; if (nid >= 0) { const t = nodes[nid].type; if (t === 'tree') { r *= 0.62; g *= 0.72; b *= 0.6; } else if (t === 'stone') { r = g = b = 0.72; } else if (t === 'ore') { r = 0.8; g = 0.5; b = 0.2; } }
-    img.data[o] = r * 255; img.data[o + 1] = g * 255; img.data[o + 2] = b * 255; img.data[o + 3] = 255;
+    const fk = !explored[cidx(i, j)] ? 0.06 : vis[cidx(i, j)] ? 1 : 0.6;
+    img.data[o] = r * 255 * fk; img.data[o + 1] = g * 255 * fk; img.data[o + 2] = b * 255 * fk; img.data[o + 3] = 255;
   }
   c.putImageData(img, 0, 0);
 }
 function drawMini() {
   const S = mini.width, k = S / WORLD;
   mctx.imageSmoothingEnabled = true; mctx.drawImage(mbase, 0, 0, S, S);
-  for (const b of blds) { mctx.fillStyle = b.team ? '#ff5a45' : '#58a6ff'; const s = Math.max(3, b.size * CS * k); mctx.fillRect(b.x * k - s / 2, b.z * k - s / 2, s, s); }
-  for (const u of units) { mctx.fillStyle = u.team ? '#ff8a7a' : '#bfe0ff'; mctx.fillRect(u.x * k - 1, u.z * k - 1, 2.2, 2.2); }
+  for (const b of blds) { if (!b.mesh.visible) continue; mctx.fillStyle = b.team ? '#ff5a45' : '#58a6ff'; const s = Math.max(3, b.size * CS * k); mctx.fillRect(b.x * k - s / 2, b.z * k - s / 2, s, s); }
+  for (const u of units) { if (!u.mesh.visible) continue; mctx.fillStyle = u.team ? '#ff8a7a' : '#bfe0ff'; mctx.fillRect(u.x * k - 1, u.z * k - 1, 2.2, 2.2); }
   mctx.strokeStyle = '#fff'; mctx.lineWidth = 1; mctx.beginPath();
   [[0, 0], [W, 0], [W, H], [0, H]].forEach(([x, y], i) => { const p = groundPlane(x, y); if (i) mctx.lineTo(p.x * k, p.z * k); else mctx.moveTo(p.x * k, p.z * k); });
   mctx.closePath(); mctx.stroke();
@@ -258,7 +275,7 @@ function tip(html) { const t = $('tip'); if (!html) { t.hidden = true; return; }
 let cmdSig = '', cmdBtns = [], tipTimer = 0;
 function addBtn(o) {
   const b = document.createElement('button'); b.className = 'cbtn ' + (o.cls || '');
-  b.innerHTML = '<span class="n"></span>' + (o.cost ? '<span class="c">' + costHTML(o.cost) + '</span>' : '');
+  b.innerHTML = '<span class="n"></span>' + (o.cost ? '<span class="c">' + costHTML(o.cost) + '</span>' : o.sub ? '<span class="c">' + o.sub + '</span>' : '');
   b.firstChild.textContent = o.label;
   const tipHtml = '<h3>' + o.label + '</h3>' + (o.cost ? '<p class="c">' + costHTML(o.cost) + (o.time ? ' · ' + o.time + ' s' : '') + '</p>' : '') + (o.desc ? '<p>' + o.desc + '</p>' : '');
   b.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') tip(tipHtml); });
@@ -269,7 +286,7 @@ function addBtn(o) {
 function tryQueue(b, kind, id) { const err = enqueue(b, kind, id); if (err) msg(err, 'bad'); }
 function buildCmd() {
   const T = ME(), own = ownUnits(), b = sel[0];
-  const sig = sel.map(e => e.id).join(',') + '|' + Object.keys(T.tech).length + '|' + Object.keys(T.busy).length + '|' + T.era + '|' + (placing ? placing.type : '') + amoveMode + razeArm + (b && b.isB ? b.done : '');
+  const sig = sel.map(e => e.id).join(',') + '|' + Object.keys(T.tech).length + '|' + Object.keys(T.busy).length + '|' + T.era + '|' + (placing ? placing.type : '') + amoveMode + razeArm + (b && b.type === 'market' ? Object.values(PRICE).map(Math.round).join() : '') + (b && b.isB ? b.done : '');
   if (sig === cmdSig) return; cmdSig = sig;
   $('cmd').innerHTML = ''; cmdBtns = [];
   if (own.length) {
@@ -281,6 +298,10 @@ function buildCmd() {
     if (b.done) {
       for (const id in UNITS) { const d = UNITS[id]; if (d.at !== b.type || !hasReq(T, d)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc + ' Životy ' + d.hp + ', útok ' + d.atk + (d.range ? ', dostřel ' + d.range : '') + ', zbroj ' + d.armor + '. Sní ' + d.upkeep + ' jídla za minutu.', fn: () => tryQueue(b, 'u', id) }); }
       for (const id in TECHS) { const d = TECHS[id]; if (d.at !== b.type || !techAvail(T, id)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc, cls: 'tech', fn: () => tryQueue(b, 't', id) }); }
+      if (b.type === 'market') for (const r in PRICE) {
+        addBtn({ label: 'Prodat: ' + RES_NAME[r].toLowerCase(), sub: '100 za <i class="dot gold"></i>' + Math.floor(PRICE[r] * 0.7), fn: () => { const e = trade(T, r, false); if (e) msg(e, 'bad'); } });
+        addBtn({ label: 'Koupit: ' + RES_NAME[r].toLowerCase(), sub: '100 za <i class="dot gold"></i>' + Math.ceil(PRICE[r] * 1.3), fn: () => { const e = trade(T, r, true); if (e) msg(e, 'bad'); } });
+      }
       if (b.queue.length) addBtn({ label: 'Zrušit poslední', desc: 'Zruší poslední položku ve frontě a vrátí suroviny.', fn: () => cancelQueue(b, b.queue.length - 1) });
     }
     if (b.type !== 'tc') addBtn({ label: razeArm === b.id ? 'Opravdu zbořit?' : 'Zbořit', cls: razeArm === b.id ? 'on' : '', fn: () => { if (razeArm === b.id) { if (!b.done) refund(T, b.def.cost, 0.75); killEnt(b, null); setSel([]); } else razeArm = b.id; } });
@@ -312,7 +333,8 @@ function refreshUI() {
     h = '<h2>Výběr: ' + sel.length + '</h2><p class="stat">' + Object.keys(by).map(k => by[k] + '× ' + k).join(', ') + '</p>';
   } else {
     const e = sel[0];
-    if (e.isNode) h = '<h2>' + e.def.name + '</h2><p class="stat">Zbývá ' + Math.ceil(e.amt) + ' (' + RES_NAME[e.def.res].toLowerCase() + ')</p>' + (e.def.req && !T.tech[e.def.req] ? '<p>K těžbě potřebuješ Hornictví a tavení.</p>' : '');
+    if (e.isAnimal) h = '<h2>Jelen</h2>' + hpBar(e) + '<p>Divoká zvěř. Pošli vesničany na lov, z úlovku pak nanosí jídlo.</p>';
+    else if (e.isNode) h = '<h2>' + e.def.name + '</h2><p class="stat">Zbývá ' + Math.ceil(e.amt) + ' (' + RES_NAME[e.def.res].toLowerCase() + ')</p>' + (e.def.req && !T.tech[e.def.req] ? '<p>K těžbě potřebuješ Hornictví a tavení.</p>' : '');
     else if (e.isU) {
       const o = e.order, task = !o ? 'čeká' : o.type === 'gather' ? 'sbírá: ' + RES_NAME[o.node.def.res].toLowerCase() : TASK[o.type];
       h = '<h2>' + e.def.name + (e.team ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Životy ' + Math.ceil(e.hp) + '/' + e.maxHp + ' · útok ' + atkOf(e) + ' · zbroj ' + armorOf(e) + (e.def.range ? ' · dostřel ' + e.def.range : '') + '</p>' +
@@ -348,7 +370,7 @@ $('b-tech').onclick = () => {
 };
 $('b-tech-close').onclick = () => { $('techs').hidden = true; };
 $('diffs').onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of $('diffs').children) x.classList.toggle('on', x === b); G.diff = +b.dataset.d; };
-$('b-start').onclick = () => { AI.attackAt = [600, 450, 330][G.diff]; $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
+$('b-start').onclick = () => { AI.attackAt = [600, 450, 330][G.diff]; $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
 $('b-again').onclick = () => location.reload();
 
 // ---------- vykreslení ----------
@@ -362,7 +384,7 @@ function drawWorldUI(now) {
     if (e.dead) continue; const m = ring(n++); m.visible = true;
     const r = e.isB ? e.size * CS * 0.74 : e.isNode ? 1.1 : (e.def.cls === 'cav' || e.def.cls === 'siege') ? 1.3 : 0.8;
     m.scale.setScalar(r); m.position.set(e.x, (e.isB ? e.y : heightAt(e.x, e.z)) + 0.12, e.z);
-    m.material.color.setHex(e.isNode ? 0xffffff : e.team ? 0xff6a50 : 0x9df08f);
+    m.material.color.setHex(e.isNode || e.isAnimal ? 0xffffff : e.team ? 0xff6a50 : 0x9df08f);
   }
   for (let i = n; i < rings.length; i++) rings[i].visible = false;
   hctx.setTransform(DPR, 0, 0, DPR, 0, 0); hctx.clearRect(0, 0, W, H);
@@ -371,13 +393,13 @@ function drawWorldUI(now) {
     const k = clamp(e.hp / e.maxHp, 0, 1); hctx.fillStyle = '#000a'; hctx.fillRect(p.x - w / 2 - 1, p.y - 1, w + 2, 5);
     hctx.fillStyle = k > 0.5 ? '#7fd66f' : k > 0.25 ? '#e8c14a' : '#ee5a45'; hctx.fillRect(p.x - w / 2, p.y, w * k, 3);
   };
-  for (const u of units) if (u.hp < u.maxHp - 0.5 || sel.includes(u)) bar(u, heightAt(u.x, u.z) + (u.def.cls === 'cav' ? 3.2 : 2.4), 22);
-  for (const b of blds) if (b.hp < b.maxHp - 0.5 || sel.includes(b)) bar(b, b.y + 4.5, 20 + b.size * 10);
+  for (const u of units) if (u.mesh.visible && (u.hp < u.maxHp - 0.5 || sel.includes(u))) bar(u, heightAt(u.x, u.z) + (u.def.cls === 'cav' ? 3.2 : 2.4), 22);
+  for (const b of blds) if (b.mesh.visible && !(b.def.line && !sel.includes(b) && b.hp > b.maxHp * 0.99) && (b.hp < b.maxHp - 0.5 || sel.includes(b))) bar(b, b.y + 4.5, 20 + b.size * 10);
   const s0 = sel[0];
   if (s0 && s0.isB && s0.team === 0 && s0.rally) { const p = toScreen(s0.rally.x, heightAt(s0.rally.x, s0.rally.z) + 0.3, s0.rally.z); if (p.ok) { hctx.strokeStyle = '#ffe08a'; hctx.lineWidth = 2; hctx.beginPath(); hctx.moveTo(p.x, p.y); hctx.lineTo(p.x, p.y - 18); hctx.stroke(); hctx.fillStyle = '#ffe08a'; hctx.fillRect(p.x, p.y - 18, 10, 7); } }
 }
 const FARM_TINT = [0x9fd070, 0xc4d868, 0xe6c35a, 0xf4f4f4];
-let last = performance.now(), acc = 0, uiT = 0, miniT = 0, baseT = 0, lastSeason = -1, snowShown = -1;
+let last = performance.now(), acc = 0, fogT = 0, uiT = 0, miniT = 0, baseT = 0, lastSeason = -1, snowShown = -1;
 const STEP = 1 / 30;
 function frame(now) {
   requestAnimationFrame(frame);
@@ -399,11 +421,15 @@ function frame(now) {
     G.snow = clamp(G.snow + (se === 3 ? 1 : -1) * dt * G.speed * 0.12, 0, 1);
   }
   if (Math.abs(G.snow - snowShown) > 0.02 || (G.snow !== snowShown && (G.snow === 0 || G.snow === 1))) { snowShown = G.snow; applySnow(G.snow); baseT = 0; }
+  if (now - fogT > 120) { fogT = now; updateFog(); }
   updatePuffs(dt);
   if (terrainDirty) { terrain.geometry.computeVertexNormals(); terrainDirty = false; }
   const t = now / 1000;
+  for (const b of blds) if (b.team !== 0) { if (vis[cidx(cellOf(b.x), cellOf(b.z))]) b.seen = true; b.mesh.visible = !!b.seen; }
+  for (const a of animals) { const m = a.mesh; m.visible = !!vis[cidx(cellOf(a.x), cellOf(a.z))]; m.position.set(a.x, heightAt(a.x, a.z) + (a.moving ? Math.abs(Math.sin(t * 8 + a.id)) * 0.1 : 0), a.z); let d = a.face - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); m.rotation.y += d * Math.min(1, dt * 8); }
   for (const u of units) {
     const m = u.mesh, h = heightAt(u.x, u.z);
+    if (u.team !== 0) m.visible = !!vis[cidx(cellOf(u.x), cellOf(u.z))];
     m.position.set(u.x, h + (u.moving ? Math.abs(Math.sin(t * 9 + u.id)) * 0.13 : 0), u.z);
     let d = u.face - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); m.rotation.y += d * Math.min(1, dt * 12);
     m.rotation.x = u.working && u.def.cls !== 'siege' && u.def.cls !== 'cav' ? Math.max(0, Math.sin(t * 7 + u.id)) * 0.28 : 0;
@@ -413,7 +439,7 @@ function frame(now) {
   drawWorldUI(now);
   renderer.render(scene, camera);
   if (now - uiT > 200) { uiT = now; refreshUI(); }
-  if (now - baseT > 2500) { baseT = now; drawMiniBase(); }
+  if (now - baseT > 900) { baseT = now; drawMiniBase(); }
   if (now - miniT > 150) { miniT = now; drawMini(); }
 }
 
@@ -424,6 +450,7 @@ function boot() {
   resize(); applySnow(0); snowShown = 0;
   addEventListener('resize', resize);
   window.GAME = { G, teams, units, blds, cam };
+  window.addEventListener('contextmenu', e => { if (placing) e.preventDefault(); });
   requestAnimationFrame(frame);
 }
 boot();

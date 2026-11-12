@@ -11,6 +11,7 @@ const bAt = new Int32Array(N * N);            // id budovy na buňce
 const nodeAt = new Int32Array(N * N).fill(-1);
 const forest = new Uint8Array(N * N);
 const nodes = [];
+const herds = [];
 const STARTS = [{ cx: 24, cy: N - 26 }, { cx: N - 26, cy: 24 }];
 
 let _seed = 1;
@@ -60,11 +61,12 @@ function genHeights(seed) {
   return w / (N * N);
 }
 
-function addNode(type, cx, cy) {
+function addNode(type, cx, cy, force) {
   if (!inMap(cx, cy)) return null;
   const i = cidx(cx, cy);
-  if (!walk[i] || nodeAt[i] >= 0) return null;
+  if ((!walk[i] && !force) || nodeAt[i] >= 0 || resv[i]) return null;
   const n = { id: nodes.length, isNode: true, type, def: NODE_DEF[type], cx, cy, x: cellC(cx) + (rnd() - 0.5) * 0.8, z: cellC(cy) + (rnd() - 0.5) * 0.8, amt: NODE_DEF[type].amt, inst: -1, v: rnd() };
+  if (type === 'fish') { n.x = cellC(cx); n.z = cellC(cy); }
   nodes.push(n); nodeAt[i] = n.id; return n;
 }
 function cluster(type, cx, cy, count, rad) {
@@ -76,8 +78,9 @@ function cluster(type, cx, cy, count, rad) {
   }
   return made;
 }
+function isShore(cx, cy) { return !walk[cidx(cx, cy)] && cellH(cx, cy) < -0.05 && !!(walk[cidx(cx + 1, cy)] || walk[cidx(cx - 1, cy)] || walk[cidx(cx, cy + 1)] || walk[cidx(cx, cy - 1)]); }
 function genNodes(seed) {
-  nodes.length = 0; nodeAt.fill(-1); forest.fill(0);
+  nodes.length = 0; herds.length = 0; nodeAt.fill(-1); forest.fill(0);
   for (let cy = 0; cy < N; cy++) for (let cx = 0; cx < N; cx++) {
     if (!walk[cidx(cx, cy)]) continue;
     const dS = Math.min(...STARTS.map(s => Math.hypot(cx - s.cx - 1, cy - s.cy - 1)));
@@ -95,6 +98,8 @@ function genNodes(seed) {
     cluster('bush', x - 4 * sg, y - 8 * sg, 5, 2);
     cluster('stone', x + 9 * sg, y - 7 * sg, 4, 1.5);
     cluster('ore', x + 12 * sg, y - 12 * sg, 4, 1.5);
+    cluster('gold', x - 12 * sg, y + 9 * sg, 3, 1.5);
+    herds.push({ cx: x + 12 * sg, cy: y + 6 * sg, n: 5 }, { cx: x - 6 * sg, cy: y - 14 * sg, n: 4 });
   });
   for (let k = 0; k < 9; k++) {
     const x = 10 + Math.floor(rnd() * (N - 20)), y = 10 + Math.floor(rnd() * (N - 20));
@@ -103,6 +108,23 @@ function genNodes(seed) {
     cluster('ore', x2, y2, 4, 2); cluster('ore', N - x2, N - y2, 4, 2);
     const x3 = 10 + Math.floor(rnd() * (N - 20)), y3 = 10 + Math.floor(rnd() * (N - 20));
     cluster('bush', x3, y3, 5, 2); cluster('bush', N - x3, N - y3, 5, 2);
+    const x4 = 10 + Math.floor(rnd() * (N - 20)), y4 = 10 + Math.floor(rnd() * (N - 20));
+    cluster('gold', x4, y4, 3, 2); cluster('gold', N - x4, N - y4, 3, 2);
+    const x5 = 12 + Math.floor(rnd() * (N - 24)), y5 = 12 + Math.floor(rnd() * (N - 24));
+    herds.push({ cx: x5, cy: y5, n: 4 }, { cx: N - x5, cy: N - y5, n: 4 });
+  }
+  // ryby: mělčina hned u břehu
+  for (let cy = 2; cy < N - 2; cy++) for (let cx = 2; cx < N - 2; cx++) {
+    if (!isShore(cx, cy) || hash2(cx, cy, seed) > 0.3) continue;
+    let near = false; for (const n of nodes) if (n.type === 'fish' && Math.abs(n.cx - cx) < 4 && Math.abs(n.cy - cy) < 4) { near = true; break; }
+    if (!near) addNode('fish', cx, cy, true);
+  }
+  // každý start má aspoň dvě hejna v dosahu nejbližšího břehu
+  for (const s of STARTS) {
+    const sh = [];
+    for (let cy = 2; cy < N - 2; cy++) for (let cx = 2; cx < N - 2; cx++) if (isShore(cx, cy) && nodeAt[cidx(cx, cy)] < 0) sh.push({ cx, cy, d: Math.hypot(cx - s.cx, cy - s.cy) });
+    sh.sort((a, b) => a.d - b.d);
+    let made = 0; for (const c of sh) { if (made >= 2) break; if (nodes.some(n => n.type === 'fish' && Math.abs(n.cx - c.cx) < 3 && Math.abs(n.cy - c.cy) < 3)) { if (c.d < 30) made++; continue; } if (addNode('fish', c.cx, c.cy, true)) made++; }
   }
 }
 
@@ -116,7 +138,9 @@ function hpop() {
   if (n) { let k = 0; for (;;) { let c = 2 * k + 1; if (c >= n) break; if (c + 1 < n && _hf[c + 1] < _hf[c]) c++; if (_hf[c] >= lf) break; _heap[k] = _heap[c]; _hf[k] = _hf[c]; k = c; } _heap[k] = li; _hf[k] = lf; }
   return top;
 }
-const blocked = i => !walk[i] || occ[i];
+const gateT = new Int8Array(N * N);        // brána: tým + 1
+let PT = -1;                                // tým, pro který se právě hledá cesta
+const blocked = i => !walk[i] || (occ[i] && gateT[i] !== PT + 1);
 // cíl = obdélník buněk [x0..x1]×[y0..y1]; adj = jak blízko stačí dojít (0 = dovnitř, 1 = sousedit)
 function findPath(sx, sy, x0, y0, x1, y1, adj) {
   _stampN++; _heap.length = 0; _hf.length = 0;
@@ -316,6 +340,31 @@ function buildingGeo(type, team) {
         P(new THREE.TorusGeometry(1.1, 0.12, 5, 12), C.woodD, w / 2 - 0.5, 1.3, -0.6, 0, Math.PI / 2, 0), P(box(0.1, 2.2, 0.1), C.woodD, w / 2 - 0.5, 1.3, -0.6), P(box(0.1, 0.1, 2.2), C.woodD, w / 2 - 0.5, 1.3, -0.6),
         P(box(1.6, 1.8, 0.1), 0x2a2622, -0.3, 0.9, 1.31), P(box(1.4, 0.3, 0.3), C.wood, 1.2, 0.15, 2.2), P(box(1.4, 0.3, 0.3), C.wood, 1.3, 0.4, 2.3, 0, 0.3, 0), ...flag(-2.3, 2.3, 4)];
       break;
+    case 'mill':
+      p = [P(cyl(1.2, 1.5, 3.2, 8), C.stone, 0, 1.6, 0), P(cyl(0, 1.45, 1.3, 8), C.thatch, 0, 3.85, 0), P(box(0.7, 1.1, 0.1), C.woodD, 0, 0.55, 1.46), P(cyl(0.12, 0.12, 0.9, 6), C.woodD, 0, 3.0, 1.5, Math.PI / 2, 0, 0)];
+      for (let i = 0; i < 4; i++) p.push(P(box(0.5, 2.6, 0.06), C.white, Math.sin(i * Math.PI / 2 + 0.4) * 1.3, 3.0 + Math.cos(i * Math.PI / 2 + 0.4) * 1.3, 1.9, 0, 0, -(i * Math.PI / 2 + 0.4)));
+      p.push(P(box(0.5, 0.4, 0.06), 'T', -0.9, 1.6, 1.25));
+      break;
+    case 'market':
+      p = [P(box(w - 0.4, 0.16, w - 0.4), C.stone, 0, 0.08, 0)];
+      for (const [x, z, c] of [[-1.5, -1.3, 'T'], [1.5, -1.3, 0xd9c98a], [-1.5, 1.4, 0xd9c98a], [1.5, 1.4, 'T']]) {
+        p.push(P(box(1.9, 0.8, 1.3), C.wood, x, 0.55, z), P(box(2.2, 0.1, 1.7), c, x, 2.0, z, 0.22, 0, 0));
+        for (const [a, b] of [[-0.95, -0.6], [0.95, -0.6], [-0.95, 0.6], [0.95, 0.6]]) p.push(P(box(0.1, 2, 0.1), C.woodD, x + a, 1, z + b));
+        p.push(P(box(0.4, 0.3, 0.4), 0xb3242e, x - 0.5, 1.1, z), P(box(0.4, 0.3, 0.4), 0xd8c27a, x + 0.1, 1.1, z), P(box(0.4, 0.3, 0.4), 0x629c45, x + 0.6, 1.1, z + 0.2));
+      }
+      p.push(P(cyl(0.5, 0.6, 0.7, 10), C.stoneD, 0, 0.5, 0), ...flag(0, 0, 4.2));
+      break;
+    case 'palisade':
+      for (const [x, z] of [[-0.62, -0.62], [0, -0.62], [0.62, -0.62], [-0.62, 0], [0, 0], [0.62, 0], [-0.62, 0.62], [0, 0.62], [0.62, 0.62]]) { const hh = 2.0 + ((x * 7 + z * 3 + 3) % 1) * 0.3; p.push(P(cyl(0.3, 0.33, hh, 6), (x + z) % 1.2 ? C.wood : C.woodD, x, hh / 2, z), P(cyl(0, 0.3, 0.4, 6), C.woodD, x, hh + 0.2, z)); }
+      break;
+    case 'wall':
+      p = [P(box(2, 2.3, 2), C.stone, 0, 1.15, 0), P(box(2.02, 0.3, 2.02), C.stoneD, 0, 0.15, 0)];
+      for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.push(P(box(0.6, 0.5, 0.6), C.stoneD, x * 0.7, 2.55, z * 0.7));
+      break;
+    case 'gate':
+      p = [P(box(0.5, 3, 2), C.stoneD, -0.75, 1.5, 0), P(box(0.5, 3, 2), C.stoneD, 0.75, 1.5, 0), P(box(2, 0.6, 2), C.stoneD, 0, 3.0, 0), P(box(1.0, 2.5, 0.3), C.woodD, 0, 1.25, 0.6), P(box(1.0, 2.5, 0.3), C.woodD, 0, 1.25, -0.6),
+        P(box(0.3, 2.5, 1.0), C.woodD, 0, 1.25, 0), P(box(0.7, 0.8, 2.06), 'T', 0, 3.0, 0), P(box(2.06, 0.8, 0.7), 'T', 0, 3.0, 0)];
+      break;
     case 'tower':
       p = [P(box(1.6, 4.4, 1.6), C.stone, 0, 2.2, 0), P(box(1.95, 0.5, 1.95), C.stoneD, 0, 4.5, 0)];
       for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) p.push(P(box(0.5, 0.5, 0.5), C.stoneD, x * 0.72, 5.0, z * 0.72));
@@ -330,9 +379,21 @@ function treeGeo(pine) {
   return merge([P(cyl(0.14, 0.2, 1.3, 5), 0x6b4f35, 0, 0.65, 0), P(new THREE.IcosahedronGeometry(1.05, 0), 0x4f8a3c, 0, 2.1, 0), P(new THREE.IcosahedronGeometry(0.7, 0), 0x629c45, 0.5, 2.7, 0.2)]);
 }
 function bushGeo() { const p = [P(new THREE.IcosahedronGeometry(0.6, 0), 0x3f7a35, 0, 0.45, 0), P(new THREE.IcosahedronGeometry(0.45, 0), 0x4c8a3d, 0.45, 0.35, 0.2)]; for (const [x, y, z] of [[0.2, 0.9, 0.3], [-0.3, 0.7, 0.4], [0.5, 0.65, -0.2], [-0.1, 0.8, -0.4], [0.7, 0.5, 0.4]]) p.push(P(sph(0.11), 0xb3242e, x, y, z)); return merge(p); }
-function rockGeo(ore) {
-  const a = ore ? 0x5d5148 : 0x9a968c, b = ore ? 0x6b5d50 : 0xb3aea2;
+function rockGeo(ore, gold) {
+  const a = gold ? 0x7d7468 : ore ? 0x5d5148 : 0x9a968c, b = gold ? 0x8f8676 : ore ? 0x6b5d50 : 0xb3aea2;
   const p = [P(new THREE.DodecahedronGeometry(0.75, 0), a, 0, 0.4, 0, 0.3, 0.2, 0), P(new THREE.DodecahedronGeometry(0.5, 0), b, 0.6, 0.3, 0.3, 0, 0.5, 0.4), P(new THREE.DodecahedronGeometry(0.4, 0), a, -0.5, 0.25, 0.4)];
-  if (ore) for (const [x, y, z] of [[0.2, 0.95, 0.2], [-0.35, 0.7, 0.1], [0.7, 0.6, 0.4], [0.1, 0.6, 0.65]]) p.push(P(new THREE.OctahedronGeometry(0.16, 0), 0xc9792e, x, y, z));
+  if (ore) for (const [x, y, z] of [[0.2, 0.95, 0.2], [-0.35, 0.7, 0.1], [0.7, 0.6, 0.4], [0.1, 0.6, 0.65]]) p.push(P(new THREE.OctahedronGeometry(gold ? 0.2 : 0.16, 0), gold ? 0xf2c230 : 0xc9792e, x, y, z));
   return merge(p);
 }
+function fishGeo() {
+  const p = [P(new THREE.TorusGeometry(0.8, 0.05, 4, 16), 0xcfe6f0, 0, 0.04, 0, Math.PI / 2, 0, 0), P(new THREE.TorusGeometry(0.45, 0.04, 4, 12), 0xcfe6f0, 0.2, 0.04, 0.1, Math.PI / 2, 0, 0)];
+  for (const [x, z, r] of [[0.3, 0.2, 0.4], [-0.35, -0.1, 2.2], [0.05, -0.45, 4]]) { p.push(P(sph(0.16), 0xb9c4cc, x, 0.08, z, 0, r, 0, 2.2, 0.7, 0.8)); p.push(P(cyl(0, 0.14, 0.2, 4), 0x8f9aa3, x - Math.cos(r) * 0.42, 0.08, z + Math.sin(r) * 0.42, 0, r, Math.PI / 2)); }
+  return merge(p);
+}
+function deerGeo() {
+  const p = [P(box(0.42, 0.5, 1.15), 0x9a6b3f, 0, 0.95, 0), P(box(0.2, 0.6, 0.24), 0x9a6b3f, 0, 1.4, 0.6, 0.5, 0, 0), P(box(0.2, 0.22, 0.42), 0xa97a4c, 0, 1.68, 0.86), P(box(0.3, 0.2, 0.1), 0xf0ede4, 0, 1.05, -0.6)];
+  for (const [x, z] of [[-0.14, 0.42], [0.14, 0.42], [-0.14, -0.42], [0.14, -0.42]]) p.push(P(box(0.11, 0.72, 0.11), 0x6e4a2e, x, 0.36, z));
+  for (const x of [-0.12, 0.12]) p.push(P(box(0.05, 0.4, 0.05), 0xd8ccb0, x, 1.98, 0.74, 0, 0, x * 3));
+  return merge(p);
+}
+function meatGeo() { return merge([P(box(0.5, 0.36, 1.15), 0x8a5a3a, 0, 0.2, 0, 0, 0.4, 0), P(box(0.42, 0.1, 0.6), 0xb5463a, 0, 0.42, 0, 0, 0.4, 0), P(box(0.2, 0.2, 0.4), 0x9a6b3f, 0.35, 0.14, 0.7, 0, 0.4, 0)]); }

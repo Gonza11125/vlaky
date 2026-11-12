@@ -1,8 +1,8 @@
 'use strict';
 // Herní data: suroviny, epochy, jednotky, budovy, technologie.
 
-const RES = ['food', 'wood', 'stone', 'ore', 'metal', 'know'];
-const RES_NAME = { food: 'Jídlo', wood: 'Dřevo', stone: 'Kámen', ore: 'Ruda', metal: 'Kov', know: 'Vědění' };
+const RES = ['food', 'wood', 'stone', 'ore', 'metal', 'gold', 'know'];
+const RES_NAME = { food: 'Jídlo', wood: 'Dřevo', stone: 'Kámen', ore: 'Ruda', metal: 'Kov', gold: 'Zlato', know: 'Vědění' };
 const ERAS = ['Doba kamenná', 'Doba bronzová', 'Doba železná', 'Středověk', 'Novověk'];
 const SEASONS = ['Jaro', 'Léto', 'Podzim', 'Zima'];
 const SEASON_LEN = 60;            // sekund na roční období
@@ -20,15 +20,15 @@ const UNITS = {
               desc: 'Střílí z dálky, v boji zblízka nevydrží.' },
   xbow:     { name: 'Kušiník', cls: 'arch', at: 'range', req: ['crossbow'], cost: { food: 40, wood: 30, metal: 15 }, time: 18, hp: 55, atk: 10, range: 10, cd: 2.4, speed: 3.1, armor: 0, pierce: 2, upkeep: 3, proj: 'arrow',
               desc: 'Šipka z kuše probije zbroj. Nabíjí pomaleji než luk.' },
-  musket:   { name: 'Mušketýr', cls: 'arch', at: 'range', req: ['gunpowder'], cost: { food: 50, metal: 35 }, time: 20, hp: 60, atk: 26, range: 11, cd: 3.6, speed: 3.1, armor: 0, pierce: 99, upkeep: 3, proj: 'shot',
+  musket:   { name: 'Mušketýr', cls: 'arch', at: 'range', req: ['gunpowder'], cost: { food: 50, metal: 35, gold: 15 }, time: 20, hp: 60, atk: 26, range: 11, cd: 3.6, speed: 3.1, armor: 0, pierce: 99, upkeep: 3, proj: 'shot',
               desc: 'Olověná kule ignoruje jakoukoli zbroj. Dlouhé nabíjení.' },
   rider:    { name: 'Jezdec', cls: 'cav', at: 'stable', req: ['horses'], cost: { food: 70, metal: 10 }, time: 20, hp: 110, atk: 9, cd: 1.4, speed: 5.6, armor: 1, upkeep: 4,
               desc: 'Rychlá jízda na přepady lučištníků a vesničanů.' },
-  knight:   { name: 'Rytíř', cls: 'cav', at: 'stable', req: ['stirrups', 'steel'], cost: { food: 90, metal: 50 }, time: 26, hp: 190, atk: 15, cd: 1.4, speed: 5.2, armor: 4, upkeep: 5,
+  knight:   { name: 'Rytíř', cls: 'cav', at: 'stable', req: ['stirrups', 'steel'], cost: { food: 90, metal: 50, gold: 30 }, time: 26, hp: 190, atk: 15, cd: 1.4, speed: 5.2, armor: 4, upkeep: 5,
               desc: 'Obrněný jezdec. Třmeny mu dovolí udeřit plnou vahou koně.' },
   catapult: { name: 'Katapult', cls: 'siege', at: 'workshop', req: ['mechanics'], cost: { wood: 150, metal: 30 }, time: 30, hp: 90, atk: 40, range: 14, cd: 5, speed: 1.8, armor: 1, upkeep: 2, bonus: { bld: 3.5 }, proj: 'rock',
               desc: 'Obléhací stroj na budovy. Pomalý a bezbranný zblízka.' },
-  cannon:   { name: 'Dělo', cls: 'siege', at: 'workshop', req: ['artillery'], cost: { wood: 100, metal: 150 }, time: 34, hp: 130, atk: 85, range: 16, cd: 6, speed: 1.6, armor: 2, upkeep: 2, bonus: { bld: 3 }, pierce: 99, proj: 'ball',
+  cannon:   { name: 'Dělo', cls: 'siege', at: 'workshop', req: ['artillery'], cost: { wood: 100, metal: 150, gold: 60 }, time: 34, hp: 130, atk: 85, range: 16, cd: 6, speed: 1.6, armor: 2, upkeep: 2, bonus: { bld: 3 }, pierce: 99, proj: 'ball',
               desc: 'Bronzové dělo. Hradby a věže proti němu neobstojí.' },
 };
 
@@ -57,10 +57,20 @@ const BUILDINGS = {
               desc: 'Cvičí jízdu.' },
   workshop: { name: 'Dílna', size: 3, hp: 1000, time: 34, req: ['mechanics'], cost: { wood: 140, metal: 30 },
               desc: 'Staví obléhací stroje.' },
+  mill:     { name: 'Mlýn', size: 2, hp: 500, time: 22, req: ['agri'], cost: { wood: 60 },
+              desc: 'Mele obilí na mouku. Dokud stojí aspoň jeden, dávají všechna pole o 15 % víc jídla.' },
+  market:   { name: 'Tržiště', size: 3, hp: 800, time: 30, req: ['currency'], cost: { wood: 120, stone: 40 },
+              desc: 'Tady prodáš přebytky za zlato a nakoupíš, co chybí. Ceny se hýbou podle toho, co prodáváš a kupuješ. Samo vynáší trochu zlata z obchodu.' },
+  palisade: { name: 'Palisáda', size: 1, hp: 350, time: 5, wall: true, line: true, cost: { wood: 6 },
+              desc: 'Hradba z kůlů. Levná, ale dlouho nevydrží. Klikni na začátek a pak na konec úseku.' },
+  wall:     { name: 'Hradba', size: 1, hp: 1300, time: 9, wall: true, line: true, req: ['masonry'], cost: { stone: 8 },
+              desc: 'Kamenná zeď. Pěchota ji bourá pomalu, obléhací stroje rychle. Klikni na začátek a pak na konec úseku.' },
+  gate:     { name: 'Brána', size: 1, hp: 700, time: 12, wall: true, gate: true, cost: { wood: 40 },
+              desc: 'Tvoji lidé projdou, nepřítel ne. Postav ji do mezery v hradbě.' },
   tower:    { name: 'Věž', size: 1, hp: 900, time: 26, req: ['masonry'], atk: 8, range: 12, cd: 1.5, cost: { wood: 20, stone: 90 },
               desc: 'Kamenná strážní věž. Sama střílí na nepřátele v dosahu.' },
 };
-const BUILD_ORDER = ['house', 'store', 'farm', 'pasture', 'barracks', 'range', 'library', 'smelter', 'smithy', 'stable', 'workshop', 'tower'];
+const BUILD_ORDER = ['house', 'store', 'farm', 'mill', 'pasture', 'barracks', 'range', 'palisade', 'gate', 'library', 'smelter', 'smithy', 'market', 'stable', 'workshop', 'wall', 'tower'];
 
 // era = nejnižší epocha, ve které jde technologii zkoumat; setsEra = postup do epochy
 const TECHS = {
@@ -78,16 +88,18 @@ const TECHS = {
   writing:   { name: 'Písmo', era: 1, at: 'tc', cost: { know: 35 }, time: 30,
                desc: 'Vědění se dá zapsat a předat dál. Odemyká Knihovnu, vědění +20 %.' },
   bronze:    { name: 'Hornictví a tavení', era: 1, at: 'tc', cost: { know: 40, wood: 50, stone: 50 }, time: 30,
-               desc: 'Měď s cínem dá bronz. Vesničané mohou těžit rudu. Odemyká Huť, Kovárnu a Šermíře.' },
+               desc: 'Měď s cínem dá bronz. Vesničané mohou těžit rudu a zlato. Odemyká Huť, Kovárnu a Šermíře.' },
   masonry:   { name: 'Zdivo', era: 1, at: 'tc', cost: { know: 40, stone: 80 }, time: 30,
                desc: 'Opracovaný kámen spojený maltou. Odemyká Věž, budovy vydrží o čtvrtinu víc.' },
   horses:    { name: 'Chov koní', era: 1, at: 'tc', cost: { know: 40, food: 100 }, time: 30,
                desc: 'Kůň pod sedlem. Odemyká Stáj a Jezdce.' },
+  currency:  { name: 'Ražba mincí', era: 1, at: 'tc', cost: { know: 35, wood: 40 }, time: 25,
+               desc: 'Kov se stejnou vahou a značkou vládce. Odemyká Tržiště.' },
   btools:    { name: 'Kovové nástroje', era: 1, at: 'smithy', cost: { know: 30, metal: 30 }, time: 25,
                desc: 'Sekery, krumpáče a dláta z kovu. Těžba dřeva, kamene a rudy +20 %.' },
   bweap:     { name: 'Kovové hroty', era: 1, at: 'smithy', cost: { know: 35, metal: 40 }, time: 25,
                desc: 'Kopí a meče s litým ostřím. Útok pěchoty a jízdy +2.' },
-  era2:      { name: 'Doba železná', era: 1, at: 'tc', setsEra: 2, req: ['bronze', 'writing'], cost: { know: 130, food: 300, metal: 60 }, time: 50,
+  era2:      { name: 'Doba železná', era: 1, at: 'tc', setsEra: 2, req: ['bronze', 'writing'], cost: { know: 130, food: 300, metal: 60, gold: 40 }, time: 50,
                desc: 'Železná ruda je všude, jen ji umět vytavit. Postup do další epochy.' },
 
   iron:      { name: 'Zpracování železa', era: 2, at: 'smithy', cost: { know: 80, metal: 80 }, time: 35,
@@ -98,7 +110,7 @@ const TECHS = {
                desc: 'Geometrie a počty. Vědění +25 %, základ pro mechaniku.' },
   mechanics: { name: 'Mechanika', era: 2, at: 'library', req: ['math'], cost: { know: 100, wood: 100 }, time: 40,
                desc: 'Páka, kladka a torzní pružina. Odemyká Dílnu a Katapult.' },
-  era3:      { name: 'Středověk', era: 2, at: 'tc', setsEra: 3, req: ['iron', 'math'], cost: { know: 260, food: 500, metal: 150 }, time: 60,
+  era3:      { name: 'Středověk', era: 2, at: 'tc', setsEra: 3, req: ['iron', 'math'], cost: { know: 260, food: 500, metal: 150, gold: 120 }, time: 60,
                desc: 'Postup do další epochy.' },
 
   threefield:{ name: 'Trojpolní hospodaření', era: 3, at: 'tc', cost: { know: 120, food: 100 }, time: 35,
@@ -109,16 +121,16 @@ const TECHS = {
                desc: 'Nauhličené a kalené železo. Pěchota a jízda +3 útok a +1 zbroj.' },
   crossbow:  { name: 'Kuše', era: 3, at: 'smithy', cost: { know: 120, wood: 100, metal: 50 }, time: 35,
                desc: 'Ocelový luk s napínákem. Odemyká Kušiníka.' },
-  university:{ name: 'Univerzity', era: 3, at: 'library', cost: { know: 150, stone: 150 }, time: 45,
+  university:{ name: 'Univerzity', era: 3, at: 'library', cost: { know: 150, stone: 150, gold: 80 }, time: 45,
                desc: 'Učenci se sdružují a přou. Vědění +40 %.' },
-  era4:      { name: 'Novověk', era: 3, at: 'tc', setsEra: 4, req: ['steel', 'university'], cost: { know: 500, food: 700, metal: 300 }, time: 70,
+  era4:      { name: 'Novověk', era: 3, at: 'tc', setsEra: 4, req: ['steel', 'university'], cost: { know: 500, food: 700, metal: 300, gold: 250 }, time: 70,
                desc: 'Postup do poslední epochy.' },
 
   gunpowder: { name: 'Střelný prach', era: 4, at: 'library', cost: { know: 250, metal: 100 }, time: 50,
                desc: 'Ledek, síra a dřevěné uhlí. Odemyká Mušketýra.' },
   artillery: { name: 'Dělostřelectví', era: 4, at: 'smithy', req: ['gunpowder'], cost: { know: 300, metal: 250 }, time: 55,
                desc: 'Lité hlavně a železné koule. Odemyká Dělo.' },
-  printing:  { name: 'Knihtisk', era: 4, at: 'library', cost: { know: 200, wood: 150 }, time: 45,
+  printing:  { name: 'Knihtisk', era: 4, at: 'library', cost: { know: 200, wood: 150, gold: 60 }, time: 45,
                desc: 'Kniha za zlomek ceny opisu. Vědění +50 %.' },
   blast:     { name: 'Vysoká pec', era: 4, at: 'smithy', cost: { know: 200, stone: 200 }, time: 45,
                desc: 'Měchy hnané vodním kolem roztaví železo do tekuta. Huť taví dvakrát rychleji.' },
@@ -129,4 +141,7 @@ const NODE_DEF = {
   bush:  { name: 'Keř s bobulemi', res: 'food', amt: 160, rate: 0.45 },
   stone: { name: 'Kamenný lom', res: 'stone', amt: 500, rate: 0.4 },
   ore:   { name: 'Ložisko rudy', res: 'ore', amt: 500, rate: 0.35, req: 'bronze' },
+  gold:  { name: 'Zlatá žíla', res: 'gold', amt: 400, rate: 0.3, req: 'bronze' },
+  fish:  { name: 'Hejno ryb', res: 'food', amt: 320, rate: 0.4 },
+  meat:  { name: 'Ulovená zvěř', res: 'food', amt: 140, rate: 0.65 },
 };

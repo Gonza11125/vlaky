@@ -7,7 +7,7 @@
   color-scheme: dark;
   --ink: #12181a; --panel: #1b2426; --panel-2: #243033; --line: #3b4b4d;
   --fg: #ece7d8; --dim: #9fada8; --brass: #d7a84a; --good: #8fd08a; --bad: #ef7d66;
-  --food: #e0734f; --wood: #b98548; --stone: #b4b4aa; --ore: #cf7f35; --metal: #8fb7cf; --know: #c7a5ee;
+  --food: #e0734f; --wood: #b98548; --stone: #b4b4aa; --ore: #cf7f35; --metal: #8fb7cf; --gold: #f0c63c; --know: #c7a5ee;
   --display: 'Marcellus', 'Palatino Linotype', Georgia, serif;
   --body: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
   --gl: max(10px, env(safe-area-inset-left, 0px)); --gr: max(10px, env(safe-area-inset-right, 0px));
@@ -30,7 +30,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 .res em { font-style: normal; font-weight: 700; min-width: 2.4em; }
 .res small { color: var(--dim); font-size: 11px; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; transform: translateY(-1px) rotate(45deg); }
-.dot.food { background: var(--food); } .dot.wood { background: var(--wood); } .dot.stone { background: var(--stone); } .dot.ore { background: var(--ore); } .dot.metal { background: var(--metal); } .dot.know { background: var(--know); }
+.dot.food { background: var(--food); } .dot.wood { background: var(--wood); } .dot.stone { background: var(--stone); } .dot.ore { background: var(--ore); } .dot.metal { background: var(--metal); } .dot.gold { background: var(--gold); } .dot.know { background: var(--know); }
 #status { display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline; margin-left: auto; }
 #status .era { font-family: var(--display); color: var(--brass); letter-spacing: .03em; }
 #tools { display: flex; gap: 6px; }
@@ -154,12 +154,14 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
         <li><b>Lidé jedí pořád.</b> Pole rodí od jara do podzimu, v zimě se žije ze zásob a z pastvin. Hlad oslabí všechny.</li>
         <li><b>Kov se nesbírá, vyrábí se.</b> Vesničané těží rudu, huť ji s dřevem taví na kov.</li>
         <li><b>Technologie navazují.</b> Bez písma není knihovna, bez matematiky katapult, bez oceli rytíř.</li>
+        <li><b>Mapu neznáš.</b> Vidíš jen okolí svých lidí a budov. Nepřítele, zlato i zvěř musíš najít, osadu si ohradíš palisádou a branou.</li>
+        <li><b>Zlato a trh.</b> Zlato se těží, nebo ho získáš prodejem přebytků na Tržišti. Platí se jím pokročilé jednotky a pozdější epochy.</li>
         <li><b>Cíl:</b> zbořit nepřátelské Sídlo dřív, než on zboří tvoje.</li>
       </ul>
       <h2>Ovládání</h2>
       <ul>
         <li><b>Myš:</b> levým vybíráš (tažením víc jednotek), pravým dáváš rozkaz. Kolečko přibližuje, prostřední tlačítko posouvá mapu.</li>
-        <li><b>Klávesy:</b> WASD nebo šipky posun, Q a E otáčení, mezerník pauza, tečka nečinný vesničan, H domů.</li>
+        <li><b>Klávesy:</b> WASD nebo šipky posun, Q a E otáčení, mezerník pauza, tečka nečinný vesničan, H domů, Ctrl + číslo uloží skupinu a číslo ji vyvolá.</li>
         <li><b>Dotyk:</b> ťuknutím vybereš, dalším ťuknutím dáš rozkaz. Tažením posouváš mapu, dvěma prsty přibližuješ.</li>
       </ul>
       <h2>Obtížnost</h2>
