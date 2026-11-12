@@ -19,7 +19,7 @@ function toast(text, cls) { UIH.note({ text, cls: cls || '', k: -1 }); }
 function focusTile(x, y) { cam.x = tileX(x); cam.z = tileZ(y); if (cam.dist > 160) cam.dist = 120; }
 
 // ---------- nástroje ----------
-const CAT_COL = { power: '#f2c14e', water: '#4fa3e0', safety: '#2f5fbf', health: '#e05a7a', edu: '#f08a2b', fun: '#5fb84f', trans: '#7a8794', gov: '#a184dd' };
+const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
 const RAIL = [
   { key: 'select', name: 'Prohlížet', sw: '#ffffff' }, { key: 'road', name: 'Silnice', sw: '#5a5f69' }, { key: 'zones', name: 'Zóny', sw: '#6fbf5a' },
   ...SERV_CATS.map(c => ({ key: 'cat:' + c.key, name: c.name, sw: CAT_COL[c.key] })),
@@ -431,7 +431,7 @@ PANELS.menu = {
   html: () => {
     let h = '<h4>Uložené hry</h4><p>Hra se ukládá do tohoto prohlížeče. Automaticky každé dva měsíce a při odchodu ze stránky.</p>';
     for (const n of ['auto', 0, 1, 2]) { const sv = readSlot(n); h += '<div class="item"><h5>' + (n === 'auto' ? 'Automatické uložení' : 'Pozice ' + (n + 1)) + '</h5><p>' + (sv ? slotLabel(sv) : 'prázdná') + '</p><div class="btns">' + (n !== 'auto' ? '<button class="btn pri" data-s="' + n + '">Uložit sem</button>' : '') + (sv ? '<button class="btn" data-l="' + n + '">Načíst</button>' : '') + '</div></div>'; }
-    h += '<h4>Grafika</h4><div class="toggle"><b>Kreslené obrysy</b><button class="sw2' + (edgeOn ? ' on' : '') + '" id="g-edge" aria-label="Obrysy"></button><p>Bez obrysů hra poběží rychleji na slabších zařízeních.</p></div><div class="toggle"><b>Stíny</b><button class="sw2' + (renderer.shadowMap.enabled ? ' on' : '') + '" id="g-shadow" aria-label="Stíny"></button><p>Vypnuté stíny výrazně zrychlí telefon.</p></div>';
+    h += '<h4>Kvalita grafiky</h4><div class="btns">' + ['Nízká', 'Střední', 'Vysoká'].map((n, i) => '<button class="btn' + (RS.quality === i ? ' pri' : '') + '" data-q="' + i + '">' + n + '</button>').join('') + '</div><p>Vysoká má ostré dlouhé stíny a plné rozlišení. Nízká vypne stíny a sníží rozlišení, hodí se pro slabší telefony a notebooky.</p>';
     h += '<h4>Ovládání</h4><p>Myš: levým tlačítkem stavíš nebo vybíráš, pravým posouváš mapu, kolečkem přibližuješ, prostředním otáčíš. Klávesy: WASD posun, Q a E otáčení, R a F sklon, mezerník pauza, 1 až 3 rychlost, Esc zruší nástroj.</p><p>Dotyk: jedním prstem stavíš nebo posouváš mapu (s nástrojem Prohlížet), dvěma prsty přibližuješ, otáčíš a posouváš.</p>';
     h += '<div class="btns"><button class="btn dan" id="g-new">' + (G.newArm ? 'Opravdu začít znovu?' : 'Nová hra') + '</button></div>';
     return h;
@@ -441,8 +441,7 @@ PANELS.menu = {
       const s = e.target.closest('[data-s]'), l = e.target.closest('[data-l]');
       if (s) { writeSlot(+s.dataset.s); renderPanel(); }
       if (l) { const n = l.dataset.l; loadSlot(n === 'auto' ? 'auto' : +n); }
-      if (e.target.id === 'g-edge') { edgeOn = !edgeOn; renderPanel(); }
-      if (e.target.id === 'g-shadow') { renderer.shadowMap.enabled = !renderer.shadowMap.enabled; for (const b of batches.values()) b.mat.needsUpdate = true; matV.needsUpdate = true; renderPanel(); }
+      const q = e.target.closest('[data-q]'); if (q) { setQuality(+q.dataset.q); try { localStorage.setItem('starosta-quality', q.dataset.q); } catch (_) { } renderPanel(); }
       if (e.target.id === 'g-new') { if (G.newArm) { G.newArm = false; closePanel(); showStart(); } else { G.newArm = true; renderPanel(); setTimeout(() => { G.newArm = false; }, 4000); } }
     };
   },
@@ -505,7 +504,7 @@ function drawHud() {
     }
   }
   const dr = G.drag;
-  if (dr && dr.mode === 'tool' && G.dragCost) { hx.font = '800 14px Nunito, sans-serif'; const t = money(G.dragCost); const w = hx.measureText(t).width + 16; hx.fillStyle = 'rgba(35,48,61,.85)'; roundRect(dr.x + 14, dr.y + 10, w, 24, 8); hx.fill(); hx.fillStyle = S.money >= G.dragCost ? '#fff' : '#ffb3a8'; hx.fillText(t, dr.x + 22, dr.y + 27); }
+  if (dr && dr.mode === 'tool' && G.dragCost) { hx.font = '600 14px Inter, sans-serif'; const t = money(G.dragCost); const w = hx.measureText(t).width + 16; hx.fillStyle = 'rgba(35,48,61,.85)'; roundRect(dr.x + 14, dr.y + 10, w, 24, 8); hx.fill(); hx.fillStyle = S.money >= G.dragCost ? '#fff' : '#ffb3a8'; hx.fillText(t, dr.x + 22, dr.y + 27); }
 }
 function roundRect(x, y, w, h, r) { hx.beginPath(); hx.moveTo(x + r, y); hx.arcTo(x + w, y, x + w, y + h, r); hx.arcTo(x + w, y + h, x, y + h, r); hx.arcTo(x, y + h, x, y, r); hx.arcTo(x, y, x + w, y, r); hx.closePath(); }
 function icon(x, y, t) {
@@ -603,7 +602,8 @@ addEventListener('pagehide', () => writeSlot('auto', true));
 
 function boot() {
   initRender(view); resizeRender(view.clientWidth || innerWidth, view.clientHeight || innerHeight);
-  if (RS.coarse) { renderer.shadowMap.enabled = false; }
+  let q = RS.coarse ? 1 : 2; try { const v = localStorage.getItem('starosta-quality'); if (v != null) q = +v; } catch (_) { }
+  setQuality(q);
   newGame({ name: 'Ukázka', size: 3, tech: 1, crisis: 0, wars: false, elections: false });
   rebuildAll(); cam.x = tileX(W.cx); cam.z = tileZ(W.cy); cam.dist = 190;
   drawRail(); drawStart();

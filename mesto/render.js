@@ -1,8 +1,8 @@
 'use strict';
 // Vykreslování: scéna, instance budov a silnic, auta, davy, vojáci, efekty, přehledové mapy, obrysy.
 
-let renderer, scene, camera, sun, matV, matB, terrain, waterMesh, waveTex, ovMesh, ovTex, ovData, prevB, ghost = null, ghostRing = null, cursorMesh;
-let VW = 1, VH = 1, DPR = 1, edgeOn = true, depthRT, depthMat, edgeMat, edgeScene, edgeCam;
+let renderer, scene, camera, sun, hemi, MATS, terrMat, skyMesh, envRT, terrain, waterMesh, waterTex, ovMesh, ovTex, ovData, prevB, ghost = null, ghostRing = null, cursorMesh;
+let VW = 1, VH = 1, DPR = 1, edgeOn = false, depthRT, depthMat, edgeMat, edgeScene, edgeCam;
 const cam = { x: 0, z: 0, dist: 150, yaw: 0.65, pitch: 0.95, shake: 0 };
 const RS = { overlay: null, coarse: false };
 const WHITE = new THREE.Color(1, 1, 1), _col2 = new THREE.Color(), _mtx = new THREE.Matrix4(), _qq = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0), _pp = new THREE.Vector3(), _ss = new THREE.Vector3();
@@ -39,31 +39,51 @@ class Batch {
   clear() { for (let i = this.n - 1; i >= 0; i--) if (this.own[i]) this.own[i].b = null; this.n = 0; this.own.length = 0; this.mesh.count = 0; this.mesh.visible = false; }
 }
 const batches = new Map();
-function batch(key, make, mat, o) { let b = batches.get(key); if (!b) { b = new Batch(make(), mat || matV, o); batches.set(key, b); } return b; }
+function batch(key, make, mat, o) { let b = batches.get(key); if (!b) { b = new Batch(make(), mat || MATS, o); batches.set(key, b); } return b; }
+const lin = hex => _col2.setHex(hex).convertSRGBToLinear();
 
 // ---------- scéna ----------
 function initRender(canvas) {
   RS.coarse = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.82;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xa6d8f0); scene.fog = new THREE.Fog(0xbfe4f3, 420, 1100);
-  camera = new THREE.PerspectiveCamera(32, 1, 2, 1600); camera.layers.enable(1);
-  scene.add(new THREE.HemisphereLight(0xf4f8ff, 0x8fb070, 0.56));
-  sun = new THREE.DirectionalLight(0xfff1d8, 0.68); sun.castShadow = true;
-  const ms = RS.coarse ? 1024 : 2048; sun.shadow.mapSize.set(ms, ms);
-  const sc = sun.shadow.camera; sc.left = -130; sc.right = 130; sc.top = 130; sc.bottom = -130; sc.near = 10; sc.far = 500; sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.4;
+  scene.fog = new THREE.Fog(0xc4d3dc, 380, 1150);
+  camera = new THREE.PerspectiveCamera(32, 1, 2, 2400); camera.layers.enable(1);
+  // obloha a odrazy okolí
+  const SUN = new THREE.Vector3(0.62, 0.52, 0.42).normalize(); RS.sunDir = SUN;
+  const skyMat = new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { top: { value: new THREE.Color(0x3f78b8) }, hor: { value: new THREE.Color(0xd2dde3) }, gnd: { value: new THREE.Color(0x8f9a86) }, sun: { value: SUN } },
+    vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
+    fragmentShader: 'uniform vec3 top, hor, gnd, sun; varying vec3 vP; void main(){ vec3 d = normalize(vP); float h = d.y; vec3 c = h > 0.0 ? mix(hor, top, pow(h, 0.55)) : mix(hor, gnd, min(1.0, -h * 6.0)); float s = max(dot(d, sun), 0.0); c += vec3(1.0, 0.92, 0.78) * (pow(s, 600.0) * 4.0 + pow(s, 12.0) * 0.25); gl_FragColor = vec4(c, 1.0); }' });
+  skyMesh = new THREE.Mesh(new THREE.SphereGeometry(1000, 32, 16), skyMat); skyMesh.renderOrder = -1; skyMesh.frustumCulled = false; skyMesh.layers.set(1); scene.add(skyMesh);
+  const envMat = skyMat.clone(); envMat.vertexShader = 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+  const pm = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(); envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), envMat));
+  envRT = pm.fromScene(envScene, 0.02); pm.dispose();
+  RS.env = envWorks(envRT.texture);   // některé grafiky vrátí černou mapu odrazů, pak se obejdeme bez ní
+  scene.environment = RS.env ? envRT.texture : null;
+  hemi = new THREE.HemisphereLight(0xdfe9f2, 0x6f6a58, RS.env ? 0.25 : 0.55); scene.add(hemi);
+  sun = new THREE.DirectionalLight(0xfff0dc, 1.9); sun.castShadow = true;
+  const ms = RS.coarse ? 1024 : 4096; sun.shadow.mapSize.set(ms, ms);
+  const sc = sun.shadow.camera; sc.left = -130; sc.right = 130; sc.top = 130; sc.bottom = -130; sc.near = 10; sc.far = 700; sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.35;
   scene.add(sun, sun.target);
-  const g = new Uint8Array([150, 150, 150, 255, 205, 205, 205, 255, 240, 240, 240, 255, 255, 255, 255, 255]);
-  const grad = new THREE.DataTexture(g, 4, 1, THREE.RGBAFormat); grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.needsUpdate = true;
-  matV = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad });
-  matB = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const TX = makeTextures(); MATS = makeMaterials(TX, RS.env ? envRT.texture : null); RS.tex = TX;
   buildTerrainMesh();
   // náhled tahu (silnice, zóny)
-  prevB = new Batch(new THREE.BoxGeometry(TS - 0.3, 0.2, TS - 0.3), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55, depthWrite: false }), { cap: 512, shadow: false, layer: 1 });
+  prevB = new Batch(new THREE.BoxGeometry(TS - 0.3, 0.2, TS - 0.3), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false }), { cap: 512, shadow: false, layer: 1 });
   cursorMesh = new THREE.Mesh(new THREE.RingGeometry(TS * 0.62, TS * 0.72, 4, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false }));
   cursorMesh.rotation.set(-Math.PI / 2, 0, Math.PI / 4); cursorMesh.renderOrder = 10; cursorMesh.layers.set(1); scene.add(cursorMesh);
   initParticles(); setupEdges();
+}
+function envWorks(tex) {
+  try {
+    const rt = new THREE.WebGLRenderTarget(16, 16), sc = new THREE.Scene(), c = new THREE.PerspectiveCamera(40, 1, 0.1, 10); c.position.z = 3;
+    sc.add(new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 8), new THREE.MeshStandardMaterial({ metalness: 1, roughness: 0.4, envMap: tex })));
+    renderer.setRenderTarget(rt); renderer.render(sc, c); const px = new Uint8Array(16 * 16 * 4); renderer.readRenderTargetPixels(rt, 0, 0, 16, 16, px); renderer.setRenderTarget(null); rt.dispose();
+    let sum = 0; for (let i = 0; i < px.length; i += 4) sum += px[i] + px[i + 1] + px[i + 2];
+    return sum / 256 > 40;
+  } catch (e) { return false; }
 }
 function setupEdges() {
   depthRT = new THREE.WebGLRenderTarget(4, 4); depthRT.depthTexture = new THREE.DepthTexture(4, 4); depthRT.depthTexture.type = THREE.UnsignedIntType;
@@ -81,40 +101,48 @@ function setupEdges() {
   });
   edgeScene = new THREE.Scene(); edgeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), edgeMat)); edgeCam = new THREE.Camera();
 }
+// kvalita: 2 vysoká, 1 střední, 0 nízká
+function setQuality(q) {
+  RS.quality = q;
+  renderer.shadowMap.enabled = q > 0;
+  const ms = q === 2 ? 4096 : 2048; if (sun.shadow.mapSize.x !== ms) { sun.shadow.mapSize.set(ms, ms); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+  resizeRender(VW, VH);
+}
 function resizeRender(w, h) {
-  VW = w; VH = h; DPR = Math.min(window.devicePixelRatio || 1, RS.coarse ? 1.5 : 2);
+  VW = w; VH = h; DPR = Math.min(window.devicePixelRatio || 1, RS.quality === 0 ? 1 : RS.quality === 1 ? 1.5 : 2);
   renderer.setPixelRatio(DPR); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   const rw = Math.round(w * DPR), rh = Math.round(h * DPR); depthRT.setSize(rw, rh); edgeMat.uniforms.px.value.set(1 / rw, 1 / rh);
 }
 
 // ---------- terén ----------
-const TERR = { grass: 0x88c463, forest: 0x77b95a, sand: 0xeadba5, bed: 0x5f9cbc, lot: 0xd9d4c8, ind: 0xc6c1b4, garden: 0x9ad47a, ruin: 0xab9f8c, flood: 0x6aa8cc, road: 0x8f8f8a };
+const TERR = { grass: 0x627d47, forest: 0x4a6337, sand: 0x8f8a6c, bed: 0x3e5a5e, lot: 0xa9a59d, ind: 0x98948b, garden: 0x5d7a44, ruin: 0x7d766b, flood: 0x4b6f80, road: 0x5e5f5f };
 function buildTerrainMesh() {
-  const geo = new THREE.BufferGeometry(), pos = new Float32Array(NN * 12), col = new Float32Array(NN * 12), nor = new Float32Array(NN * 12), ind = new Uint32Array(NN * 6);
-  for (let k = 0; k < NN; k++) { for (let v = 0; v < 4; v++) { nor[k * 12 + v * 3 + 1] = 1; } const o = k * 4; ind.set([o, o + 2, o + 1, o + 1, o + 2, o + 3], k * 6); }
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setIndex(new THREE.BufferAttribute(ind, 1));
-  terrain = new THREE.Mesh(geo, matV); terrain.receiveShadow = true; scene.add(terrain);
-  // okolí mapy
-  const outer = new THREE.MeshToonMaterial({ color: 0x9cc884, gradientMap: matV.gradientMap });
-  for (const [x, z, w, d] of [[0, -HALF - 300, HALF * 2 + 1200, 600], [0, HALF + 300, HALF * 2 + 1200, 600], [-HALF - 300, 0, 600, HALF * 2], [HALF + 300, 0, 600, HALF * 2]]) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), outer); m.rotation.x = -Math.PI / 2; m.position.set(x, -0.02, z); m.receiveShadow = true; scene.add(m); }
-  // voda s kreslenými vlnkami
-  waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), new THREE.MeshToonMaterial({ color: 0x3f98d4, gradientMap: matV.gradientMap, transparent: true, opacity: 0.92 }));
+  const geo = new THREE.BufferGeometry(), pos = new Float32Array(NN * 12), col = new Float32Array(NN * 12), nor = new Float32Array(NN * 12), uv = new Float32Array(NN * 8), ind = new Uint32Array(NN * 6);
+  for (let k = 0; k < NN; k++) { for (let v = 0; v < 4; v++) nor[k * 12 + v * 3 + 1] = 1; const o = k * 4; ind.set([o, o + 2, o + 1, o + 1, o + 2, o + 3], k * 6); }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); geo.setIndex(new THREE.BufferAttribute(ind, 1));
+  terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: RS.tex.lawn.map, normalMap: RS.tex.lawn.normalMap, roughness: 0.95, envMapIntensity: 0.35 });
+  terrain = new THREE.Mesh(geo, terrMat); terrain.receiveShadow = true; scene.add(terrain);
+  // okolí mapy: louky a pole do dálky
+  const outer = new THREE.MeshStandardMaterial({ color: lin(0x667f4c).clone(), map: RS.tex.lawn.map, roughness: 1, envMapIntensity: 0.3 });
+  for (const [x, z, w, d] of [[0, -HALF - 600, HALF * 2 + 2400, 1200], [0, HALF + 600, HALF * 2 + 2400, 1200], [-HALF - 600, 0, 1200, HALF * 2], [HALF + 600, 0, 1200, HALF * 2]]) {
+    const g = new THREE.PlaneGeometry(w, d); const u = g.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * w / 10, u.getY(i) * d / 10);
+    const m = new THREE.Mesh(g, outer); m.rotation.x = -Math.PI / 2; m.position.set(x, -0.02, z); m.receiveShadow = true; scene.add(m); }
+  // voda s vlnami a odrazem oblohy
+  waterTex = RS.tex.water.normalMap; waterTex.repeat.set(40, 40);
+  waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), new THREE.MeshStandardMaterial({ color: lin(0x2f5566).clone(), normalMap: waterTex, normalScale: new THREE.Vector2(0.35, 0.35), roughness: 0.05, metalness: 0.15, envMapIntensity: 1.2, transparent: true, opacity: 0.93 }));
   waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.y = -0.3; waterMesh.receiveShadow = true; waterMesh.layers.set(1); scene.add(waterMesh);
-  const wc = document.createElement('canvas'); wc.width = wc.height = 128; const x = wc.getContext('2d'); x.strokeStyle = 'rgba(255,255,255,0.55)'; x.lineWidth = 3; x.lineCap = 'round';
-  for (let i = 0; i < 9; i++) { const cx = (i * 47) % 128, cy = (i * 71) % 128; x.beginPath(); x.arc(cx, cy, 10, Math.PI * 1.15, Math.PI * 1.85); x.stroke(); }
-  waveTex = new THREE.CanvasTexture(wc); waveTex.wrapS = waveTex.wrapT = THREE.RepeatWrapping; waveTex.repeat.set(26, 26);
-  const wv = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), new THREE.MeshBasicMaterial({ map: waveTex, transparent: true, depthWrite: false }));
-  wv.rotation.x = -Math.PI / 2; wv.position.y = -0.26; wv.layers.set(1); scene.add(wv);
   // přehledová mapa
   ovData = new Uint8Array(NN * 4); ovTex = new THREE.DataTexture(ovData, N, N, THREE.RGBAFormat); ovTex.magFilter = THREE.LinearFilter; ovTex.minFilter = THREE.LinearFilter; ovTex.needsUpdate = true;
-  ovMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), new THREE.MeshBasicMaterial({ map: ovTex, transparent: true, depthWrite: false }));
+  ovMesh = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2, HALF * 2), new THREE.MeshBasicMaterial({ map: ovTex, transparent: true, depthWrite: false, toneMapped: false }));
   ovMesh.rotation.x = -Math.PI / 2; ovMesh.position.y = 0.35; ovMesh.layers.set(1); ovMesh.visible = false; ovMesh.renderOrder = 3; scene.add(ovMesh);
 }
 function paintTile(k) {
   const x = k % N, y = (k / N) | 0, p = terrain.geometry.attributes.position.array, c = terrain.geometry.attributes.color.array;
   const water = ter[k] === 1, h = water ? -0.9 : 0, x0 = x * TS - HALF, z0 = y * TS - HALF;
   const vs = [[x0, z0], [x0 + TS, z0], [x0, z0 + TS], [x0 + TS, z0 + TS]];
-  for (let v = 0; v < 4; v++) { p[k * 12 + v * 3] = vs[v][0]; p[k * 12 + v * 3 + 1] = h; p[k * 12 + v * 3 + 2] = vs[v][1]; }
+  const uv = terrain.geometry.attributes.uv.array;
+  for (let v = 0; v < 4; v++) { p[k * 12 + v * 3] = vs[v][0]; p[k * 12 + v * 3 + 1] = h; p[k * 12 + v * 3 + 2] = vs[v][1]; uv[k * 8 + v * 2] = vs[v][0] / 5; uv[k * 8 + v * 2 + 1] = vs[v][1] / 5; }
   let hex = TERR.grass;
   if (water) hex = TERR.bed;
   else if (flood[k]) hex = TERR.flood;
@@ -122,9 +150,9 @@ function paintTile(k) {
   else if (ruin[k]) hex = TERR.ruin;
   else if (bld[k]) { const t = blds.get(bld[k]).type; hex = ['park', 'bigpark', 'university', 'stadium', 'solar', 'airport', 'dike'].includes(t) ? TERR.garden : TERR.lot; }
   else if (zone[k] && lvl[k]) hex = zone[k] === 1 && !dens[k] ? TERR.garden : zone[k] === 3 ? TERR.ind : TERR.lot;
-  else if (zone[k]) { _col2.setHex(ZONES[zone[k]].hex).lerp(new THREE.Color(0xf4f1e6), 0.42); if ((x + y) % 2) _col2.multiplyScalar(0.95); hex = _col2.getHex(); }
+  else if (zone[k]) { _col2.setHex(TERR.grass).lerp(new THREE.Color(ZONES[zone[k]].hex), 0.38); hex = _col2.getHex(); }
   else if (ter[k] === 3) hex = TERR.forest; else if (ter[k] === 2) hex = TERR.sand;
-  _col2.setHex(hex); const f = 0.96 + hash2(x, y, 3) * 0.06;
+  lin(hex); const f = 0.97 + hash2(x, y, 3) * 0.04;
   for (let v = 0; v < 4; v++) { c[k * 12 + v * 3] = _col2.r * f; c[k * 12 + v * 3 + 1] = _col2.g * f; c[k * 12 + v * 3 + 2] = _col2.b * f; }
   RS.terrDirty = true;
 }
@@ -141,15 +169,15 @@ function faceRoad(x, y, s) {
 function zoneKey(k) { const z = zone[k], d = dens[k], l = lvl[k], v = vari[k] % (z === 1 || z === 2 ? 5 : 3), s = z === 3 ? spec[k] : 0; return 'Z' + z + d + l + v + s; }
 function zoneGeo(key) { const z = +key[1], d = +key[2], l = +key[3], v = +key[4], s = +key[5]; return z === 1 ? mRes(d, l, v) : z === 2 ? mCom(d, l, v) : z === 3 ? mInd(d, l, s, v, key) : mOff(d, l, v); }
 function tint(k) {
-  if (aband[k]) return _col2.setRGB(0.58, 0.53, 0.5);
-  const f = 0.93 + (vari[k] % 7) * 0.012; return _col2.setRGB(f, f, f);
+  if (aband[k]) return _col2.setRGB(0.45, 0.42, 0.4);
+  const f = 0.9 + (vari[k] % 7) * 0.017; return _col2.setRGB(f, f, f);
 }
 function refreshTile(k) {
   const h = tileH[k]; if (h) { if (h.b) h.b.remove(h); tileH[k] = null; smokers.delete(k); }
   const ts = treeH[k]; if (ts) { for (const t of ts) if (t.b) t.b.remove(t); treeH[k] = null; }
   paintTile(k);
   const x = k % N, y = (k / N) | 0, wx = tileX(x), wz = tileZ(y);
-  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1; tileH[k] = batch((br ? 'BR' : 'RD') + m, () => mRoad(m, br), matV, { shadow: false }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
+  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1; tileH[k] = batch((br ? 'BR' : 'RD') + m, () => mRoad(m, br), MATS, { shadow: !br ? false : true }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
   if (bld[k]) return;
   if (ruin[k] && !lvl[k]) { tileH[k] = batch('RUB', mRubble).add({ k }, mtx(wx, 0, wz, (vari[k] % 4) * 1.57)); return; }
   if (zone[k] && lvl[k]) {
@@ -181,7 +209,7 @@ function syncBuildings() {
     if (h.built !== bt || h.off !== (b.off > 0)) {
       h.built = bt; h.off = b.off > 0; const p = h.p;
       h.b.set(h, mtx(p[0], 0, p[2], p[3], 1, bt >= 1 ? 1 : 0.12 + 0.88 * bt, 1));
-      h.b.col(h, h.off ? _col2.setRGB(0.6, 0.56, 0.52) : bt < 1 ? _col2.setRGB(0.85, 0.8, 0.7) : WHITE);
+      h.b.col(h, h.off ? _col2.setRGB(0.45, 0.42, 0.4) : bt < 1 ? _col2.setRGB(0.8, 0.76, 0.68) : WHITE);
     }
   }
 }
@@ -218,7 +246,7 @@ function updateCars(dt) {
     const k = roadList[(Math.random() * roadList.length) | 0], n = nextRoad(k, -1); if (n === -1 || n === k || n == null) continue;
     const bus = Math.random() < 0.06 && T.pop > 3000, kind = bus ? 'CARbus' : 'CAR';
     const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4) };
-    c.h = batch(kind, () => mCar(bus ? 'bus' : 'car'), matV, { shadow: false, cap: 64 }).add({}, carPos(c), bus ? WHITE : _col2.setHex(CAR_COLS[(Math.random() * CAR_COLS.length) | 0]));
+    c.h = batch(kind, () => mCar(bus ? 'bus' : 'car'), MATS, { shadow: true, cap: 64 }).add({}, carPos(c), bus ? WHITE : lin(CAR_COLS[(Math.random() * CAR_COLS.length) | 0]));
     cars.push(c);
   }
   if (cars.length > want + 4) killCar(cars[cars.length - 1]);
@@ -243,7 +271,7 @@ function dispatch(kind, fromType, k, count) {
   const path = roadPath(nearestRoad(src.x, src.y), nearestRoad(tx, ty)); if (!path || path.length < 2) return;
   for (let i = 0; i < (count || 1); i++) {
     const v = { kind, path, i: 0, t: -i * 0.6, sp: 13, wait: 7 + i };
-    v.h = batch('V' + kind, () => mCar(kind), matV, { shadow: false }).add({}, mtx(0, -50, 0, 0)); vehicles.push(v);
+    v.h = batch('V' + kind, () => mCar(kind), MATS, { shadow: true }).add({}, mtx(0, -50, 0, 0)); vehicles.push(v);
   }
 }
 function updateVehicles(dt) {
@@ -259,7 +287,7 @@ function updateVehicles(dt) {
 
 // ---------- davy, policie, armáda ----------
 const crowd = new Map();   // id incidentu -> postavy
-function person(kind) { return batch('P' + kind, () => mPerson(kind), matV, { shadow: false, cap: 64 }); }
+function person(kind) { return batch('P' + kind, () => mPerson(kind), MATS, { shadow: true, cap: 64 }); }
 function updateCrowds(dt, t, dayFrac) {
   const live = new Set();
   for (const i of S.inc) {
@@ -269,7 +297,7 @@ function updateCrowds(dt, t, dayFrac) {
     const cx = tileX(i.x), cz = tileZ(i.y);
     if (i.type === 'assault') { updateAssault(i, c, t, dayFrac); continue; }
     const n = clamp(Math.round(i.size / 30), 10, RS.coarse ? 70 : 150), riot = i.type === 'riot';
-    while (c.people.length < n) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()); c.people.push({ h: person('protest').add({}, mtx(0, -50, 0)), a, r, ph: Math.random() * 6, col: CAR_COLS[(Math.random() * 8) | 0] }); c.people[c.people.length - 1].h.b.col(c.people[c.people.length - 1].h, _col2.setHex(c.people[c.people.length - 1].col)); }
+    while (c.people.length < n) { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()); c.people.push({ h: person('protest').add({}, mtx(0, -50, 0)), a, r, ph: Math.random() * 6, col: CAR_COLS[(Math.random() * 8) | 0] }); c.people[c.people.length - 1].h.b.col(c.people[c.people.length - 1].h, lin(c.people[c.people.length - 1].col)); }
     while (c.people.length > n) { const p = c.people.pop(); if (p.h.b) p.h.b.remove(p.h); }
     const R = 2 + Math.sqrt(n) * 0.55;
     for (const p of c.people) { const jitter = riot ? Math.sin(t * 3 + p.ph) * 0.6 : Math.sin(t * 1.3 + p.ph) * 0.15; const x = cx + Math.cos(p.a + jitter * 0.1) * p.r * R + jitter, z = cz + Math.sin(p.a) * p.r * R;
@@ -282,7 +310,7 @@ function updateCrowds(dt, t, dayFrac) {
   for (const [id, c] of crowd) if (!live.has(id)) { for (const g of [c.people, c.police, c.enemy, c.ours]) for (const p of g) if (p.h.b) p.h.b.remove(p.h); crowd.delete(id); }
   // armáda v ulicích
   const mk = S.martial > 0 ? 8 : 0; RS.martial = RS.martial || [];
-  while (RS.martial.length < mk && roadList.length) { const k = roadList[(hash2(RS.martial.length, 3, 1) * roadList.length) | 0]; RS.martial.push(batch('Varmy', () => mCar('army'), matV, { shadow: false }).add({}, mtx(tileX(k % N) + 0.8, 0.08, tileZ((k / N) | 0), RS.martial.length))); }
+  while (RS.martial.length < mk && roadList.length) { const k = roadList[(hash2(RS.martial.length, 3, 1) * roadList.length) | 0]; RS.martial.push(batch('Varmy', () => mCar('army'), MATS, { shadow: true }).add({}, mtx(tileX(k % N) + 0.8, 0.08, tileZ((k / N) | 0), RS.martial.length))); }
   while (RS.martial.length > mk) { const h = RS.martial.pop(); if (h.b) h.b.remove(h); }
 }
 const SIDE = { W: [-1, 0], E: [1, 0], N: [0, -1], S: [0, 1] };
@@ -290,13 +318,13 @@ function updateAssault(i, c, t, dayFrac) {
   const n = clamp(Math.round(i.size / 40), 4, 26), s = SIDE[i.side] || [-1, 0];
   const tx = tileX(i.x), tz = tileZ(i.y), sx = s[0] ? s[0] * (HALF + 20) : tx, sz = s[1] ? s[1] * (HALF + 20) : tz;
   const prog = clamp((S.day + dayFrac - i.day) / Math.max(1, i.eta - i.day), 0, 1);
-  while (c.enemy.length < n) c.enemy.push({ h: batch('Vetank', () => mCar('etank'), matV, { shadow: true }).add({}, mtx(0, -50, 0)), o: [(Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10] });
+  while (c.enemy.length < n) c.enemy.push({ h: batch('Vetank', () => mCar('etank'), MATS, { shadow: true }).add({}, mtx(0, -50, 0)), o: [(Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10] });
   const dx = tx - sx, dz = tz - sz, ry = Math.atan2(-dz, dx);
   for (const e of c.enemy) e.h.b.set(e.h, mtx(lerp(sx, tx, prog) + e.o[0] * (1 - prog * 0.5), 0.05, lerp(sz, tz, prog) + e.o[1] * (1 - prog * 0.5), ry));
   if (i.intercept) {
     const base = [...blds.values()].find(b => b.type === 'barracks'); if (!base) return;
     const bx = tileX(base.x + 1), bz = tileZ(base.y + 1), mx = lerp(sx, tx, 0.72), mz = lerp(sz, tz, 0.72), p2 = clamp(prog * 1.4, 0, 1);
-    while (c.ours.length < Math.min(14, n)) c.ours.push({ h: batch('Vtank', () => mCar('tank'), matV, { shadow: true }).add({}, mtx(0, -50, 0)), o: [(Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8] });
+    while (c.ours.length < Math.min(14, n)) c.ours.push({ h: batch('Vtank', () => mCar('tank'), MATS, { shadow: true }).add({}, mtx(0, -50, 0)), o: [(Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8] });
     for (const e of c.ours) e.h.b.set(e.h, mtx(lerp(bx, mx, p2) + e.o[0], 0.05, lerp(bz, mz, p2) + e.o[1], Math.atan2(-(mz - bz), mx - bx)));
   }
 }
@@ -304,12 +332,12 @@ function updateAssault(i, c, t, dayFrac) {
 // ---------- částice: kouř, oheň, výbuchy ----------
 let pB, fB; const parts = [];
 function initParticles() {
-  pB = new Batch(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshToonMaterial({ gradientMap: matV.gradientMap }), { cap: 700, shadow: false, layer: 1 });
-  fB = new Batch(new THREE.ConeGeometry(0.5, 1.4, 6), new THREE.MeshBasicMaterial({ fog: false }), { cap: 400, shadow: false, layer: 1 });
+  pB = new Batch(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshStandardMaterial({ roughness: 1, transparent: true, opacity: 0.55, depthWrite: false, envMapIntensity: 0.5 }), { cap: 700, shadow: false, layer: 1 });
+  fB = new Batch(new THREE.ConeGeometry(0.5, 1.4, 8), new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.9, depthWrite: false }), { cap: 400, shadow: false, layer: 1 });
 }
 function puff(x, y, z, hex, size, life, vy, vx, vz) {
   if (parts.length >= 680) return;
-  const p = { x, y, z, vx: vx || 0, vy, vz: vz || 0, life, max: life, size, h: pB.add({}, mtx(x, y, z, 0, 0.01), _col2.setHex(hex)) }; parts.push(p);
+  const p = { x, y, z, vx: vx || 0, vy, vz: vz || 0, life, max: life, size, h: pB.add({}, mtx(x, y, z, 0, 0.01), lin(hex)) }; parts.push(p);
 }
 function updateParticles(dt) {
   for (let i = parts.length - 1; i >= 0; i--) {
@@ -346,7 +374,7 @@ function updateEffects(dt, t) {
   fB.clear();
   for (const f of fireList.slice(0, 120)) for (let j = 0; j < 3; j++) {
     const ph = t * 9 + f[0] * 0.3 + j * 2, s = (0.9 + Math.sin(ph) * 0.25) * f[2];
-    fB.add({}, mtx(f[0] + (j - 1) * 0.9 * f[2], 0.6 + s * 0.6 + j * 0.3, f[1] + ((j * 7) % 3 - 1) * 0.7 * f[2], ph * 0.1, s, s * (1.2 + Math.sin(ph * 1.7) * 0.25), s), _col2.setHex(j === 1 ? 0xffd34d : 0xff7a1e));
+    fB.add({}, mtx(f[0] + (j - 1) * 0.9 * f[2], 0.6 + s * 0.6 + j * 0.3, f[1] + ((j * 7) % 3 - 1) * 0.7 * f[2], ph * 0.1, s, s * (1.2 + Math.sin(ph * 1.7) * 0.25), s), _col2.setHex(j === 1 ? 0xffd27a : 0xff8a2a));
   }
 }
 function handleFX() {
@@ -391,14 +419,14 @@ function updateOverlay() {
 // ---------- náhledy pro nástroje ----------
 function showPreview(cells) {
   prevB.clear();
-  for (const c of cells.slice(0, 2000)) prevB.add({}, mtx(tileX(c.x), 0.3, tileZ(c.y), 0), _col2.setHex(c.col));
+  for (const c of cells.slice(0, 2000)) prevB.add({}, mtx(tileX(c.x), 0.3, tileZ(c.y), 0), lin(c.col));
 }
 function showGhost(type, x, y, ok) {
   if (ghost && ghost.userData.type !== type) { scene.remove(ghost); ghost = null; }
   if (ghostRing) { scene.remove(ghostRing); ghostRing = null; }
   if (!type) { if (ghost) { scene.remove(ghost); ghost = null; } return; }
   const s = SERV[type].size;
-  if (!ghost) { ghost = new THREE.Mesh(mServ(type), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.65, depthWrite: false })); ghost.userData.type = type; ghost.layers.set(1); scene.add(ghost); }
+  if (!ghost) { ghost = new THREE.Mesh(mServ(type), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false })); ghost.userData.type = type; ghost.layers.set(1); scene.add(ghost); }
   const wx = tileX(x) + (s - 1) * TS / 2, wz = tileZ(y) + (s - 1) * TS / 2;
   ghost.position.set(wx, 0.05, wz); ghost.material.color.setHex(ok ? 0xffffff : 0xff6655);
   const r = SERV[type].r; if (r && r < 30) { ghostRing = new THREE.Mesh(new THREE.RingGeometry(r * TS - 0.5, r * TS, 48), new THREE.MeshBasicMaterial({ color: ok ? 0xffffff : 0xff6655, transparent: true, opacity: 0.6, depthWrite: false })); ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.set(wx, 0.4, wz); ghostRing.layers.set(1); scene.add(ghostRing); }
@@ -411,12 +439,12 @@ function showCursor(x, y, s, col) {
 
 // ---------- kamera a výběr ----------
 function updateCam() {
-  cam.x = clamp(cam.x, -HALF, HALF); cam.z = clamp(cam.z, -HALF, HALF); cam.dist = clamp(cam.dist, 30, 420); cam.pitch = clamp(cam.pitch, 0.45, 1.35);
+  cam.x = clamp(cam.x, -HALF, HALF); cam.z = clamp(cam.z, -HALF, HALF); cam.dist = clamp(cam.dist, 25, 420); cam.pitch = clamp(cam.pitch, 0.45, 1.35);
   const sh = cam.shake > 0 ? cam.shake : 0, ox = (Math.random() - 0.5) * sh, oz = (Math.random() - 0.5) * sh;
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   camera.position.set(cam.x + Math.sin(cam.yaw) * cp * cam.dist + ox, sp * cam.dist, cam.z + Math.cos(cam.yaw) * cp * cam.dist + oz);
   camera.lookAt(cam.x + ox, 0, cam.z + oz);
-  sun.target.position.set(cam.x, 0, cam.z); sun.position.set(cam.x + 90, 160, cam.z + 60);
+  sun.target.position.set(cam.x, 0, cam.z); sun.position.set(cam.x + RS.sunDir.x * 300, RS.sunDir.y * 300, cam.z + RS.sunDir.z * 300); skyMesh.position.copy(camera.position);
   const sc = sun.shadow.camera, ext = clamp(cam.dist * 0.9, 60, 230); if (Math.abs(sc.right - ext) > 8) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.updateProjectionMatrix(); }
 }
 const _ray = new THREE.Raycaster(), _ndc = new THREE.Vector2(), _plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), _hit = new THREE.Vector3();
@@ -433,11 +461,11 @@ function project(x, y, z) { _pv.set(x, y, z).project(camera); return { x: (_pv.x
 function renderFrame(dt, t, dayFrac) {
   if (dirty.size) { for (const k of dirty) refreshTile(k); if ([...dirty].some(k => road[k] || !road[k])) RS.roadsDirty = true; dirty.clear(); }
   syncBuildings(); handleFX();
-  if (RS.terrDirty) { terrain.geometry.attributes.position.needsUpdate = true; terrain.geometry.attributes.color.needsUpdate = true; terrain.geometry.computeBoundingSphere(); RS.terrDirty = false; }
+  if (RS.terrDirty) { terrain.geometry.attributes.position.needsUpdate = true; terrain.geometry.attributes.color.needsUpdate = true; terrain.geometry.attributes.uv.needsUpdate = true; terrain.geometry.computeBoundingSphere(); RS.terrDirty = false; }
   for (let i = anims.length - 1; i >= 0; i--) { const a = anims[i]; a.t += dt * 2.2; const h = a.h; if (!h.b) { anims.splice(i, 1); continue; } const p = h.p, k = Math.min(1, a.t); const s = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.18 : 1; h.b.set(h, mtx(p[0], 0, p[2], p[3], 1 / Math.sqrt(s), k * s, 1 / Math.sqrt(s))); if (a.t >= 1) anims.splice(i, 1); }
   for (const h of servH.values()) if (h.r && h.r.b) { const p = h.p; _mtx.makeRotationY(p[3]); const rot = new THREE.Matrix4().makeRotationZ(t * 1.6 + h.id); const m = new THREE.Matrix4().makeTranslation(p[0], 10.3, p[2]).multiply(_mtx).multiply(rot); h.r.b.set(h.r, m); }
   updateCars(dt); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
-  waveTex.offset.set((t * 0.01) % 1, (t * 0.006) % 1);
+  waterTex.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
   waterMesh.position.y = S.floodEv ? -0.3 + Math.min(1, S.floodEv.day / 3) * 0.2 : -0.3;
   if (cam.shake > 0) cam.shake = Math.max(0, cam.shake - dt * 1.2);
   updateCam();

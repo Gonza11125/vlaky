@@ -143,6 +143,15 @@ function genCity(size, techs) {
   for (const b of blocks) {
     for (let i = 0; i <= sp; i++) for (const [x, y] of [[b.x0 + i, b.y0], [b.x0 + i, b.y0 + sp], [b.x0, b.y0 + i], [b.x0 + sp, b.y0 + i]]) if (inb(x, y)) layRoad(x, y);
   }
+  // odříznuté čtvrti (třeba za řekou) napojit po hlavních ulicích, přes vodu mostem
+  computeConn();
+  for (const b of blocks) {
+    if (conn[idx(b.x0, b.y0)]) continue;
+    let x = b.x0, y = b.y0;
+    while (y !== cy) { y += Math.sign(cy - y); layRoad(x, y); }
+    while (x !== cx) { x += Math.sign(cx - x); layRoad(x, y); }
+    computeConn();
+  }
   // služby
   const has = (t, x, y, dist) => { for (const b of blds.values()) if (b.type === t && Math.hypot(b.x - x, b.y - y) < dist) return true; return false; };
   const put = (t, b, ox, oy) => { const s = SERV[t].size, x = b.x0 + 1 + (ox || 0), y = b.y0 + 1 + (oy || 0); if (!canBuildAt(x, y, s, true)) return null; b.used = (b.used || 0) + s * s; return addBuilding(t, x, y); };
