@@ -61,6 +61,14 @@ const SERV = {
   stadium:   { name: 'Stadion', cat: 'fun', size: 3, cost: 5000000, up: 80000, r: 40, park: 0.3, happy: 4, desc: 'Celé město je o něco spokojenější. Fanoušci ale umí i demonstrovat.' },
   bus:       { name: 'Autobusové depo', cat: 'trans', size: 1, cost: 400000, up: 15000, r: 9, transit: 0.5, desc: 'Městská doprava ulehčí silnicím.' },
   metro:     { name: 'Stanice metra', cat: 'trans', size: 1, cost: 2500000, up: 40000, r: 12, transit: 1, req: 'metro', desc: 'Rychlá podzemní doprava. Výrazně ubere aut.' },
+  // památky: land = body cestovního ruchu, unique = jen jedna ve městě
+  castle:    { name: 'Zámek', cat: 'landmark', size: 3, cost: 9000000, up: 60000, r: 10, park: 0.8, land: 6, unique: true, desc: 'Barokní zámek s francouzskou zahradou. Turisté, svatby, koncerty a prestiž.' },
+  cathedral: { name: 'Katedrála', cat: 'landmark', size: 3, cost: 7000000, up: 30000, r: 9, park: 0.6, land: 5, unique: true, desc: 'Gotická katedrála se dvěma věžemi. Láká poutníky a turisty, lidem zvedá náladu.' },
+  museum:    { name: 'Národní muzeum', cat: 'landmark', size: 2, cost: 5000000, up: 70000, r: 8, park: 0.4, land: 4, rp: 6, unique: true, desc: 'Sbírky, výstavy a školní exkurze. Přidá i trochu výzkumu.' },
+  zoo:       { name: 'Zoologická zahrada', cat: 'landmark', size: 3, cost: 6000000, up: 90000, r: 10, park: 1, land: 5, unique: true, desc: 'Sloni, žirafy a pavilon tropů. V létě sem jezdí rodiny z celého kraje.' },
+  aquapark:  { name: 'Aquapark', cat: 'landmark', size: 3, cost: 5500000, up: 110000, r: 9, park: 0.8, land: 4, unique: true, req: 'tourism', desc: 'Tobogány, vlnobití a sauny. V létě plno, v zimě klid.' },
+  lookout:   { name: 'Rozhledna', cat: 'landmark', size: 1, cost: 600000, up: 4000, r: 6, park: 0.4, land: 1, desc: 'Vyhlídka do okolí pro výletníky. Hodí se na kopec nebo k lesu.' },
+  tvtower:   { name: 'Televizní věž', cat: 'landmark', size: 2, cost: 8000000, up: 50000, r: 8, park: 0.3, land: 4, unique: true, req: 'internet', desc: 'Vysílač s vyhlídkovou restaurací. Symbol moderního města viditelný z dálky.' },
   // železnice: rail = druh stanice, pax = síla osobní dopravy, freight = kapacita nákladu (t/měs.)
   railhalt:  { name: 'Železniční zastávka', cat: 'rail', size: 1, cost: 300000, up: 7000, r: 9, rail: 'pass', pax: 0.55, desc: 'Nástupiště s přístřeškem. Osobní vlaky tu zastaví a vezmou lidi z okolí.' },
   railst:    { name: 'Nádraží', cat: 'rail', size: 2, cost: 1500000, up: 30000, r: 12, rail: 'pass', pax: 1, desc: 'Nádražní budova s pokladnou a krytým nástupištěm. Lidé jezdí vlakem do práce i za nákupy.' },
@@ -74,7 +82,7 @@ const SERV = {
   dike:      { name: 'Protipovodňová hráz', cat: 'gov', size: 1, cost: 25000, up: 200, req: 'flood', line: true, desc: 'Hráz podél řeky. Zastaví vodu, když lemuje celý břeh.' },
 };
 const SERV_CATS = [
-  { key: 'power', name: 'Energie' }, { key: 'water', name: 'Voda a odpad' }, { key: 'rescue', name: 'Hasiči' }, { key: 'rail', name: 'Železnice' }, { key: 'safety', name: 'Policie a armáda' },
+  { key: 'power', name: 'Energie' }, { key: 'water', name: 'Voda a odpad' }, { key: 'rescue', name: 'Hasiči' }, { key: 'landmark', name: 'Památky' }, { key: 'rail', name: 'Železnice' }, { key: 'safety', name: 'Policie a armáda' },
   { key: 'health', name: 'Zdraví' }, { key: 'edu', name: 'Vzdělání' }, { key: 'fun', name: 'Volný čas' },
   { key: 'trans', name: 'Doprava a obchod' }, { key: 'gov', name: 'Správa' },
 ];

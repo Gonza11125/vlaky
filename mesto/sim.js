@@ -32,7 +32,7 @@ function newGame(o) {
   computeWaterDist();
   for (const k in S) delete S[k];
   Object.assign(S, {
-    v: 1, name: o.name || 'Nové Město', day: 0, money: STARTS[o.size].money, loan: 0,
+    v: 1, name: o.name || 'Nové Město', day: 90, startDay: 90, money: STARTS[o.size].money, loan: 0,
     opts: { size: o.size, tech: o.tech, crisis: o.crisis, wars: o.wars, elections: o.elections },
     tax: { R: 9, C: 9, I: 9, O: 9 }, lastTax: 36,
     bud: { police: 100, fire: 100, health: 100, edu: 100, transit: 100, rail: 100, army: 100, parks: 100 },
@@ -141,7 +141,7 @@ function blur(src, dst, r, passes) {
     a = dst;
   }
 }
-const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', firevol: 'fire', firehq: 'fire', fireair: 'fire', techpark: 'edu', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', railhalt: 'rail', railst: 'rail', mainst: 'rail', station: 'rail', container: 'rail', depot: 'rail', barracks: 'army', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
+const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', firevol: 'fire', firehq: 'fire', fireair: 'fire', techpark: 'edu', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', railhalt: 'rail', railst: 'rail', mainst: 'rail', station: 'rail', container: 'rail', depot: 'rail', barracks: 'army', castle: 'parks', cathedral: 'parks', museum: 'edu', zoo: 'parks', aquapark: 'parks', lookout: 'parks', tvtower: 'parks', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
 const budF = cat => cat ? 0.35 + 0.65 * S.bud[cat] / 100 : 1;
 function computeCoverage() {
   for (const c of Object.values(cov)) c.fill(0);
@@ -194,6 +194,10 @@ function analysis() {
     if (b.type === 'townhall' && !b.off) T.rpGov = 3; if (b.type === 'intel') intel += budF('police'); if (d.tourism) tour += 3; if (b.type === 'stadium') stadium++;
   }
   trade += T.railTrade || 0; tour += T.railTour || 0;
+  // památky: cestovní ruch podle sezóny
+  { const mc = monthOf(S.day); let lt = 0, ln = 0; for (const b of blds.values()) { const d = SERV[b.type]; if (!d.land || !b.ok) continue; ln++;
+      const summer = mc >= 5 && mc <= 7, winterM = mc === 11 || mc <= 1; lt += d.land * (b.type === 'aquapark' || b.type === 'zoo' ? (summer ? 1.5 : winterM ? 0.5 : 1) : 1); }
+    T.landTour = lt; T.landN = ln; }
   if (S.techs.logistics) trade *= 1.3; trade *= 1 + tfx('trade'); intel *= 1 + tfx('intel');
   const k_s = S.techs.smartgrid ? 0.85 : 1;
   const pDem = (pop * PW_RES + jobs * PW_JOB) * k_s * (S.heat > 0 ? 1.2 : 1) * (1 + tfx('powerDemand')), wDem = (pop * WT_RES + jobs * WT_JOB) * k_s * (S.heat > 0 ? 1.35 : 1) * (1 + tfx('waterDemand'));
@@ -310,6 +314,7 @@ function happyMods() {
   if (pol) m.push(['Vyhlášky', pol]);
   if (tfx('happy')) m.push(['Výzkum', tfx('happy')]);
   if (T.stadium) m.push(['Stadion', 4]);
+  if (T.landN) m.push(['Památky', Math.min(6, T.landN * 1.2)]);
   if (S.martial > 0) m.push(['Vojáci v ulicích', -6]);
   if (S.nb.some(n => n.war)) m.push(['Válka', -5]);
   if (S.crime > 30) m.push(['Kriminalita', -(S.crime - 30) * 0.3]);
@@ -393,7 +398,7 @@ function firesDay() {
   const fe = (1 + tfx('fireEff')) * (0.45 + 0.55 * (T.wRatio || 0));   // hasiči bez vody nezmůžou nic
   for (const k of burning) {
     const x = k % N, y = (k / N) | 0, c = Math.min(1, cov.fire[k] * fe);
-    if (chance(c * 0.55 + (S.techs.firecode ? 0.08 : 0))) { fire[k] = 0; markDirty(k); if (c > 0.2) note('Hasiči uhasili ' + tileName(k) + '.', 'good', k); continue; }
+    if (chance(c * 0.55 + (S.techs.firecode ? 0.08 : 0))) { fire[k] = 0; markDirty(k); S.stat = S.stat || {}; S.stat.fires = (S.stat.fires || 0) + 1; if (c > 0.2) note('Hasiči uhasili ' + tileName(k) + '.', 'good', k); continue; }
     fire[k]++;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (chance(0.11 * (1 - c * 0.8) * (S.heat > 0 ? 1.6 : 1))) igniteTile(n, true); }
     if (fire[k] > 5 + (k % 4)) destroyTile(k, 'shořela');
@@ -624,7 +629,8 @@ function monthly() {
   const coll = hall ? 1 : 0.4;
   const inc = {
     R: pop * S.tax.R * TAXK.R * coll, C: T.fil[2] * S.tax.C * TAXK.C * coll, I: T.fil[3] * S.tax.I * TAXK.I * coll, O: T.fil[4] * S.tax.O * TAXK.O * coll * (1 + tfx('officeTax')),
-    power: Math.max(0, T.pCap - T.pDem) * 25, tourism: S.techs.tourism ? (T.tour + T.stadium * 2 + sumPark()) * 9000 : 0,
+    power: Math.max(0, T.pCap - T.pDem) * 25, tourism: (T.tour * 9000 + (T.landTour || 0) * 14000) * (S.techs.tourism ? 1.5 : 1) + (S.techs.tourism ? (T.stadium * 2 + sumPark()) * 9000 : 0),
+    share: pop > 0 ? 55000 * Math.sqrt(pop / 450) * coll : 0,
   };
   if (blds.size && [...blds.values()].some(b => b.type === 'recycle' && b.ok)) inc.recycle = 40000;
   const RL = railMonth(); inc.rail = RL.inc; inc.railSub = RL.sub;
@@ -664,8 +670,10 @@ function monthly() {
   neighborsMonthly();
   if (S.opts.elections && m === 9 && (yearOf(S.day) - 2026) % 4 === 2) election();
   advisor();
-  S.hist.push({ d: S.day, pop: Math.round(pop), money: Math.round(S.money), happy: Math.round(S.happy), approval: Math.round(S.approval), crime: Math.round(S.crime), radical: Math.round(S.radical) });
-  if (S.hist.length > 120) S.hist.shift();
+  S.hist.push({ d: S.day, pop: Math.round(pop), money: Math.round(S.money), happy: Math.round(S.happy), approval: Math.round(S.approval), crime: Math.round(S.crime), radical: Math.round(S.radical),
+    net: Math.round(S.last ? S.last.net : 0), unemp: Math.round(T.unemp * 1000) / 10, poll: Math.round(T.pollR || 0), traf: Math.round((T.traffic || 0) * 100), pax: Math.round(S.rail ? S.rail.pax : 0), tour: Math.round(S.last ? S.last.inc.tourism : 0), health: Math.round(S.health), loan: Math.round(S.loan) });
+  if (S.hist.length > 240) S.hist.shift();
+  if (typeof missionMonthly === 'function') missionMonthly();
 }
 function sumPark() { let s = 0; for (const b of blds.values()) if (b.ok && SERV[b.type].park) s += SERV[b.type].size; return s; }
 function tradeCapLeft() { return Math.max(0, T.trade - S.tradeUsed); }
@@ -705,7 +713,7 @@ function monthlyEvents(m) {
   const k = CRK(), pop = T.pop, big = pop > 1500;
   if (!big) return;
   // příroda
-  if (m >= 2 && m <= 4 && !S.floodEv && chance(0.12 * k)) startFlood();
+  if (m >= 2 && m <= 4 && !S.floodEv && chance(0.12 * k * (S.mission && S.mission.floodK || 1))) startFlood();
   if (chance(0.007 * k)) quake();
   if (m >= 5 && m <= 9 && chance(0.025 * k)) storm();
   if (m >= 5 && m <= 7 && !S.heat && chance(0.09 * k)) { S.heat = 45; note('Vlna veder! Lidé spotřebují víc vody i elektřiny a snadno vzplane požár.', 'bad'); }
@@ -827,7 +835,7 @@ function answer(a, opt) {
 }
 function election() {
   const v = clamp(S.approval + (Math.random() - 0.5) * 8, 0, 100);
-  if (v >= 50) { S.mood += 4; note('Volby: obhájil jsi mandát se ziskem ' + Math.round(v) + ' % hlasů!', 'good'); }
+  if (v >= 50) { S.stat = S.stat || {}; S.stat.elections = (S.stat.elections || 0) + 1; S.mood += 4; note('Volby: obhájil jsi mandát se ziskem ' + Math.round(v) + ' % hlasů!', 'good'); }
   else gameOver('election', Math.round(v));
 }
 function gameOver(why, v) {

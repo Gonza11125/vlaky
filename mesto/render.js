@@ -74,7 +74,7 @@ function initRender(canvas) {
   prevB = new Batch(new THREE.BoxGeometry(TS - 0.3, 0.2, TS - 0.3), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.5, depthWrite: false }), { cap: 512, shadow: false, layer: 1 });
   cursorMesh = new THREE.Mesh(new THREE.RingGeometry(TS * 0.62, TS * 0.72, 4, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false }));
   cursorMesh.rotation.set(-Math.PI / 2, 0, Math.PI / 4); cursorMesh.renderOrder = 10; cursorMesh.layers.set(1); scene.add(cursorMesh);
-  initParticles(); setupEdges();
+  initParticles(); setupEdges(); initAtmo();
 }
 function envWorks(tex) {
   try {
@@ -125,7 +125,7 @@ function buildTerrainMesh() {
   terrMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: RS.tex.lawn.map, normalMap: RS.tex.lawn.normalMap, roughness: 0.95, envMapIntensity: 0.35 });
   terrain = new THREE.Mesh(geo, terrMat); terrain.receiveShadow = true; scene.add(terrain);
   // okolí mapy: louky a pole do dálky
-  const outer = new THREE.MeshStandardMaterial({ color: lin(0x667f4c).clone(), map: RS.tex.lawn.map, roughness: 1, envMapIntensity: 0.3 });
+  const outer = RS.outerMat = new THREE.MeshStandardMaterial({ color: lin(0x667f4c).clone(), map: RS.tex.lawn.map, roughness: 1, envMapIntensity: 0.3 });
   for (const [x, z, w, d] of [[0, -HALF - 600, HALF * 2 + 2400, 1200], [0, HALF + 600, HALF * 2 + 2400, 1200], [-HALF - 600, 0, 1200, HALF * 2], [HALF + 600, 0, 1200, HALF * 2]]) {
     const g = new THREE.PlaneGeometry(w, d); const u = g.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * w / 10, u.getY(i) * d / 10);
     const m = new THREE.Mesh(g, outer); m.rotation.x = -Math.PI / 2; m.position.set(x, -0.02, z); m.receiveShadow = true; scene.add(m); }
@@ -185,6 +185,7 @@ function refreshTile(k) {
   const ts = treeH[k]; if (ts) { for (const t of ts) if (t.b) t.b.remove(t); treeH[k] = null; }
   paintTile(k);
   const x = k % N, y = (k / N) | 0, wx = tileX(x), wz = tileZ(y);
+  ATM.lampsDirty = true;
   if (rail[k]) { refreshRailTile(k, x, y, wx, wz); if (!road[k]) return; }
   if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, rt = rail[k] && road[k] === 1 ? 2 : road[k]; tileH[k] = batch('R' + rt + (br ? 'b' : '') + m, () => mRoadT(rt, m, br), MATS, { shadow: br || rt === 3 || rt === 6 }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
   if (bld[k]) return;
@@ -462,6 +463,9 @@ function updateEffects(dt, t) {
 function handleFX() {
   while (FX.length) {
     const f = FX.shift();
+    const fx = f.k != null ? tileX(f.k % N) : null, fz = f.k != null ? tileZ((f.k / N) | 0) : null;
+    if (f.t === 'firetruck') sfx('siren', fx, fz); else if (f.t === 'police') sfx('police', fx, fz); else if (f.t === 'boom' || f.t === 'crash' || f.t === 'derail') sfx('boom', fx, fz); else if (f.t === 'battle') sfx('boom', fx, fz); else if (f.t === 'storm') sfx('thunder');
+    else if (f.t === 'build') { const b = blds.get(f.b); if (b) sfx('build', tileX(b.x), tileZ(b.y)); }
     if (f.t === 'grow') grow(f.k);
     else if (f.t === 'firetruck') dispatchFire(f.k);
     else if (f.t === 'police') dispatch('police', ['police', 'policehq'], f.k, 3);
@@ -548,6 +552,7 @@ function renderFrame(dt, t, dayFrac) {
   for (let i = anims.length - 1; i >= 0; i--) { const a = anims[i]; a.t += dt * 2.2; const h = a.h; if (!h.b) { anims.splice(i, 1); continue; } const p = h.p, k = Math.min(1, a.t); const s = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.18 : 1; h.b.set(h, mtx(p[0], 0, p[2], p[3], 1 / Math.sqrt(s), k * s, 1 / Math.sqrt(s))); if (a.t >= 1) anims.splice(i, 1); }
   for (const h of servH.values()) if (h.r && h.r.b) { const p = h.p; _mtx.makeRotationY(p[3]); const rot = new THREE.Matrix4().makeRotationZ(t * 1.6 + h.id); const m = new THREE.Matrix4().makeTranslation(p[0], 10.3, p[2]).multiply(_mtx).multiply(rot); h.r.b.set(h.r, m); }
   updateCars(dt); updateTransit(dt, t); updateRail(dt, t); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
+  updateAtmo(dt, t);
   waterTex.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
   waterMesh.position.y = S.floodEv ? -0.3 + Math.min(1, S.floodEv.day / 3) * 0.2 : -0.3;
   if (cam.shake > 0) cam.shake = Math.max(0, cam.shake - dt * 1.2);

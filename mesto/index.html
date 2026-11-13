@@ -210,6 +210,29 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
 .choice b { font-weight: 800; } .choice small { color: var(--ink2); }
 .saves .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .saves .item small { display: block; color: var(--ink2); font-size: 12px; }
+/* mise, grafy, odznaky */
+#mission { position: absolute; right: var(--gr); top: calc(var(--topH, 62px) + 4px); width: 270px; padding: 0; z-index: 4; overflow: hidden; }
+body.panelopen #mission { display: none; }
+.mi-h { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; border: 0; background: none; padding: 8px 12px; text-align: left; }
+.mi-h b { font: 700 15px var(--display); } .mi-h span { font-size: 12px; color: var(--ink2); white-space: nowrap; }
+.mi-b { padding: 0 12px 10px; }
+.mi-g { position: relative; font-size: 12.5px; padding: 4px 0 6px; border-top: 1px solid var(--soft); }
+.mi-g i { position: absolute; left: 0; bottom: 1px; height: 3px; background: var(--accent); border-radius: 2px; }
+.mi-g.ok { color: var(--good); font-weight: 700; } .mi-g.ok i { background: var(--good); }
+.stars { color: #d9a02a; letter-spacing: 1px; }
+.cards.mis { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.mi-meta { color: var(--accent) !important; font-weight: 600; }
+.freeh { margin-top: 18px !important; }
+.chartbox { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px 6px; margin-bottom: 8px; }
+.ch-h { display: flex; justify-content: space-between; align-items: baseline; } .ch-h b { font: 700 14px var(--display); } .ch-h small { color: var(--ink2); font-size: 11px; }
+.chart { width: 100%; height: auto; display: block; margin: 4px 0 2px; }
+.chart .ax { stroke: #c9cfd6; stroke-width: 1; } .chart .zero { stroke: #9aa3ad; stroke-width: 1; stroke-dasharray: 3 3; } .chart .lb { font: 10px var(--body); fill: #6a737d; }
+.ch-l { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--ink2); } .ch-l i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; } .ch-l b { color: var(--ink); }
+.seg2 { margin-bottom: 10px; }
+.achs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.ach { border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; opacity: .55; } .ach b { display: block; font: 700 13px var(--display); } .ach small { font-size: 11.5px; color: var(--ink2); }
+.ach.on { opacity: 1; border-color: #e6c77a; background: #fdf8ea; } .ach.on b { color: #9a6a10; }
+@media (max-width: 860px) { #mission { left: auto; right: var(--gr); width: min(250px, 62%); top: calc(var(--topH, 52px) + 6px); } .mi-h { padding: 6px 10px; } .mi-g { font-size: 12px; } }
 .s-store { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 6px; } .s-store small { color: var(--ink2); font-size: 12px; }
 
 /* jemná viněta a barevné doladění obrazu */
@@ -281,12 +304,12 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
       <div class="st"><small>Důvěra</small><b id="t-appr" class="num">0 %</b><div class="meter"><span id="m-appr"></span></div></div>
     </div>
     <div id="speed" class="card">
-      <button class="sp" data-s="0" title="Pauza (mezerník)">II</button><button class="sp on" data-s="1" title="Rychlost 1">1×</button><button class="sp" data-s="2" title="Rychlost 2">2×</button><button class="sp" data-s="3" title="Rychlost 3">3×</button>
+      <button class="sp" data-s="0" title="Pauza (mezerník)">II</button><button class="sp on" data-s="1" title="Rychlost 1">1×</button><button class="sp" data-s="2" title="Rychlost 2">2×</button><button class="sp" data-s="3" title="Rychlost 3">3×</button><button class="sp" id="b-snd" title="Zvuk"></button>
     </div>
     <button class="mob" id="b-manage" aria-expanded="false">Správa</button>
     <div id="tabs" class="card">
       <button class="tab" data-p="budget">Rozpočet</button><button class="tab" data-p="trade">Obchod</button><button class="tab" data-p="research">Rozvoj</button><button class="tab" data-p="rail">Železnice</button><button class="tab" data-p="policy">Vyhlášky</button>
-      <button class="tab" data-p="security">Bezpečnost</button><button class="tab" data-p="society">Společnost</button><button class="tab" data-p="diplo">Sousedé</button><button class="tab" data-p="crisis">Krize<span class="badge" id="b-crisis" hidden>0</span></button><button class="tab" data-p="menu">Hra</button>
+      <button class="tab" data-p="security">Bezpečnost</button><button class="tab" data-p="society">Společnost</button><button class="tab" data-p="diplo">Sousedé</button><button class="tab" data-p="stats">Statistiky</button><button class="tab" data-p="crisis">Krize<span class="badge" id="b-crisis" hidden>0</span></button><button class="tab" data-p="menu">Hra</button>
     </div>
   </div>
 
@@ -299,6 +322,7 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
   <canvas id="mini" width="180" height="180"></canvas>
   <button class="card mob" id="b-mini">Mapa</button>
   <div id="toolchip" class="card" hidden></div>
+  <div id="mission" class="card" hidden></div>
   <div class="overlay" id="tree" hidden><div class="treebox" role="dialog" aria-label="Strom výzkumu"><header><h2>Strom výzkumu</h2><div id="tt-sum"></div><button class="x" id="tt-x" aria-label="Zavřít">×</button></header><div id="tt-wrap"><div id="tt-scroll"><div id="tt-grid"></div></div><aside id="tt-det"></aside></div></div></div>
 
   <div class="overlay" id="start">
@@ -306,6 +330,8 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
       <h1>Starosta</h1>
       <p class="lead">Postav moderní město a udrž ho v chodu. Rozpočet, obchod, výzkum a vyhlášky jsou v tvých rukou. Stejně tak povodně, epidemie, stávky, demonstrace, extremisté, nespokojená armáda a sousedé, kteří nezapomínají.</p>
       <div class="saves" id="s-saves"></div>
+      <div id="s-missions"></div>
+      <h3 class="freeh">Volná hra</h3>
       <h3>Jméno města</h3>
       <input class="namein" id="s-name" maxlength="28" value="Nové Lhoty" autocomplete="off" spellcheck="false">
       <h3>Čím začneš</h3>
@@ -336,4 +362,7 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
 <script src="models.js"></script>
 <script src="render.js"></script>
 <script src="trains.js"></script>
+<script src="atmo.js"></script>
+<script src="audio.js"></script>
 <script src="ui.js"></script>
+<script src="missions.js"></script>

@@ -10,6 +10,7 @@ const DAY_SEC = [0, 0.8, 0.32, 0.1];
 // ---------- zprávy ----------
 UIH.note = m => {
   if (!G.playing) return;
+  if (m.cls === 'good') sfx(/Vyzkoumáno/.test(m.text) ? 'research' : 'good'); else if (m.cls === 'bad') sfx('bad');
   const el = document.createElement('div'); el.className = 'note ' + m.cls + (m.k >= 0 ? ' jump' : ''); el.textContent = m.text;
   if (m.k >= 0) el.onclick = () => focusTile(m.k % N, (m.k / N) | 0);
   const f = $('feed'); f.appendChild(el); while (f.children.length > 5) f.firstChild.remove();
@@ -19,7 +20,8 @@ function toast(text, cls) { UIH.note({ text, cls: cls || '', k: -1 }); }
 function focusTile(x, y) { cam.x = tileX(x); cam.z = tileZ(y); if (cam.dist > 160) cam.dist = 120; }
 
 // ---------- nástroje ----------
-const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', rescue: '#c8372d', rail: '#2f6f6a', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
+document.addEventListener('click', e => { if (e.target.closest('button')) sfx('click'); }, true);
+const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', rescue: '#c8372d', rail: '#2f6f6a', landmark: '#b08a3a', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
 const RAIL = [
   { key: 'select', name: 'Prohlížet', sw: '#ffffff' }, { key: 'road', name: 'Silnice', sw: '#5a5f69' }, { key: 'zones', name: 'Zóny', sw: '#6fbf5a' },
   ...SERV_CATS.map(c => ({ key: 'cat:' + c.key, name: c.name, sw: CAT_COL[c.key] })),
@@ -125,6 +127,7 @@ function applyDrag() {
   else if (t.kind === 'demolish') { const done = new Set(); for (const c of cells) { const k = idx(c.x, c.y); if (bld[k]) { if (done.has(bld[k])) continue; done.add(bld[k]); } const e = demolish(c.x, c.y); if (e && cells.length === 1) err = e; else if (!e) n++; } }
   else if (t.kind === 'build') for (const c of cells) { const r = placeServ(t.type, c.x, c.y); if (typeof r === 'string') { if (cells.length === 1) err = r; if (r.startsWith('Nemáš')) { poor = true; break; } } else n++; }
   if (poor) toast('Došly peníze.', 'bad'); if (err) toast(err, 'bad');
+  if (n > 0) sfx(t.kind === 'demolish' || t.kind === 'unrail' || t.kind === 'dezone' ? 'demolish' : t.kind === 'zone' ? 'zone' : t.kind === 'build' ? 'build' : 'road');
   showPreview([]); G.dragCells = null; refreshNow();
 }
 
@@ -202,8 +205,11 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
 // ---------- horní lišta ----------
-document.querySelectorAll('.sp').forEach(b => b.onclick = () => setSpeed(+b.dataset.s));
-function setSpeed(s) { if (s) G.lastSpeed = s; G.speed = s; document.querySelectorAll('.sp').forEach(b => b.classList.toggle('on', +b.dataset.s === s)); }
+document.querySelectorAll('.sp[data-s]').forEach(b => b.onclick = () => setSpeed(+b.dataset.s));
+function drawSnd() { const b = $('b-snd'); if (b) { b.classList.toggle('on', !AU.on); b.innerHTML = AU.on ? '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>' : '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 9l6 6M22 9l-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'; b.setAttribute('aria-label', AU.on ? 'Vypnout zvuk' : 'Zapnout zvuk'); } }
+$('b-snd').onclick = () => { audioStart(); setAudio({ on: !AU.on }); drawSnd(); if (G.panel === 'menu') renderPanel(); };
+drawSnd();
+function setSpeed(s) { if (s) G.lastSpeed = s; G.speed = s; document.querySelectorAll('.sp[data-s]').forEach(b => b.classList.toggle('on', +b.dataset.s === s)); }
 function meterCol(v) { return v >= 60 ? 'var(--good)' : v >= 40 ? 'var(--warn)' : 'var(--bad)'; }
 function updateTop() {
   $('t-name').textContent = S.name; $('t-date').textContent = dateStr(S.day);
@@ -304,7 +310,7 @@ PANELS.budget = {
     const L = S.last; let h = '';
     if (!L) h = '<p>První vyúčtování bude na konci měsíce.</p>';
     else {
-      const I = L.inc, E = L.exp, ITEMS = [['Daně z bydlení', I.R], ['Daně z obchodů', I.C], ['Daně z průmyslu', I.I], ['Daně z kanceláří', I.O], ['Prodej elektřiny', I.power], ['Cestovní ruch', I.tourism], ['Recyklace', I.recycle || 0], ['Jízdné a nákladní poplatky', I.rail || 0], ['Dotace kraje na vlaky', I.railSub || 0], ['Obchod se zbožím', L.trade.net]];
+      const I = L.inc, E = L.exp, ITEMS = [['Daně z bydlení', I.R], ['Daně z obchodů', I.C], ['Daně z průmyslu', I.I], ['Daně z kanceláří', I.O], ['Sdílené daně od státu', I.share || 0], ['Prodej elektřiny', I.power], ['Cestovní ruch', I.tourism], ['Recyklace', I.recycle || 0], ['Jízdné a nákladní poplatky', I.rail || 0], ['Dotace kraje na vlaky', I.railSub || 0], ['Obchod se zbožím', L.trade.net]];
       for (const [a, v] of ITEMS) if (Math.abs(v) >= 1) h += row(a, (v >= 0 ? '+' : '') + money(v), v >= 0 ? 'pos' : 'neg');
       for (const [a, v] of [['Provoz služeb', E.services], ['Správa města', E.admin], ['Údržba silnic', E.roads], ['Železnice: vlaky a tratě', E.rail || 0], ['Financování výzkumu', E.research], ['Vyhlášky', E.policies], ['Úroky', E.loan]]) if (v >= 1) h += row(a, '−' + money(v), 'neg');
       h += row('<b>Celkem</b>', (L.net >= 0 ? '+' : '') + money(L.net), L.net >= 0 ? 'pos' : 'neg');
@@ -612,6 +618,7 @@ PANELS.crisis = {
 const SLOT = n => 'starosta-' + n, SLOTS = ['auto', 0, 1, 2];
 const CLOUD = { db: null, uid: null, ready: false, tried: false, slots: {}, parsed: {}, busy: {}, pending: {}, lastWrite: 0, dl: null };
 (async () => {
+  await 0;   // až po načtení celého skriptu
   try {
     if (!window.claude || typeof window.claude.use !== 'function') throw 0;
     const [db, user, dl] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('downloads')]);
@@ -678,15 +685,20 @@ PANELS.menu = {
     for (const n of SLOTS) { const sv = readSlot(n); h += '<div class="item"><h5>' + (n === 'auto' ? 'Automatické uložení' : 'Pozice ' + (n + 1)) + '</h5><p>' + (sv ? slotLabel(sv) + whenSaved(sv) : 'prázdná') + '</p><div class="btns">' + (n !== 'auto' ? '<button class="btn pri" data-s="' + n + '">Uložit sem</button>' : '') + (sv ? '<button class="btn" data-l="' + n + '">Načíst</button>' : '') + '</div></div>'; }
     h += '<h4>Soubor</h4><p>Hru si můžeš stáhnout do souboru a později ji nahrát, třeba na jiném zařízení.</p><div class="btns"><button class="btn" id="g-exp">Stáhnout hru do souboru</button><button class="btn" id="g-imp">Nahrát hru ze souboru</button></div>';
     h += '<h4>Kvalita grafiky</h4><div class="btns">' + ['Nízká', 'Střední', 'Vysoká'].map((n, i) => '<button class="btn' + (RS.quality === i ? ' pri' : '') + '" data-q="' + i + '">' + n + '</button>').join('') + '</div><p>Vysoká má ostré dlouhé stíny a plné rozlišení. Nízká vypne stíny a sníží rozlišení, hodí se pro slabší telefony a notebooky.</p>';
+    h += '<h4>Den a noc</h4><div class="btns">' + ['Vždy den', 'Střídat den a noc', 'Vždy noc'].map((n, i) => '<button class="btn' + (ATM.mode === i ? ' pri' : '') + '" data-dn="' + i + '">' + n + '</button>').join('') + '</div><p>Roční období a počasí se řídí datem ve hře: v zimě sněží a zamrzá voda, na podzim žloutne listí, na jaře a na podzim víc prší.</p>';
+    h += '<h4>Zvuk a hudba</h4><div class="btns"><button class="btn' + (AU.on ? ' pri' : '') + '" data-au="on">' + (AU.on ? 'Zvuk zapnutý' : 'Zvuk vypnutý') + '</button><button class="btn' + (AU.music ? ' pri' : '') + '" data-au="music">Hudba</button><button class="btn' + (AU.amb ? ' pri' : '') + '" data-au="amb">Zvuky okolí</button></div><div class="rs-fund"><input type="range" id="au-vol" min="0" max="100" step="5" value="' + Math.round(AU.vol * 100) + '" aria-label="Hlasitost"><b class="num" id="au-volv">' + Math.round(AU.vol * 100) + ' %</b></div>';
     h += '<h4>Ovládání</h4><p>Myš: levým tlačítkem stavíš nebo vybíráš, pravým posouváš mapu, kolečkem přibližuješ, prostředním otáčíš. Klávesy: WASD posun, Q a E otáčení, R a F sklon, mezerník pauza, 1 až 3 rychlost, Esc zruší nástroj.</p><p>Dotyk: jedním prstem stavíš nebo posouváš mapu (s nástrojem Prohlížet), dvěma prsty přibližuješ, otáčíš a posouváš.</p>';
     h += '<div class="btns"><button class="btn dan" id="g-new">' + (G.newArm ? 'Opravdu začít znovu?' : 'Nová hra') + '</button></div>';
     return h;
   },
   bind: () => {
+    const v = $('au-vol'); if (v) v.oninput = () => { audioStart(); setAudio({ vol: +v.value / 100 }); $('au-volv').textContent = v.value + ' %'; };
     $('pbody').onclick = e => {
       const s = e.target.closest('[data-s]'), l = e.target.closest('[data-l]');
       if (s) { writeSlot(+s.dataset.s); renderPanel(); }
       if (l) { const n = l.dataset.l; loadSlot(n === 'auto' ? 'auto' : +n); }
+      const dn = e.target.closest('[data-dn]'); if (dn) { setDayMode(+dn.dataset.dn); renderPanel(); }
+      const au = e.target.closest('[data-au]'); if (au) { audioStart(); const k = au.dataset.au; setAudio({ [k]: !AU[k] }); drawSnd(); renderPanel(); }
       if (e.target.id === 'g-exp') exportSave();
       if (e.target.id === 'g-imp') importSave();
       const q = e.target.closest('[data-q]'); if (q) { setQuality(+q.dataset.q); try { localStorage.setItem('starosta-quality', q.dataset.q); } catch (_) { } renderPanel(); }
@@ -800,6 +812,7 @@ function drawStart() {
   $('s-crisis').innerHTML = CRISIS_LEVELS.map((c, i) => '<button class="pick' + (OPT.crisis === i ? ' on' : '') + '" data-v="' + i + '"><b>' + c.name + '</b><small>' + ['Katastrofy a nepokoje jsou vzácné. Hodí se pro klidné budování.', 'Občas něco vyhoří, zaplaví nebo vypukne demonstrace.', 'Pohromy, stávky a extremisté přicházejí často.'][i] + '</small></button>').join('');
   $('s-rules').innerHTML = '<button class="pick' + (OPT.wars ? ' on' : '') + '" data-r="wars"><b>Války a převraty: ' + (OPT.wars ? 'ano' : 'ne') + '</b><small>Sousedé mohou zaútočit a nespokojená armáda se může vzbouřit.</small></button><button class="pick' + (OPT.elections ? ' on' : '') + '" data-r="elections"><b>Volby: ' + (OPT.elections ? 'ano' : 'ne') + '</b><small>Každé čtyři roky. S nízkou důvěrou prohraješ.</small></button>';
   const saves = SLOTS.map(n => [n, readSlot(n)]).filter(s => s[1]).sort((a, b) => (b[1].saved || 0) - (a[1].saved || 0));
+  if (typeof drawMissionsStart === 'function') drawMissionsStart();
   $('s-saves').innerHTML = (saves.length ? '<h3>Pokračovat</h3>' + saves.map(([n, sv]) => '<div class="item"><span>' + slotLabel(sv) + '<small>' + (n === 'auto' ? 'automatické uložení' : 'pozice ' + (n + 1)) + whenSaved(sv) + '</small></span><button class="btn pri" data-load="' + n + '">Pokračovat</button></div>').join('') : '')
     + '<div class="s-store"><small>' + (CLOUD.ready ? 'Uložené hry se berou z tvého účtu na Claude.' : CLOUD.tried ? 'Uložené hry jsou jen v tomto prohlížeči.' : 'Hledám uložené hry…') + '</small><button class="btn" data-imp="1">Nahrát hru ze souboru</button></div>';
 }
@@ -813,14 +826,15 @@ $('s-go').onclick = () => {
   if (!OPT.size) { cam.x = tileX(8); }
   startPlaying();
 };
-function showStart() { G.playing = false; $('start').hidden = false; drawStart(); closePanel(); G.cat = null; drawSub(); }
+function showStart() { G.playing = false; $('start').hidden = false; drawStart(); closePanel(); G.cat = null; drawSub(); const mi = $('mission'); if (mi) mi.hidden = true; }
 function startPlaying() {
   document.body.classList.remove('tabsopen', 'minion');
   rebuildAll(); drawMiniBase(); RS.overlay = null; setOverlay(null);
   for (const el of mkEls.values()) el.remove(); mkEls.clear(); $('feed').innerHTML = '';
   G.playing = true; G.demo = false; G.acc = 0; G.lastAuto = S.day; $('start').hidden = true; $('over').hidden = true;
-  setTool({ kind: 'select' }); G.cat = S.day === 0 && !T.pop ? 'cat:power' : null; drawRail(); drawSub(); setSpeed(1); updateTop(); showAsk();
-  if (S.day === 0) for (const m of S.log) UIH.note(m);
+  const fresh = S.day === (S.startDay || 0); setTool({ kind: 'select' }); G.cat = fresh && !T.pop ? 'cat:power' : null; drawRail(); drawSub(); setSpeed(1); updateTop(); showAsk();
+  if (fresh) for (const m of S.log) UIH.note(m);
+  if (typeof drawMission === 'function') drawMission();
 }
 
 // ---------- hlavní smyčka ----------
@@ -841,7 +855,7 @@ function loop(now) {
     if (S.asks.length && $('ask').hidden) showAsk();
     if (S.day - G.lastAuto >= 30 && Date.now() - CLOUD.lastWrite > 15000) { G.lastAuto = S.day; writeSlot('auto', true); }
   } else { cam.yaw += dt * 0.05; simDayDemo(dt); }
-  renderFrame(dt, t, dayFrac);
+  renderFrame(dt, t, dayFrac); updateAudio(dt);
   if (G.playing) {
     updateMarkers(); drawHud();
     if (now - uiT > 250) { uiT = now; updateTop(); }

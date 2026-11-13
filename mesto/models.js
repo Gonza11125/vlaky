@@ -156,6 +156,7 @@ function mServ(t) {
   const s = SERV[t].size, W = s * TS - 0.6, b = new GB(), key = 'S:' + t;
   if (t === 'church') return mChurch();
   if (SERV[t].rail) return mRailBld(t);
+  if (SERV[t].cat === 'landmark') return mLandmark(t);
   switch (t) {
     case 'townhall': lot(b, W, 0xcfc8ba, 'pave'); b.facade('stone', 2, 1.7, 6, 3.6, 0xeee6d5, 0, 0, -0.8).use('tile').gable(6.2, 1.4, 3.8, 0x7a4a36, 0, 3.4, -0.8, Math.PI / 2).use('plain');
       for (let i = 0; i < 6; i++) b.cyl(0.17, 0.19, 2.7, PAL.white, -2.3 + i * 0.92, 0, 1.3, 12); b.box(5.6, 0.45, 0.7, PAL.white, 0, 2.7, 1.3).box(5.8, 0.2, 1.2, 0xd8d2c4, 0, 0, 1.4);
@@ -522,5 +523,93 @@ function mTram() {
   b.use('paint').box(5.2, 0.95, 0.95, 0xc8372d, 0, 0.22, 0).box(5.22, 0.35, 0.97, 0xf0e8d8, 0, 0.22, 0).use('glass').box(5.24, 0.42, 0.98, 0x2b3642, 0, 0.66, 0)
     .use('plain').box(4.8, 0.14, 0.7, 0xd8d6d0, 0, 1.17, 0).use('metal').box(0.6, 0.04, 0.05, 0x2a2c30, 0.2, 1.62, 0).box(0.04, 0.34, 0.04, 0x2a2c30, 0.2, 1.3, 0);
   b.use('plain'); for (const x of [-1.9, 0, 1.9]) b.box(0.6, 0.2, 0.8, 0x2a2c30, x, 0.04, 0);
+  return b.geo();
+}
+
+// ---------- památky ----------
+function animal(b, kind, x, z, ry) {
+  const pm = b.m, c = Math.cos(ry || 0), sn = Math.sin(ry || 0), P = (dx, dz) => [x + dx * c + dz * sn, z - dx * sn + dz * c];
+  b.use('plain');
+  if (kind === 'giraffe') { const col = 0xd8a24a; let p = P(0, 0); b.sph(0.45, col, p[0], 1.1, p[1], 1.4, 0.8, 0.8); for (const [dx, dz] of [[-0.35, -0.2], [-0.35, 0.2], [0.35, -0.2], [0.35, 0.2]]) { p = P(dx, dz); b.box(0.1, 1.0, 0.1, col, p[0], 0, p[1]); }
+    p = P(0.5, 0); b.add(new THREE.BoxGeometry(0.16, 1.4, 0.16), col, p[0], 1.8, p[1], 0, ry || 0, -0.35); p = P(0.78, 0); b.box(0.36, 0.18, 0.16, col, p[0], 2.42, p[1], ry || 0); }
+  else if (kind === 'elephant') { const col = 0x8a8a86; let p = P(0, 0); b.sph(0.7, col, p[0], 1.0, p[1], 1.4, 0.9, 0.9); for (const [dx, dz] of [[-0.5, -0.3], [-0.5, 0.3], [0.5, -0.3], [0.5, 0.3]]) { p = P(dx, dz); b.cyl(0.16, 0.16, 0.8, col, p[0], 0, p[1], 6); }
+    p = P(1.0, 0); b.sph(0.42, col, p[0], 1.3, p[1], 1, 1, 1); p = P(1.35, 0); b.add(new THREE.CylinderGeometry(0.07, 0.11, 0.9, 6), col, p[0], 0.9, p[1], 0, 0, 0.3); }
+  else { const col = 0xe9e4d8; let p = P(0, 0); b.sph(0.35, col, p[0], 0.55, p[1], 1.4, 0.8, 0.8); p = P(0.45, 0); b.sph(0.18, col, p[0], 0.85, p[1]); }
+  b.m = pm;
+}
+function hedgeBox(b, w, d, x, z) { const pm = b.m; b.use('leaf').box(w, 0.45, d, 0x3f6a35, x, 0, z); b.m = pm; }
+function mLandmark(t) {
+  const s = SERV[t].size, W = s * TS - 0.6, b = new GB(), key = 'S:' + t;
+  switch (t) {
+    case 'castle': {
+      lot(b, W, PAL.grass, 'lawn'); b.use('pave').box(W - 1, 0.06, 4.2, 0xd9cdb0, 0, 0.06, 2.6).box(1.4, 0.06, W, 0xd9cdb0, 0, 0.07, 0);
+      const wall = 0xead7a0, roof = 0x4a5650;
+      b.facade('stone', 3, 1.5, 6.4, 2.4, wall, 0, 0, -3.2).use('tile').gable(6.8, 1.6, 2.8, roof, 0, 4.5, -3.2, Math.PI / 2);
+      for (const sx of [-1, 1]) { b.facade('stone', 2, 1.5, 2.0, 4.6, wall, sx * 4.2, 0, -1.6).use('tile').gable(2.4, 1.3, 4.9, roof, sx * 4.2, 3.0, -1.6, 0);
+        b.use('stone').cyl(0.95, 0.95, 4.6, wall, sx * 4.2, 0, -4.2, 14).use('metal').cone(1.05, 1.8, 0x4f7f6a, sx * 4.2, 4.6, -4.2, 14).use('plain').sph(0.12, 0xd9b84a, sx * 4.2, 6.5, -4.2); }
+      b.facade('stone', 3, 1.5, 2.2, 2.6, 0xf0e2b8, 0, 0, -1.6).use('metal').cone(1.3, 2.0, 0x4f7f6a, 0, 4.5, -1.6, 4).use('plain').cyl(0.4, 0.4, 0.05, PAL.white, 0, 3.6, -0.28, 16);
+      b.use('stone').cyl(0.9, 1.0, 0.45, 0xd9cdb0, 0, 0.06, 2.4, 18).use('water').cyl(0.78, 0.78, 0.05, PAL.water, 0, 0.45, 2.4, 18).use('stone').cyl(0.1, 0.14, 0.9, 0xd9cdb0, 0, 0.45, 2.4, 8);
+      for (const sx of [-1, 1]) { hedgeBox(b, 3.4, 0.4, sx * 3.2, 1.2); hedgeBox(b, 3.4, 0.4, sx * 3.2, 3.9); hedgeBox(b, 0.4, 2.7, sx * 1.7, 2.55); hedgeBox(b, 0.4, 2.7, sx * 4.7, 2.55);
+        b.use('leaf').cone(0.35, 1.3, 0x3a5f33, sx * 3.2, 0.06, 2.55, 8); b.use('lawn').box(2.6, 0.08, 2.2, 0x6a8f45, sx * 3.2, 0.06, 2.55); }
+      b.use('metal'); for (const sx of [-1, 1]) b.box(0.25, 1.6, 0.25, 0x2a2c30, sx * 0.9, 0, 5.4);
+      break; }
+    case 'cathedral': {
+      lot(b, W, 0xc9c0ad, 'pave'); const st = 0xb9b3a7, sl = 0x4a5058;
+      b.use('pave').box(3.2, 4.6, 7.2, st, 0, 0, -0.6).use('tile').gable(3.6, 2.8, 7.4, sl, 0, 4.6, -0.6, 0);
+      b.use('pave').box(7.2, 4.2, 2.2, st, 0, 0, -2.4).use('tile').gable(7.4, 2.4, 2.4, sl, 0, 4.2, -2.4, Math.PI / 2);
+      b.use('pave').box(3.0, 3.4, 2.4, st, 0, 0, -4.6).cyl(1.5, 1.5, 3.4, st, 0, 0, -5.0, 12);
+      for (const sx of [-1, 1]) { b.use('pave').box(1.5, 9.4, 1.5, st, sx * 1.1, 0, 3.4).use('tile').pyr(1.6, 4.6, sl, sx * 1.1, 9.4, 3.4).use('plain').sph(0.13, 0xd9b84a, sx * 1.1, 14.1, 3.4);
+        for (const z of [-3.4, -1.0, 1.4]) b.use('pave').add(new THREE.BoxGeometry(0.35, 3.6, 0.5), st, sx * 2.0, 1.8, z, 0, 0, sx * -0.25); }
+      b.use('glass').add(new THREE.CircleGeometry(0.8, 16), 0x6a4fa0, 0, 5.4, 4.16).add(new THREE.CircleGeometry(0.55, 3, 0, Math.PI), 0x7a5fb0, 0, 2.2, 4.16);
+      for (const z of [-3.0, -1.6, -0.2, 1.2]) for (const sx of [-1, 1]) b.add(new THREE.BoxGeometry(0.04, 2.0, 0.5), 0x5a4f90, sx * 1.61, 2.0, z, 0, 0, 0);
+      b.use('pave').box(4.4, 0.25, 1.2, 0xd5ccb8, 0, 0, 4.8).tree(-4.2, 4.2, 0.8, PAL.leaf[1]).tree(4.2, 4.2, 0.8, PAL.leaf[0]).tree(4.4, -4.4, 0.9, PAL.leaf[2]);
+      break; }
+    case 'museum': {
+      lot(b, W, 0xcfc6b2, 'pave'); const st = 0xe9e2d0;
+      b.facade('stone', 2, 1.7, 6.6, 3.6, st, 0, 0, -1.4).parapet(6.6, 3.6, 3.4, 0xd5ccb8, 0, -1.4);
+      b.use('stone').box(4.2, 0.35, 1.6, 0xd5ccb8, 0, 0, 1.1).box(4.0, 0.3, 1.5, 0xd5ccb8, 0, 0.35, 1.1);
+      b.use('plain'); for (let i = 0; i < 6; i++) b.cyl(0.16, 0.18, 2.6, 0xf2ede0, -1.75 + i * 0.7, 0.65, 1.3, 10);
+      b.use('stone').box(4.2, 0.4, 1.6, st, 0, 3.25, 1.0).use('tile').gable(4.4, 0.9, 1.6, 0xd5ccb8, 0, 3.65, 1.0, Math.PI / 2);
+      b.use('stone').cyl(1.3, 1.3, 0.8, st, 0, 3.4, -1.4, 18).use('metal').sph(1.3, 0x5f8f7a, 0, 4.2, -1.4, 1, 0.85, 1, 2).use('plain').cyl(0.1, 0.1, 0.6, 0xd9b84a, 0, 5.3, -1.4, 6);
+      b.use('paint').box(0.5, 1.6, 0.06, 0xa83a30, -2.6, 0.6, 1.2).box(0.5, 1.6, 0.06, 0x2f5f9f, 2.6, 0.6, 1.2);
+      break; }
+    case 'zoo': {
+      lot(b, W, PAL.grass, 'lawn');
+      b.use('pave').box(1.2, 0.06, W, 0xc9bda0, -0.6, 0.06, 0).box(W, 0.06, 1.2, 0xc9bda0, 0, 0.06, 1.2);
+      b.use('soil').box(4.2, 0.08, 4.2, 0xb59a6a, -3.4, 0.06, -3.4).use('wood'); for (const [x, z, w, d] of [[-3.4, -1.3, 4.2, 0.1], [-1.3, -3.4, 0.1, 4.2]]) b.box(w, 0.7, d, PAL.wood, x, 0, z);
+      animal(b, 'giraffe', -4.0, -3.8, 0.5); animal(b, 'giraffe', -2.6, -4.5, 2.4); b.tree(-4.6, -2.2, 0.9, PAL.leaf[3]);
+      b.use('soil').box(4.2, 0.08, 3.6, 0x9a8a72, 3.0, 0.06, -3.6).use('water').box(1.6, 0.06, 1.2, PAL.water, 4.1, 0.1, -2.6).use('stone'); b.box(4.2, 0.6, 0.15, 0xa8a49b, 3.0, 0, -1.7).box(0.15, 0.6, 3.6, 0xa8a49b, 0.95, 0, -3.6);
+      animal(b, 'elephant', 2.4, -4.2, 0.3); animal(b, 'elephant', 3.8, -4.6, 2.8);
+      b.use('glass').sph(2.0, 0x9fc4b4, 3.0, 0, 3.2, 1.2, 0.95, 1.1, 2).use('metal').cyl(2.45, 2.45, 0.15, PAL.steel, 3.0, 0, 3.2, 20);
+      b.use('water').cyl(1.3, 1.3, 0.06, PAL.water, -3.4, 0.06, 3.4, 18); for (let i = 0; i < 4; i++) animal(b, 'bird', -3.8 + i * 0.5, 3.0 + (i % 2) * 0.6, i);
+      b.tree(-1.6, 4.6, 0.7).tree(-4.8, 1.6, 0.8, PAL.leaf[1]).tree(4.8, 0.6, 0.7, PAL.leaf[2]);
+      b.use('paint').box(1.6, 1.4, 0.2, 0x3f7f4f, -0.6, 0, 5.2).use('plain').box(1.3, 0.3, 0.22, 0xd9b84a, -0.6, 1.0, 5.2);
+      break; }
+    case 'aquapark': {
+      lot(b, W, 0xd9d2c0, 'pave');
+      b.use('glass').box(5.6, 2.6, 3.6, 0x9fc0d4, -2.6, 0, -3.4).use('metal').add(new THREE.CylinderGeometry(2.0, 2.0, 5.8, 16, 1, false, 0, Math.PI), 0xbfd8e8, -2.6, 2.6, -3.4, 0, 0, Math.PI / 2);
+      b.use('water').box(4.6, 0.12, 3.0, 0x3fa8c8, -2.2, 0.02, 1.6).box(2.2, 0.12, 2.2, 0x4fb8d4, 3.6, 0.02, 3.4).use('plain').box(4.9, 0.18, 3.3, 0xeef2f2, -2.2, 0, 1.6);
+      b.use('metal').box(1.2, 4.6, 1.2, 0xd8dde2, 3.8, 0, -3.6);
+      const cols = [0xe0483a, 0xf4c447, 0x3f82dd];
+      for (let i = 0; i < 9; i++) { const a = i * 0.7, r = 1.5, y = 4.4 - i * 0.48; b.use('paint').add(new THREE.CylinderGeometry(0.28, 0.28, 1.2, 8), cols[i % 3], 3.8 + Math.cos(a) * r * 0.9, y, -3.6 + Math.sin(a) * r * 0.9 + i * 0.25, Math.PI / 2, -a, 0.45); }
+      for (const [x, z, c] of [[-4.8, 4.6, 0xe0483a], [-1.0, 4.6, 0xf4c447], [1.4, 0.4, 0x3f82dd]]) b.use('metal').cyl(0.03, 0.03, 1.2, PAL.steel, x, 0, z, 6).use('paint').cone(0.7, 0.35, c, x, 1.0, z, 10);
+      b.use('wood'); for (let i = 0; i < 4; i++) b.box(0.5, 0.12, 1.1, 0xf2f0ea, 1.2 + i * 0.7, 0.1, 4.8);
+      break; }
+    case 'lookout': {
+      lot(b, W, PAL.grass, 'lawn');
+      b.use('metal'); for (const [x, z] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) b.add(new THREE.BoxGeometry(0.12, 8.4, 0.12), 0x6f4f32, x * 0.7, 4.2, z * 0.7, z * 0.07, 0, -x * 0.07);
+      b.use('wood'); for (let i = 1; i < 6; i++) { const y = i * 1.4, w = 1.7 - i * 0.12; for (const r2 of [0, Math.PI / 2]) b.box(w, 0.08, 0.08, 0x7a5a3e, Math.sin(r2) * w / 2 * 0, y, 0, r2); }
+      b.box(2.0, 0.15, 2.0, PAL.wood, 0, 8.3, 0).use('metal').box(2.0, 0.6, 0.05, 0x6f4f32, 0, 8.45, 1.0).box(2.0, 0.6, 0.05, 0x6f4f32, 0, 8.45, -1.0).box(0.05, 0.6, 2.0, 0x6f4f32, 1.0, 8.45, 0).box(0.05, 0.6, 2.0, 0x6f4f32, -1.0, 8.45, 0);
+      b.use('tile').pyr(2.2, 1.2, 0x7a4a36, 0, 9.6, 0); for (const [x, z] of [[-0.95, -0.95], [0.95, -0.95], [-0.95, 0.95], [0.95, 0.95]]) b.use('wood').box(0.08, 1.2, 0.08, 0x6f4f32, x, 8.4, z);
+      b.pine(-1.2, 1.2, 0.7).pine(1.3, -1.0, 0.6);
+      break; }
+    case 'tvtower': {
+      lot(b, W, 0xb9b4aa, 'pave');
+      b.facade('office', 1, 2.2, 5.2, 3.0, 0xd8dde2, 0, 0, 1.2).parapet(5.2, 3.0, 2.2, PAL.conc, 0, 1.2);
+      b.use('plain').cyl(0.55, 0.9, 20, 0xe8e6e0, 0, 0, -1.2, 16);
+      b.use('plain').cyl(1.6, 1.0, 1.0, 0xe8e6e0, 0, 15.2, -1.2, 20).use('glass').cyl(1.65, 1.65, 1.2, 0x8fb0c4, 0, 16.2, -1.2, 20).use('plain').cyl(1.2, 1.7, 0.6, 0xe8e6e0, 0, 17.4, -1.2, 20);
+      b.use('metal').cyl(0.12, 0.22, 7, 0xd8dde2, 0, 18, -1.2, 8); for (let i = 0; i < 4; i++) b.box(0.3, 0.3, 0.3, i % 2 ? 0xe0483a : PAL.white, 0, 19 + i * 1.6, -1.2);
+      break; }
+  }
   return b.geo();
 }

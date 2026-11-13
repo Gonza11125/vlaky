@@ -286,7 +286,7 @@ function updateTrains(dt) {
   for (const t of trains.slice()) {
     const R = t.R, rk = RAILS[rail[R.tiles[Math.min(R.tiles.length - 1, Math.max(0, tileIndexAt(t)))]] || 1] || RAILS[1];
     const vmax = t.vmax * (t.type === 'hs' ? (rk.hs ? 1.6 : 0.9) : rk.speed > 1 ? 1.1 : 1) * (S.bud.rail < 80 ? 0.85 : 1);
-    if (t.dwell > 0) { t.dwell -= dt; if (t.dwell <= 0) { t.at = null; if (t.turn) { t.turn = false; turnTrain(t); } } }
+    if (t.dwell > 0) { t.dwell -= dt; if (t.dwell <= 0) { if (t.pos && t.pos[0] && t.at) sfx('horn', t.pos[0][0], t.pos[0][1]); t.at = null; if (t.turn) { t.turn = false; turnTrain(t); } } }
     else {
       const st = t.stops.find(s => !s.done), target = st ? st.s + t.len / 2 : (t.edgeEnd ? Infinity : R.len - 0.2);
       const dist = target - t.s, allow = Math.sqrt(Math.max(0, 2 * 2.2 * dist));
