@@ -352,7 +352,7 @@ function mGarden(v) {
   lot(b, 3.95, PAL.grass, 'lawn');
   if (v === 0) { beds(b, -0.8, 0.2, 1.6, 2.6, 6); beds(b, 0.9, 0.9, 1.2, 1.4, 4); b.use('wood').box(0.9, 0.9, 0.8, 0x8a6a48, 1.1, 0, -1.2).use('tile').gable(1.0, 0.45, 0.9, 0x7a4a36, 1.1, 0.9, -1.2, Math.PI / 2); }
   else if (v === 1) { for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) b.tree(x, z, 0.6, [0x5d8a3a, 0x6a8f3f][(x + z + 4) % 2]); }
-  else { b.tree(-1.1, -1.0, 0.65, 0x5d8a3a).tree(1.2, 1.1, 0.55, 0x6a8f3f); beds(b, 0.6, -0.7, 1.4, 1.4, 4); b.use('glass').box(1.0, 0.75, 1.4, 0xc8d8dc, -0.8, 0, 1.0).use('wood').box(0.5, 0.7, 0.5, 0x5a4532, 1.4, 0, -1.5); }
+  else { b.tree(-1.1, -1.0, 0.65, 0x5d8a3a).tree(1.2, 1.1, 0.55, 0x6a8f3f); beds(b, 0.6, -0.7, 1.4, 1.4, 4); b.use('glass').box(1.0, 0.75, 1.4, 0x7f9a95, -0.8, 0, 1.0).use('wood').box(0.5, 0.7, 0.5, 0x5a4532, 1.4, 0, -1.5); }
   fence(b, -1.95, 1.95, -1.95, 'x'); fence(b, -1.95, 1.95, 1.95, 'z');
   return b.geo();
 }

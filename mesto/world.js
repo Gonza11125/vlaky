@@ -252,7 +252,7 @@ function genCity(size, techs) {
   const resT = []; for (let k = 0; k < NN; k++) if (lvl[k] && zone[k] === 1) resT.push(k);
   const dc = k => Math.hypot(k % N - cx, ((k / N) | 0) - cy) + hash2(k, 2, 9) * 3;
   resT.sort((a, b) => dc(a) - dc(b));
-  const deficit = Math.max(0, capR * 0.5 - capJ), share = size >= 3 ? { 3: 0.5, 2: 0.3, 4: 0.2 } : { 3: 0.55, 2: 0.45, 4: 0 };
+  const deficit = Math.max(0, capR * 0.5 - capJ), share = village ? { 3: 0.85, 2: 0.1, 4: 0 } : size >= 3 ? { 3: 0.5, 2: 0.3, 4: 0.2 } : { 3: 0.55, 2: 0.45, 4: 0 };
   const conv = (z, list) => { let got = 0; for (const k of list) { if (got >= deficit * share[z] || zone[k] !== 1) { if (got >= deficit * share[z]) break; continue; } const before = capK(k); zone[k] = z; dens[k] = z === 3 ? dens[k] && size >= 4 ? 1 : 0 : dens[k]; if (lvl[k] > (dens[k] ? 5 : 3)) lvl[k] = 3; const c = capK(k); capR -= before; capJ += c; got += c; } };
   conv(3, resT.slice().reverse()); conv(2, resT); conv(4, resT);
   for (let pass = 0; pass < 5 && capJ > capR * 0.62; pass++) {
@@ -260,6 +260,8 @@ function genCity(size, techs) {
     for (let k = 0; k < NN; k++) if (lvl[k] > 1 && zone[k] > 1 && hash2(k, pass, 3) < f) { capJ -= capK(k); lvl[k]--; capJ += capK(k); }
   }
   for (let k = 0; k < NN; k++) if (zone[k] === 3 && lvl[k]) spec[k] = village ? 1 : hash2(k % N, (k / N) | 0, 6) < 0.35 ? 1 : (techs.includes('hightech') && hash2(k, 0, 7) < 0.2 ? 2 : 0);
+  // zbytky polí a lesa uvnitř městských bloků se změní na trávník
+  for (const b of blocks) for (let j = 1; j < sp; j++) for (let i = 1; i < sp; i++) { const k = idx(b.x0 + i, b.y0 + j); if (inb(b.x0 + i, b.y0 + j) && (ter[k] === 4 || ter[k] === 3) && !zone[k] && !bld[k] && !road[k]) ter[k] = 0; }
   // ráz zástavby: historické jádro, předměstí, sídliště a vesnické okraje
   for (let k = 0; k < NN; k++) {
     if (!zone[k]) continue;
