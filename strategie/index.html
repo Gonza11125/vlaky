@@ -157,7 +157,8 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <button class="tbtn" id="b-tech">Technologie</button>
       <button class="tbtn" id="b-speed" title="Rychlost hry">1×</button>
       <button class="tbtn" id="b-pause" title="Pauza (mezerník)">Pauza</button>
-      <button class="tbtn" id="b-save" title="Uloží hru do tohoto prohlížeče">Uložit</button>
+      <button class="tbtn" id="b-save" title="Uloží hru">Uložit</button>
+      <button class="tbtn" id="b-export" title="Stáhne hru do souboru">Soubor</button>
     </div>
   </div>
 
@@ -217,9 +218,9 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <button class="pick" id="b-join" disabled>Připojit se</button>
       </div>
       <p class="hint" id="net-status">Zjišťuji, jestli je síť dostupná…</p>
-      <div class="row" style="align-items:center"><button class="go" id="b-start">Začít novou hru</button><button class="go alt" id="b-continue" hidden>Pokračovat v uložené hře</button></div>
+      <div class="row" style="align-items:center"><button class="go" id="b-start">Začít novou hru</button><button class="go alt" id="b-continue" hidden>Pokračovat v uložené hře</button><button class="go alt" id="b-import">Nahrát hru ze souboru</button></div>
       <p class="hint"><a href="https://claude.ai/artifact/TcDtKN79igJbRfaMwddkCi" target="_blank" rel="noopener" style="color:var(--brass)">Budovatelská hra Starosta ↗</a> – moderní město, ekonomika a krize bez spěchu.</p>
-      <p class="lead" style="margin:10px 0 0;font-size:12.5px">Hra se ukládá sama každou chvíli a tlačítkem Uložit, vždy do tohoto prohlížeče na tomto zařízení.</p>
+      <p class="lead" id="s-savenote" style="margin:10px 0 0;font-size:12.5px">Hledám uloženou hru…</p>
     </div>
   </div>
 

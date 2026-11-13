@@ -392,33 +392,78 @@ function applyOpts() { G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real
 $('b-start').onclick = () => { applyOpts(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
 $('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = false; G.paused = true; };
 
-// ---------- uložení ----------
+// ---------- uložení: účet na Claude (pro přihlášené, na všech zařízeních), prohlížeč a soubor ----------
 const SAVE_KEY = 'vek-pokroku-save-1';
-function readSave() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return s && s.v === 1 ? s : null; } catch (_) { return null; } }
-function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (_) { } }
+const CLOUD = { db: null, uid: null, ready: false, tried: false, doc: null, parsed: null, busy: false, pending: null, dl: null };
+(async () => {
+  try {
+    if (!window.claude || typeof window.claude.use !== 'function') throw 0;
+    const [db, user, dl] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('downloads')]);
+    CLOUD.dl = dl;
+    const uid = user ? await user.id() : null, canW = user ? await user.can('data.write') : null;
+    if (db && uid && canW !== false) {
+      CLOUD.db = db; CLOUD.uid = uid;
+      const sn = await Promise.race([db.collection('data/users/' + uid).doc('save').get(), new Promise((_, rej) => setTimeout(() => rej(0), 12000))]);
+      if (sn && sn.exists) CLOUD.doc = sn.data();
+      CLOUD.ready = true;
+    }
+  } catch (_) { }
+  CLOUD.tried = true; showSaveOffer();
+})();
+function readLocal() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return s && s.v === 1 ? s : null; } catch (_) { return null; } }
+function readCloud() { const d = CLOUD.doc; if (!d || typeof d.data !== 'string') return null; if (!CLOUD.parsed || CLOUD.parsed.saved !== d.saved) { try { CLOUD.parsed = JSON.parse(d.data); } catch (_) { return null; } } return CLOUD.parsed && CLOUD.parsed.v === 1 ? CLOUD.parsed : null; }
+function readSave() { const a = readLocal(), c = readCloud(); if (!a) return c; if (!c) return a; return (c.saved || 0) >= (a.saved || 0) ? c : a; }
+function cloudSet(body) {
+  if (!CLOUD.db) return; if (CLOUD.busy) { CLOUD.pending = body; return; }
+  CLOUD.busy = true; const ref = CLOUD.db.collection('data/users/' + CLOUD.uid).doc('save');
+  (body ? ref.set(body).then(() => { CLOUD.doc = body; }) : ref.delete().then(() => { CLOUD.doc = null; })).catch(e => { if (e && e.code === 'invalid_argument') CLOUD.db = null; })
+    .finally(() => { CLOUD.busy = false; const n = CLOUD.pending; if (n !== null) { CLOUD.pending = null; cloudSet(n); } });
+}
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (_) { } if (CLOUD.db && CLOUD.doc) cloudSet(undefined); }
+function makeSave() { return Object.assign(saveState(), { cam: { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw } }); }
+let lastCloud = 0;
 function doSave(quiet) {
   if (G.mode !== 'ai') { if (!quiet) msg('Hru po síti uložit nejde.', 'bad'); return false; }
   if (G.over || !$('start').hidden) return false;
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(Object.assign(saveState(), { cam: { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw } }))); if (!quiet) msg('Hra uložena. Příště ji najdeš na úvodní obrazovce.', 'good'); return true; }
-  catch (e) { if (!quiet) msg('Uložení se nepovedlo: prohlížeč nedovolil zápis.', 'bad'); return false; }
+  let sv, str; try { sv = makeSave(); str = JSON.stringify(sv); } catch (e) { if (!quiet) msg('Uložení se nepovedlo.', 'bad'); return false; }
+  let local = false; try { localStorage.setItem(SAVE_KEY, str); local = true; } catch (_) { }
+  const cloud = !!CLOUD.db && str.length < 240000;
+  if (cloud && (!quiet || Date.now() - lastCloud > 20000)) { lastCloud = Date.now(); cloudSet({ v: 1, saved: sv.saved, data: str }); }
+  if (!quiet) msg(cloud ? 'Hra uložena do tvého účtu. Načteš ji i na jiném zařízení.' : local ? 'Hra uložena v tomto prohlížeči. Pro jistotu si ji můžeš stáhnout do souboru.' : 'Uložení se nepovedlo. Stáhni si hru do souboru.', cloud || local ? 'good' : 'bad');
+  return cloud || local;
 }
+async function exportSave() {
+  if (G.mode !== 'ai' || G.over || !$('start').hidden) { msg('Stáhnout jde jen rozehraná hra proti počítači.', 'bad'); return; }
+  const str = JSON.stringify(makeSave()), name = 'vek-pokroku-rok-' + (Math.floor(G.time / (SEASON_LEN * 4)) + 1) + '.json';
+  if (CLOUD.dl) { try { await CLOUD.dl.save({ filename: name, data: new Blob([str], { type: 'application/json' }) }); msg('Soubor s hrou je stažený.', 'good'); return; } catch (e) { if (e && (e.code === 'declined' || e.code === 'rate_limited')) return; } }
+  try { const u = URL.createObjectURL(new Blob([str], { type: 'application/json' })), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); msg('Soubor s hrou je stažený.', 'good'); }
+  catch (_) { msg('Stažení tady nejde.', 'bad'); }
+}
+const fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = '.json,application/json'; fileIn.style.display = 'none'; document.body.appendChild(fileIn);
+fileIn.onchange = () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return; const r = new FileReader();
+  r.onload = () => { let sv; try { sv = JSON.parse(r.result); } catch (_) { sv = null; } if (!sv || sv.v !== 1 || !sv.teams) { msg('Tohle není uložená hra Věku pokroku.', 'bad'); return; } continueSave(sv); };
+  r.readAsText(f); };
 function resetView() { sel = []; cmdSig = ''; rings.length = 0; markers.length = 0; ghost = null; placing = null; $('place').hidden = true; lastSeason = -1; snowShown = -1; baseT = 0; acc = 0; lastAlert = -99; ping = null; for (const k in groups) delete groups[k]; }
 function startFresh() { resetView(); newGame(G.diff); cam.x = ME().tcx; cam.z = ME().tcz + 4; cam.yaw = 0; cam.dist = view.clientWidth < 760 ? 84 : 62; }
-function continueSave() {
-  const sv = readSave(); if (!sv) return;
+function continueSave(given) {
+  const sv = given && given.teams ? given : readSave(); if (!sv) return;
   G.mode = 'ai'; MY = 0;
   resetView();
-  try { newGame(0, sv); } catch (e) { clearSave(); startFresh(); msg('Uloženou hru se nepodařilo načíst, začíná nová.', 'bad'); $('start').hidden = true; G.paused = false; return; }
+  try { newGame(0, sv); } catch (e) { startFresh(); msg('Uloženou hru se nepodařilo načíst, začíná nová.', 'bad'); $('start').hidden = true; G.paused = false; return; }
   if (sv.cam) Object.assign(cam, sv.cam);
   $('b-speed').textContent = G.speed + '×'; $('start').hidden = true; G.paused = false; $('b-pause').textContent = 'Pauza'; $('b-pause').classList.remove('warn');
   msg('Hra načtena.', 'good');
 }
 function showSaveOffer() {
-  const sv = readSave(), el = $('b-continue'); el.hidden = !sv; if (!sv) return;
+  const sv = readSave(), el = $('b-continue'); el.hidden = !sv;
+  const note = $('s-savenote'); if (note) note.textContent = CLOUD.ready ? 'Hra se ukládá sama každou chvíli a tlačítkem Uložit do tvého účtu na Claude, takže ji načteš i na jiném zařízení. Můžeš si ji i stáhnout do souboru.' : CLOUD.tried ? 'Hra se ukládá sama každou chvíli a tlačítkem Uložit do tohoto prohlížeče. Pro jistotu si ji stáhni do souboru (tlačítko Soubor) a příště ji odtud nahraj.' : 'Hledám uloženou hru…';
+  if (!sv) return;
   el.textContent = 'Pokračovat v uložené hře (rok ' + (Math.floor(sv.G.time / (SEASON_LEN * 4)) + 1) + ', ' + ERAS[sv.teams[0].era].toLowerCase() + ')';
 }
 $('b-save').onclick = () => doSave(false);
-$('b-continue').onclick = continueSave;
+$('b-continue').onclick = () => continueSave();
+$('b-import').onclick = () => fileIn.click();
+$('b-export').onclick = exportSave;
 setInterval(() => { if (!G.paused) doSave(true); }, 45000);
 document.addEventListener('visibilitychange', () => { if (document.hidden) doSave(true); });
 addEventListener('pagehide', () => doSave(true));
