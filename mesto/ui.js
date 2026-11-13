@@ -199,8 +199,8 @@ document.querySelectorAll('.tab').forEach(b => b.onclick = () => { document.body
 $('b-manage').onclick = () => { const o = document.body.classList.toggle('tabsopen'); $('b-manage').setAttribute('aria-expanded', o); if (o) { G.cat = null; drawRail(); drawSub(); } };
 $('b-mini').onclick = () => { document.body.classList.toggle('minion'); };
 $('pclose').onclick = closePanel;
-function openPanel(p, arg) { G.panel = p; G.parg = arg; $('panel').hidden = false; document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.p === p)); renderPanel(); if (window.innerWidth < 860) { G.cat = null; drawRail(); drawSub(); } }
-function closePanel() { G.panel = null; $('panel').hidden = true; document.querySelectorAll('.tab').forEach(b => b.classList.remove('on')); }
+function openPanel(p, arg) { G.panel = p; G.parg = arg; $('panel').hidden = false; document.body.classList.add('panelopen'); document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.p === p)); renderPanel(); if (window.innerWidth < 860) { G.cat = null; drawRail(); drawSub(); } }
+function closePanel() { G.panel = null; $('panel').hidden = true; document.body.classList.remove('panelopen'); document.querySelectorAll('.tab').forEach(b => b.classList.remove('on')); }
 function renderPanel() { const P = PANELS[G.panel]; if (!P) return; $('ptitle').textContent = P.title(G.parg); $('pbody').onclick = null; $('pbody').innerHTML = P.html(G.parg); if (P.bind) P.bind(G.parg); }
 function livePanel() { const P = PANELS[G.panel]; if (!P) return; if (P.live) P.live(G.parg); else if (!P.static) { const sc = $('pbody').scrollTop; renderPanel(); $('pbody').scrollTop = sc; } }
 function refreshNow() { updateTop(); if (G.panel && PANELS[G.panel] && !PANELS[G.panel].live) livePanel(); }

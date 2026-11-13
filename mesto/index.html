@@ -195,6 +195,7 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
   body.minion #mini { display: block; }
   #b-mini { position: absolute; right: var(--gr); bottom: calc(70px + env(safe-area-inset-bottom, 0px)); height: 44px; padding: 0 14px; align-items: center; font-weight: 700; border: 0; color: var(--ink); }
   body.minion #b-mini { background: var(--ink); color: #fff; }
+  body.panelopen #b-mini, body.panelopen #mini { display: none !important; }
   #ovbar { right: var(--gr); left: auto; top: calc(var(--topH, 100px) + 6px); bottom: auto; padding: 4px 8px; }
   #toolchip { top: calc(var(--topH, 100px) + 48px); }
   .mk { font-size: 11.5px; padding: 3px 7px; }
