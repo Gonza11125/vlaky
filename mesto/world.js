@@ -85,7 +85,7 @@ function computeConn() {
     const k = q.pop(), x = k % N, y = (k / N) | 0;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (road[n] && !conn[n]) { conn[n] = 1; q.push(n); } }
   }
-  for (let k = 0; k < NN; k++) if (conn[k]) {
+  for (let k = 0; k < NN; k++) if (conn[k] && !(ROADS[road[k]] && ROADS[road[k]].noAccess)) {
     const x = k % N, y = (k / N) | 0;
     for (let j = y - 2; j <= y + 2; j++) for (let i = x - 2; i <= x + 2; i++) if (inb(i, j)) acc[idx(i, j)] = 1;
   }
@@ -129,12 +129,14 @@ function genTerrain(seed) {
 // lán pole: [sloupec, řádek]; plodina a směr řádků se odvozují z lánu
 function parcel(x, y) { const row = Math.floor(y / 5); return [Math.floor((x + (row % 3) * 2) / 6), row]; }
 function fieldCrop(x, y) { const p = parcel(x, y); return Math.floor(hash2(p[0], p[1], W.seed + 7) * 5); }
-function layRoad(x, y) { const k = idx(x, y); if (bld[k]) return; clearTile(k); road[k] = 1; }
+function layRoad(x, y, rt) { const k = idx(x, y); if (bld[k]) return; clearTile(k); road[k] = rt || 1; }
 
 // ---------- vesnice podél hlavní silnice ----------
 function genVillage(techs) {
   const cx = W.cx, cy = W.cy, L = 12, lane = cx + 4;
-  for (let y = cy - 8; y < cy; y++) if (ter[idx(lane, y)] !== 1) layRoad(lane, y);
+  for (let y = cy - 8; y < cy; y++) if (ter[idx(lane, y)] !== 1) layRoad(lane, y, 2);
+  // hasičská zbrojnice dobrovolných hasičů na rohu návsi
+  if (canBuildAt(cx + 3, cy - 1, 1, false)) addBuilding('firevol', cx + 3, cy - 1);
   const free = (x, y) => inb(x, y) && ter[idx(x, y)] !== 1 && !road[idx(x, y)] && !bld[idx(x, y)] && !zone[idx(x, y)];
   // náves: kostel, obecní úřad a rybník
   if (canBuildAt(cx - 3, cy - 3, 2, false)) addBuilding('church', cx - 3, cy - 3);
@@ -162,7 +164,7 @@ function genCity(size, techs) {
   const st = STARTS[size], cx = W.cx, cy = W.cy;
   // dálnice ze západního okraje
   const village = size === 1, hwEnd = village ? cx + 13 : st.r ? cx : 12;
-  for (let x = 0; x <= hwEnd; x++) { if (ter[idx(x, cy)] === 1 && village) break; layRoad(x, cy); }
+  for (let x = 0; x <= hwEnd; x++) { if (ter[idx(x, cy)] === 1 && village) break; layRoad(x, cy, village || !st.r ? 2 : 1); }
   for (let x = 0; x <= hwEnd + 2; x++) for (const y of [cy - 1, cy + 1]) if (ter[idx(x, y)] === 3) ter[idx(x, y)] = 0;
   if (!st.r) { for (const [x, y] of [[8, cy + 1], [8, cy - 2], [5, cy + 1], [5, cy - 2]]) if (canBuildAt(x, y, 2, false)) { addBuilding('townhall', x, y); break; } return; }
   const R = st.r, sp = 5;
@@ -225,6 +227,16 @@ function genCity(size, techs) {
     placeBig('hospital', [], b => b.d > 0.5); placeBig('highschool', [], b => b.d > 0.5);
   }
   if (techs.includes('hygiene') && size >= 3) placeBig('sewage', indBlocks);
+  if (size >= 3 && techs.includes('ems')) placeBig('firehq', [], b => b.d < 0.55);
+  // druhy silnic: příjezd z dálnice, hlavní třídy, tramvaje a pěší zóna
+  if (!village) {
+    const bx0 = Math.min(...blocks.map(b => b.x0));
+    for (let x = 0; x < bx0; x++) { const k = idx(x, cy); if (road[k]) road[k] = size >= 3 ? 5 : 2; }
+    if (size >= 3) for (let k = 0; k < NN; k++) { if (!road[k]) continue; const x = k % N, y = (k / N) | 0; if (x < bx0) continue;
+      const axis = y === cy || x === cx, dd = Math.hypot(x - cx, y - cy) / R;
+      if (axis && dd < (size >= 4 ? 0.95 : 0.7)) road[k] = size >= 4 && dd < 0.75 ? 4 : 3; }
+    if (size >= 4) { const px = cx + sp; for (let y = cy - sp + 1; y < cy; y++) { const k = idx(px, y); if (road[k] && ter[k] !== 1) road[k] = 6; } }
+  }
   // zóny: nejdřív bydlení, pak průmysl, centrum a obchody na hlavních třídách
   const maxL = [0, 2, 3, 4, 5][size];
   const hiR = [0, 0, 0.5, 0.8, 0.66][size];
@@ -285,7 +297,7 @@ function genCity(size, techs) {
     for (let n = 0; n < 4 && haveW < needW * 1.45; n++) { const p = put('pump', b, n, 3); if (p) haveW += SERV.pump.water * (nearWater(p.x, p.y, 1, 2) ? 1.5 : 1); }
   }
   while (haveW < needW * 1.45) { const p = placeAlong('pump'); if (!p) break; haveW += SERV.pump.water * (nearWater(p.x, p.y, 1, 2) ? 1.5 : 1); }
-  while (haveG < (res + jobs * 0.5) * 1.1) { const b = placeBig('dump', anyOuter.slice().reverse()); if (!b) break; haveG += SERV.dump.garbage; }
+  while (haveG < (res + jobs * 0.5) * 1.1) { const b = placeBig('dump', anyOuter); if (!b) break; haveG += SERV.dump.garbage; }
   if (size >= 4) { const pb = riverBlocks.find(b => !b.used && nearWater(b.x0 + 1, b.y0 + 1, 3, 1)); if (pb) { pb.used = 16; put('port', pb, 0, 0); } }
   // zbylé parcely v nepoužitých blocích dostanou zónu bydlení
   for (let k = 0; k < NN; k++) if (zone[k] && lvl[k]) occ[k] = ZONES[zone[k]].cap[dens[k]][lvl[k]] * (zone[k] === 1 ? 0.92 : 0.8);

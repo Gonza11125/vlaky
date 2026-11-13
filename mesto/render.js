@@ -184,7 +184,7 @@ function refreshTile(k) {
   const ts = treeH[k]; if (ts) { for (const t of ts) if (t.b) t.b.remove(t); treeH[k] = null; }
   paintTile(k);
   const x = k % N, y = (k / N) | 0, wx = tileX(x), wz = tileZ(y);
-  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, ru = !br && isRural(x, y); tileH[k] = batch((br ? 'BR' : ru ? 'RR' : 'RD') + m, () => mRoad(m, br, ru), MATS, { shadow: !br ? false : true }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
+  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, rt = road[k]; tileH[k] = batch('R' + rt + (br ? 'b' : '') + m, () => mRoadT(rt, m, br), MATS, { shadow: br || rt === 3 || rt === 6 }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
   if (bld[k]) return;
   if (ruin[k] && !lvl[k]) { tileH[k] = batch('RUB', mRubble).add({ k }, mtx(wx, 0, wz, (vari[k] % 4) * 1.57)); return; }
   if (zone[k] && lvl[k]) {
@@ -233,37 +233,66 @@ function rebuildAll() {
 // ---------- doprava ----------
 const cars = [], vehicles = [];
 let roadList = [];
-function rebuildRoadList() { roadList = []; for (let k = 0; k < NN; k++) if (road[k] && conn[k]) roadList.push(k); }
+function rebuildRoadList() { roadList = []; tramList = []; pedList = []; for (let k = 0; k < NN; k++) if (road[k] && conn[k]) { if (road[k] === 6) pedList.push(k); else roadList.push(k); if (road[k] === 4) tramList.push(k); } }
+let tramList = [], pedList = [];
+const drivable = n => road[n] && road[n] !== 6;
 const NB4 = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-function nextRoad(k, prev) {
-  const x = k % N, y = (k / N) | 0, opts = [];
-  for (const [dx, dy] of NB4) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (road[n] && n !== prev) opts.push(n); }
+function nextRoad(k, prev, ok) {
+  ok = ok || drivable; const x = k % N, y = (k / N) | 0, opts = [];
+  for (const [dx, dy] of NB4) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (ok(n) && n !== prev) opts.push(n); }
   return opts.length ? opts[(Math.random() * opts.length) | 0] : prev;
 }
 const CAR_COLS = [0xe0483a, 0x3f82dd, 0xf4c447, 0xf7f5ee, 0x47a85b, 0x3b4150, 0xf08a5d, 0x8a5bd6];
 function carPos(c) {
   const ax = tileX(c.k % N), az = tileZ((c.k / N) | 0), bx = tileX(c.n % N), bz = tileZ((c.n / N) | 0);
   let dx = bx - ax, dz = bz - az; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
-  const x = lerp(ax, bx, c.t) - dz * 0.75, z = lerp(az, bz, c.t) + dx * 0.75, y = (ter[c.k] === 1 || ter[c.n] === 1) ? 0.15 : 0.08;
+  const rt = road[c.k], off = c.lane != null ? c.lane : rt === 5 || rt === 3 ? (c.fast ? 0.55 : 1.25) : 0.75;
+  const x = lerp(ax, bx, c.t) - dz * off, z = lerp(az, bz, c.t) + dx * off, y = (ter[c.k] === 1 || ter[c.n] === 1) ? 0.15 : 0.08;
   return mtx(x, y, z, Math.atan2(-dz, dx), c.s || 1);
 }
 function updateCars(dt) {
-  if (RS.roadsDirty) { rebuildRoadList(); RS.roadsDirty = false; for (const c of cars.slice()) if (!road[c.k] || !road[c.n]) killCar(c); }
+  if (RS.roadsDirty) { rebuildRoadList(); RS.roadsDirty = false; for (const c of cars.slice()) if (!drivable(c.k) || !drivable(c.n)) killCar(c); }
   const want = roadList.length < 2 || !T.pop ? 0 : Math.min(RS.coarse ? 160 : 420, Math.round(roadList.length * (0.08 + Math.min(1.6, T.traffic) * 0.45) + T.pop / 900));
   let spawn = 6;
   while (cars.length < want && spawn--) {
     const k = roadList[(Math.random() * roadList.length) | 0], n = nextRoad(k, -1); if (n === -1 || n === k || n == null) continue;
     const bus = Math.random() < 0.06 && T.pop > 3000, kind = bus ? 'CARbus' : 'CAR';
-    const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4) };
+    const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4), fast: Math.random() < 0.4 };
     c.h = batch(kind, () => mCar(bus ? 'bus' : 'car'), MATS, { shadow: true, cap: 64 }).add({}, carPos(c), bus ? WHITE : lin(CAR_COLS[(Math.random() * CAR_COLS.length) | 0]));
     cars.push(c);
   }
   if (cars.length > want + 4) killCar(cars[cars.length - 1]);
   const jam = T.traffic > 1 ? 1 / (0.5 + T.traffic * 0.5) : 1;
   for (const c of cars) {
-    c.t += dt * c.sp * jam / TS;
+    c.t += dt * c.sp * jam * (road[c.k] === 5 ? 1.7 : 1) / TS;
     while (c.t >= 1) { c.t -= 1; const nk = nextRoad(c.n, c.k); c.prev = c.k; c.k = c.n; c.n = nk; if (nk == null || nk < 0) { c.n = c.prev; } }
     c.h.b.set(c.h, carPos(c));
+  }
+}
+// tramvaje jezdí jen po tramvajových třídách, chodci po pěších zónách
+const trams = [], walkers = [];
+const isTram = n => road[n] === 4, isPed = n => road[n] === 6;
+function pedNear(n) { const x = n % N, y = (n / N) | 0; for (const [dx, dy] of NB4) if (inb(x + dx, y + dy) && road[idx(x + dx, y + dy)] === 6) return true; return false; }
+function updateTransit(dt, t) {
+  const wantT = tramList.length < 3 ? 0 : Math.min(RS.coarse ? 10 : 26, Math.ceil(tramList.length / 7));
+  while (trams.length < wantT) { const k = tramList[(Math.random() * tramList.length) | 0], n = nextRoad(k, -1, isTram); if (n === k) break;
+    const c = { k, n, prev: -1, t: Math.random(), sp: 5.5, lane: 0.55 }; c.h = batch('VTRAM', mTram, MATS, { shadow: true, cap: 32 }).add({}, carPos(c)); trams.push(c); }
+  while (trams.length > wantT) { const c = trams.pop(); if (c.h.b) c.h.b.remove(c.h); }
+  for (const c of trams) {
+    if (!isTram(c.k) || !isTram(c.n)) { const k = tramList[(Math.random() * tramList.length) | 0]; c.k = k; c.n = nextRoad(k, -1, isTram); c.t = 0; }
+    c.t += dt * c.sp / TS;
+    while (c.t >= 1) { c.t -= 1; const nk = nextRoad(c.n, c.k, isTram); c.prev = c.k; c.k = c.n; c.n = nk; }
+    c.h.b.set(c.h, carPos(c));
+  }
+  const wantP = Math.min(RS.coarse ? 60 : 160, pedList.length * 4);
+  while (walkers.length < wantP && pedList.length) { const k = pedList[(Math.random() * pedList.length) | 0], c = { k, n: nextRoad(k, -1, isPed), prev: -1, t: Math.random(), sp: 0.9 + Math.random() * 0.6, lane: (Math.random() - 0.5) * 2.6 };
+    c.h = person('walk').add({}, carPos(c), lin(CAR_COLS[(Math.random() * CAR_COLS.length) | 0])); walkers.push(c); }
+  while (walkers.length > wantP) { const c = walkers.pop(); if (c.h.b) c.h.b.remove(c.h); }
+  for (const c of walkers) {
+    if (!road[c.k] || !road[c.n]) { const k = pedList[(Math.random() * pedList.length) | 0]; c.k = k; c.n = nextRoad(k, -1, isPed); c.t = 0; }
+    c.t += dt * c.sp / TS;
+    while (c.t >= 1) { c.t -= 1; const nk = nextRoad(c.n, c.k, isPed); c.prev = c.k; c.k = c.n; c.n = nk; }
+    const m = carPos(c); m.elements[13] = 0.1 + Math.abs(Math.sin(t * 7 + c.lane * 9)) * 0.05; c.h.b.set(c.h, m);
   }
 }
 function killCar(c) { if (c.h.b) c.h.b.remove(c.h); cars.splice(cars.indexOf(c), 1); }
@@ -273,6 +302,28 @@ function roadPath(a, b) {
   for (let h = 0; h < q.length; h++) { const k = q[h]; if (k === b) break; const x = k % N, y = (k / N) | 0; for (const [dx, dy] of NB4) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (road[n] && prev[n] === -2) { prev[n] = k; q.push(n); } } }
   if (prev[b] === -2) return null; const p = []; for (let k = b; k !== -1; k = prev[k]) p.push(k); return p.reverse();
 }
+const FIRE_ST = ['firevol', 'fire', 'firehq', 'fireair'];
+// přibližná výška domu na políčku (pro plameny a ikonu požáru)
+const BLD_H = { 1: [[0, 2.6, 3.5, 4.1, 4.1, 4.1], [0, 4.8, 6.7, 10.1, 16.5, 29]], 2: [[0, 2.2, 3.9, 2.4, 2.4, 2.4], [0, 4.3, 5.8, 5.3, 14.8, 34.6]], 3: [[0, 2.6, 2.8, 5.5, 5.5, 5.5], [0, 7.4, 8.8, 10.6, 11.8, 13]], 4: [[0, 3.2, 4.4, 5.7, 6.9, 8.1], [0, 8.4, 12.8, 20.5, 30.4, 39.2]] };
+function bldH(k) { const t = BLD_H[zone[k]]; return t && lvl[k] ? t[dens[k] ? 1 : 0][Math.min(5, lvl[k])] : 1; }
+function burningAt(k) { if (fire[k]) return true; if (bld[k]) { const b = blds.get(bld[k]); return b && b.fire > 0; } return false; }
+function dispatchFire(k) {
+  if (vehicles.some(v => v.fk != null && Math.abs(v.fk % N - k % N) + Math.abs(((v.fk / N) | 0) - ((k / N) | 0)) <= 2)) return;
+  const tx = k % N, ty = (k / N) | 0, rk = 1 + tfx('fireRange'); let src = null, bd = 1e9;
+  for (const b of blds.values()) if (FIRE_ST.includes(b.type) && b.ok) { const d = Math.hypot(b.x - tx, b.y - ty); if (d <= SERV[b.type].r * rk + 2 && d < bd) { bd = d; src = b; } }
+  if (!src) return;
+  const D = SERV[src.type];
+  if (src.type === 'fireair') {   // vrtulník letí přímo
+    const v = { kind: 'heli', fk: k, from: [tileX(src.x + 1), tileZ(src.y + 1)], to: [tileX(tx) + 2, tileZ(ty)], t: 0, sp: 22 / Math.max(8, Math.hypot(src.x - tx, src.y - ty) * TS), wait: 3 };
+    v.h = batch('Vheli', () => mCar('heli'), MATS, { shadow: true }).add({}, mtx(0, -50, 0, 0)); vehicles.push(v); return;
+  }
+  const path = roadPath(nearestRoad(src.x, src.y), nearestRoad(tx, ty)); if (!path || path.length < 2) return;
+  for (let i = 0; i < Math.min(3, D.trucks || 1); i++) {
+    const v = { kind: 'fire', fk: k, path, i: 0, t: -i * 0.6, sp: 13, wait: 3 + i, lane: [0.75, -0.75, 1.5][i] };
+    v.h = batch('Vfire', () => mCar('fire'), MATS, { shadow: true }).add({}, mtx(0, -50, 0, 0)); vehicles.push(v);
+  }
+}
+function spray(x, z, tx, tz, h) { const dx = tx - x, dz = tz - z, d = Math.hypot(dx, dz) || 1; puff(x + dx / d * 0.6, 1.3, z + dz / d * 0.6, 0xe4f2f8, 0.42, 0.75, 1.2 + Math.min(7, (h || 2) * 0.45), dx / d * 3.5 - 0.6, dz / d * 3.5); }
 function dispatch(kind, fromType, k, count) {
   const tx = k % N, ty = (k / N) | 0; let src = null, bd = 1e9;
   for (const b of blds.values()) if (fromType.includes(b.type) && b.ok) { const d = Math.hypot(b.x - tx, b.y - ty); if (d < bd) { bd = d; src = b; } }
@@ -285,10 +336,22 @@ function dispatch(kind, fromType, k, count) {
 }
 function updateVehicles(dt) {
   for (const v of vehicles.slice()) {
-    if (v.i >= v.path.length - 1) { v.wait -= dt; if (v.wait <= 0) { if (v.h.b) v.h.b.remove(v.h); vehicles.splice(vehicles.indexOf(v), 1); } continue; }
+    const fx = v.fk != null ? tileX(v.fk % N) : 0, fz = v.fk != null ? tileZ((v.fk / N) | 0) : 0, live = v.fk != null && burningAt(v.fk);
+    if (v.kind === 'heli') {
+      v.t = Math.min(1, v.t + dt * v.sp); const e = v.t < 1 ? v.t * v.t * (3 - 2 * v.t) : 1, x = lerp(v.from[0], v.to[0], e), z = lerp(v.from[1], v.to[1], e);
+      const y = v.back ? 9 * (1 - e) : Math.min(9, v.t * 30);
+      v.h.b.set(v.h, mtx(x, y + (v.t >= 1 ? Math.sin(performance.now() / 300) * 0.2 : 0), z, Math.atan2(-(v.to[1] - v.from[1]), v.to[0] - v.from[0])));
+      if (v.t >= 1 && !v.back) { if (live && Math.random() < 0.6) puff(x + (Math.random() - 0.5), 7.5, z + (Math.random() - 0.5), 0xd8ecf4, 0.5, 1.0, -7); v.wait -= live ? dt * 0.1 : dt; if (v.wait <= 0 || v.wait < -40) { v.back = true; v.t = 0; [v.from, v.to] = [v.to, v.from]; } }
+      else if (v.t >= 1 && v.back) { if (v.h.b) v.h.b.remove(v.h); vehicles.splice(vehicles.indexOf(v), 1); }
+      continue;
+    }
+    if (v.i >= v.path.length - 1) {
+      if (live && v.kind === 'fire') { v.hold = (v.hold || 0) + dt; if (Math.random() < 0.85) { const m = carPos({ k: v.path[v.path.length - 1], n: v.path[v.path.length - 2], t: 0, lane: v.lane }).elements; spray(m[12], m[14], fx, fz, bldH(v.fk)); } if (v.hold < 90) continue; }
+      if (v.kind === 'fire' && !v.back) { v.wait -= dt; if (v.wait > 0) continue; v.back = true; v.path = v.path.slice().reverse(); v.i = 0; v.t = 0; v.sp = 9; continue; }
+      v.wait -= dt; if (v.wait <= 0) { if (v.h.b) v.h.b.remove(v.h); vehicles.splice(vehicles.indexOf(v), 1); } continue; }
     v.t += dt * v.sp / TS; while (v.t >= 1 && v.i < v.path.length - 1) { v.t -= 1; v.i++; }
     if (v.t < 0) continue;
-    const c = { k: v.path[v.i], n: v.path[Math.min(v.i + 1, v.path.length - 1)], t: v.i >= v.path.length - 1 ? 0 : v.t };
+    const c = { k: v.path[v.i], n: v.path[Math.min(v.i + 1, v.path.length - 1)], t: v.i >= v.path.length - 1 ? 0 : v.t, lane: v.lane };
     if (c.k === c.n) c.n = v.path[v.i - 1] || c.k;
     v.h.b.set(v.h, carPos(c));
   }
@@ -376,21 +439,27 @@ function updateEffects(dt, t) {
       puff(x, c[1], z, S.pol.ecolaw || S.techs.filters ? 0xe9e9e6 : 0xb9b6b0, s.b ? 1.3 : 0.8, 3 + Math.random() * 2, 1.6);
     }
     // požáry
-    fireList = []; for (let k = 0; k < NN; k++) if (fire[k]) fireList.push([tileX(k % N), tileZ((k / N) | 0), 1]);
-    for (const b of blds.values()) if (b.fire > 0) fireList.push([tileX(b.x) + (b.size - 1) * TS / 2, tileZ(b.y) + (b.size - 1) * TS / 2, b.size]);
-    for (const f of fireList.slice(0, 40)) if (Math.random() < 0.7) puff(f[0] + (Math.random() - 0.5) * 2, 3 + Math.random() * 2, f[1] + (Math.random() - 0.5) * 2, 0x46413d, 1.4 * f[2], 3.5, 2.4);
+    fireList = []; for (let k = 0; k < NN; k++) if (fire[k]) fireList.push([tileX(k % N), tileZ((k / N) | 0), 1, bldH(k), k]);
+    for (const b of blds.values()) if (b.fire > 0) fireList.push([tileX(b.x) + (b.size - 1) * TS / 2, tileZ(b.y) + (b.size - 1) * TS / 2, b.size, 3, -1]);
+    for (const f of fireList.slice(0, 40)) if (Math.random() < 0.7) puff(f[0] + (Math.random() - 0.5) * 2, f[3] + 1.5 + Math.random() * 2, f[1] + (Math.random() - 0.5) * 2, 0x46413d, 1.4 * f[2] * (f[3] > 8 ? 1.4 : 1), 3.5, 2.4);
   }
   fB.clear();
-  for (const f of fireList.slice(0, 120)) for (let j = 0; j < 3; j++) {
-    const ph = t * 9 + f[0] * 0.3 + j * 2, s = (0.9 + Math.sin(ph) * 0.25) * f[2];
-    fB.add({}, mtx(f[0] + (j - 1) * 0.9 * f[2], 0.6 + s * 0.6 + j * 0.3, f[1] + ((j * 7) % 3 - 1) * 0.7 * f[2], ph * 0.1, s, s * (1.2 + Math.sin(ph * 1.7) * 0.25), s), _col2.setHex(j === 1 ? 0xffd27a : 0xff8a2a));
+  for (const f of fireList.slice(0, 120)) {
+    const tall = f[3] > 5, n = tall ? 5 : 3;
+    for (let j = 0; j < n; j++) {
+      const ph = t * 9 + f[0] * 0.3 + j * 2, s = (0.9 + Math.sin(ph) * 0.25) * f[2] * (tall ? (j < 3 ? 1.6 : 1.25) : 1);
+      // nízké domy hoří celé, u vysokých šlehají plameny ze střechy a z oken
+      let x = f[0] + (j - 1) * 0.9 * f[2], y = 0.6 + s * 0.6 + j * 0.3, z = f[1] + ((j * 7) % 3 - 1) * 0.7 * f[2];
+      if (tall) { if (j < 3) y = f[3] + s * 0.5; else { const sd = (j + (f[4] >= 0 ? f[4] : 0)) % 4, o = 1.95; x = f[0] + (sd === 0 ? o : sd === 1 ? -o : (j - 3.5) * 1.6); z = f[1] + (sd === 2 ? o : sd === 3 ? -o : (j - 3.5) * 1.6); y = f[3] * (0.35 + 0.25 * (j - 3)); } }
+      fB.add({}, mtx(x, y, z, ph * 0.1, s, s * (1.2 + Math.sin(ph * 1.7) * 0.25), s), _col2.setHex(j === 1 ? 0xffd27a : 0xff8a2a));
+    }
   }
 }
 function handleFX() {
   while (FX.length) {
     const f = FX.shift();
     if (f.t === 'grow') grow(f.k);
-    else if (f.t === 'firetruck') dispatch('fire', ['fire'], f.k, 1);
+    else if (f.t === 'firetruck') dispatchFire(f.k);
     else if (f.t === 'police') dispatch('police', ['police', 'policehq'], f.k, 3);
     else if (f.t === 'army') dispatch('army', ['barracks'], f.k, 3);
     else if (f.t === 'boom') boom(tileX(f.k % N), tileZ((f.k / N) | 0), !f.small);
@@ -473,7 +542,7 @@ function renderFrame(dt, t, dayFrac) {
   if (RS.terrDirty) { terrain.geometry.attributes.position.needsUpdate = true; terrain.geometry.attributes.color.needsUpdate = true; terrain.geometry.attributes.uv.needsUpdate = true; terrain.geometry.computeBoundingSphere(); RS.terrDirty = false; }
   for (let i = anims.length - 1; i >= 0; i--) { const a = anims[i]; a.t += dt * 2.2; const h = a.h; if (!h.b) { anims.splice(i, 1); continue; } const p = h.p, k = Math.min(1, a.t); const s = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.18 : 1; h.b.set(h, mtx(p[0], 0, p[2], p[3], 1 / Math.sqrt(s), k * s, 1 / Math.sqrt(s))); if (a.t >= 1) anims.splice(i, 1); }
   for (const h of servH.values()) if (h.r && h.r.b) { const p = h.p; _mtx.makeRotationY(p[3]); const rot = new THREE.Matrix4().makeRotationZ(t * 1.6 + h.id); const m = new THREE.Matrix4().makeTranslation(p[0], 10.3, p[2]).multiply(_mtx).multiply(rot); h.r.b.set(h.r, m); }
-  updateCars(dt); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
+  updateCars(dt); updateTransit(dt, t); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
   waterTex.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
   waterMesh.position.y = S.floodEv ? -0.3 + Math.min(1, S.floodEv.day / 3) * 0.2 : -0.3;
   if (cam.shake > 0) cam.shake = Math.max(0, cam.shake - dt * 1.2);

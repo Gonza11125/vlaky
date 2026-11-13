@@ -19,7 +19,7 @@ function toast(text, cls) { UIH.note({ text, cls: cls || '', k: -1 }); }
 function focusTile(x, y) { cam.x = tileX(x); cam.z = tileZ(y); if (cam.dist > 160) cam.dist = 120; }
 
 // ---------- nástroje ----------
-const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
+const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', rescue: '#c8372d', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
 const RAIL = [
   { key: 'select', name: 'Prohlížet', sw: '#ffffff' }, { key: 'road', name: 'Silnice', sw: '#5a5f69' }, { key: 'zones', name: 'Zóny', sw: '#6fbf5a' },
   ...SERV_CATS.map(c => ({ key: 'cat:' + c.key, name: c.name, sw: CAT_COL[c.key] })),
@@ -28,10 +28,11 @@ const RAIL = [
 function drawRail() {
   $('tools').innerHTML = RAIL.map(r => '<button class="tool' + (railOn(r.key) ? ' on' : '') + '" data-k="' + r.key + '"><span class="sw" style="background:' + r.sw + '"></span>' + r.name + '</button>').join('');
 }
-function railOn(key) { const t = G.tool; if (key === 'select') return t.kind === 'select' && !G.cat; if (key === 'road') return t.kind === 'road'; if (key === 'demolish') return t.kind === 'demolish'; return G.cat === key; }
+function railOn(key) { const t = G.tool; if (key === 'select') return t.kind === 'select' && !G.cat; if (key === 'road') return t.kind === 'road' || G.cat === 'roads'; if (key === 'demolish') return t.kind === 'demolish'; return G.cat === key; }
 $('tools').onclick = e => {
   const b = e.target.closest('.tool'); if (!b) return; const k = b.dataset.k;
-  if (k === 'select' || k === 'road' || k === 'demolish') { setTool({ kind: k }); G.cat = null; }
+  if (k === 'road') { if (G.tool.kind === 'road' && G.cat === 'roads') { G.cat = null; } else { setTool({ kind: 'road', rt: G.rt || 1 }); G.cat = 'roads'; } }
+  else if (k === 'select' || k === 'demolish') { setTool({ kind: k }); G.cat = null; }
   else G.cat = G.cat === k ? null : k;
   drawRail(); drawSub();
 };
@@ -39,7 +40,7 @@ function setTool(t) { G.tool = t; G.drag = null; showPreview([]); showGhost(null
 // štítek aktivního nástroje (hlavně pro dotyk): co dělá a tlačítko Hotovo
 function drawToolChip() {
   const c = $('toolchip'), t = G.tool; if (!G.playing || t.kind === 'select') { c.hidden = true; return; }
-  const name = t.kind === 'road' ? 'Silnice' : t.kind === 'zone' ? ZONES[t.z].short + (t.d ? ' – hustá' : ' – řídká') : t.kind === 'dezone' ? 'Zrušit zónu' : t.kind === 'demolish' ? 'Bourat' : SERV[t.type].name;
+  const name = t.kind === 'road' ? ROADS[t.rt || 1].name : t.kind === 'zone' ? ZONES[t.z].short + (t.d ? ' – hustá' : ' – řídká') : t.kind === 'dezone' ? 'Zrušit zónu' : t.kind === 'demolish' ? 'Bourat' : SERV[t.type].name;
   const touch = RS.coarse || window.innerWidth < 860, drag = t.kind !== 'build' || SERV[t.type].line;
   c.innerHTML = '<span><b>' + name + '</b> <small>' + (touch ? (drag ? 'táhni prstem, mapu posuneš dvěma' : 'klepni na místo stavby') : (drag ? 'táhni myší, Esc ukončí' : 'klikni na místo, Esc ukončí')) + '</small></span><button class="btn pri" id="tc-done">Hotovo</button>';
   c.hidden = false; $('tc-done').onclick = () => { setTool({ kind: 'select' }); G.cat = null; drawRail(); drawSub(); };
@@ -52,6 +53,10 @@ function drawSub() {
     for (const z of [1, 2, 3, 4]) for (const d of [0, 1]) { const on = G.tool.kind === 'zone' && G.tool.z === z && G.tool.d === d;
       h += '<button class="opt' + (on ? ' on' : '') + '" data-zone="' + z + d + '"><span class="sw" style="background:' + ZONES[z].color + ';opacity:' + (d ? 1 : 0.55) + '"></span><b>' + ZONES[z].short + (d ? ' – hustá' : ' – řídká') + '</b><span class="c">zdarma</span>' + (d ? '' : '<em>' + ZONES[z].desc + '</em>') + '</button>'; }
     h += '<button class="opt' + (G.tool.kind === 'dezone' ? ' on' : '') + '" data-zone="0"><span class="sw" style="background:#cfc8b8"></span><b>Zrušit zónu</b><span class="c"></span></button>';
+  } else if (G.cat === 'roads') {
+    h = '<h3>Silnice</h3><p style="margin:0 0 8px;color:var(--ink2);font-size:12.5px">Táhni přes mapu. Přes stávající silnici můžeš postavit jiný druh, přestavba stojí 70 %.</p>';
+    for (const rt in ROADS) { const R = ROADS[rt], lock = R.req && !S.techs[R.req], on = G.tool.kind === 'road' && (G.tool.rt || 1) === +rt;
+      h += '<button class="opt' + (on ? ' on' : '') + (lock ? ' lock' : '') + '" data-rt="' + rt + '"><span class="sw" style="background:' + ['', '#5a5f69', '#7d7a6a', '#4a6a4a', '#b8372d', '#3d4045', '#c9bea6'][rt] + '"></span><b>' + R.name + '</b><span class="c num">' + money(R.cost) + '</span><em>' + (lock ? 'Vyžaduje výzkum: ' + TECHS[R.req].name + '. ' : '') + R.desc + ' Kapacita ' + Math.round(R.cap * 100) + ' %, údržba ' + money(R.up) + ' měsíčně za políčko.</em></button>'; }
   } else if (G.cat === 'maps') {
     h = '<h3>Přehledové mapy</h3>' + '<button class="opt' + (!RS.overlay ? ' on' : '') + '" data-ov=""><span class="sw" style="background:#fff"></span><b>Bez mapy</b><span></span></button>';
     for (const k in OVERLAYS) h += '<button class="opt' + (RS.overlay === k ? ' on' : '') + '" data-ov="' + k + '"><span class="sw" style="background:#a184dd"></span><b>' + OVERLAYS[k].name + '</b><span></span></button>';
@@ -65,12 +70,13 @@ function drawSub() {
   s.innerHTML = h;
 }
 $('sub').onclick = e => {
-  const z = e.target.closest('[data-zone]'), b = e.target.closest('[data-b]'), ov = e.target.closest('[data-ov]');
+  const z = e.target.closest('[data-zone]'), b = e.target.closest('[data-b]'), ov = e.target.closest('[data-ov]'), rb = e.target.closest('[data-rt]');
+  if (rb) { const rt = +rb.dataset.rt, R = ROADS[rt]; if (R.req && !S.techs[R.req]) { toast('Nejdřív vyzkoumej: ' + TECHS[R.req].name + '.', 'bad'); return; } G.rt = rt; setTool({ kind: 'road', rt }); G.cat = 'roads'; }
   if (z) { const v = z.dataset.zone; setTool(v === '0' ? { kind: 'dezone' } : { kind: 'zone', z: +v[0], d: +v[1] }); G.cat = 'zones'; }
   if (b) { const t = b.dataset.b, d = SERV[t]; if (d.req && !S.techs[d.req]) { toast('Nejdřív vyzkoumej: ' + TECHS[d.req].name + '.', 'bad'); return; } setTool({ kind: 'build', type: t }); G.cat = 'cat:' + d.cat; }
   if (ov) { setOverlay(ov.dataset.ov || null); }
   drawRail(); drawSub();
-  if (window.innerWidth < 860 && (z || b)) $('sub').hidden = true;
+  if (window.innerWidth < 860 && (z || b || rb)) $('sub').hidden = true;
 };
 function setOverlay(k) { RS.overlay = k; updateOverlay(); const o = $('ovbar'); o.hidden = !k; if (k) o.innerHTML = '<b>' + OVERLAYS[k].name + '</b><button class="btn" id="ovx">Skrýt</button>'; if (k) $('ovx').onclick = () => { setOverlay(null); drawSub(); }; }
 
@@ -86,7 +92,7 @@ function previewCells(a, b) {
   const t = G.tool; let cells = [], cost = 0;
   if (t.kind === 'road' || (t.kind === 'build' && SERV[t.type].line)) {
     cells = lineCells(a, b).map(c => { const k = idx(c.x, c.y); if (t.kind === 'build') { const ok = !servProblem(t.type, c.x, c.y); if (ok) cost += SERV[t.type].cost; return { ...c, col: ok ? 0x8f99a3 : 0xe0483a }; }
-      if (road[k]) return null; const bad = bld[k]; if (!bad) cost += ter[k] === 1 ? BRIDGE_COST : ROAD_COST + (lvl[k] ? DEMOLISH_COST : 0); return { ...c, col: bad ? 0xe0483a : ter[k] === 1 ? 0x4a7fd9 : 0x5a5f69 }; }).filter(Boolean);
+      const rt = t.rt || 1; if (road[k] === rt) return null; const bad = bld[k] || (ROADS[rt].req && !S.techs[ROADS[rt].req]); if (!bad) cost += roadCost(k, rt) * (road[k] ? 0.7 : 1); return { ...c, col: bad ? 0xe0483a : ter[k] === 1 ? 0x4a7fd9 : 0x5a5f69 }; }).filter(Boolean);
   } else if (t.kind === 'zone') {
     cells = rectCells(a, b).map(c => { const k = idx(c.x, c.y); if (ter[k] === 1 || road[k] || bld[k]) return null; return { ...c, col: ZONES[t.z].hex }; }).filter(Boolean);
   } else if (t.kind === 'dezone' || t.kind === 'demolish') {
@@ -96,7 +102,7 @@ function previewCells(a, b) {
 }
 function applyDrag() {
   const t = G.tool, cells = G.dragCells || []; let n = 0, poor = false, err = null;
-  if (t.kind === 'road') for (const c of cells) { const r = buildRoad(c.x, c.y); if (r === -1) { poor = true; break; } if (r > 0) n++; }
+  if (t.kind === 'road') for (const c of cells) { const r = buildRoad(c.x, c.y, t.rt || 1); if (r === -1) { poor = true; break; } if (r === -2) { err = 'Nejdřív vyzkoumej: ' + TECHS[ROADS[t.rt].req].name + '.'; break; } if (r > 0) n++; }
   else if (t.kind === 'zone') for (const c of cells) { const r = setZone(c.x, c.y, t.z, t.d); if (r === -1) { poor = true; break; } if (r > 0) n++; }
   else if (t.kind === 'dezone') for (const c of cells) { if (zone[idx(c.x, c.y)]) { const e = demolish(c.x, c.y); if (!e) n++; } }
   else if (t.kind === 'demolish') { const done = new Set(); for (const c of cells) { const k = idx(c.x, c.y); if (bld[k]) { if (done.has(bld[k])) continue; done.add(bld[k]); } const e = demolish(c.x, c.y); if (e && cells.length === 1) err = e; else if (!e) n++; } }
@@ -171,6 +177,7 @@ addEventListener('keydown', e => {
   if (!G.playing) return;
   if (e.code === 'Space') { e.preventDefault(); setSpeed(G.speed ? 0 : (G.lastSpeed || 1)); }
   if (e.code === 'Digit1') setSpeed(1); if (e.code === 'Digit2') setSpeed(2); if (e.code === 'Digit3') setSpeed(3);
+  if (e.code === 'Escape' && !$('tree').hidden) { closeTree(); return; }
   if (e.code === 'Escape') { if (G.tool.kind !== 'select') { setTool({ kind: 'select' }); drawSub(); } else if (G.panel) closePanel(); else { G.cat = null; drawRail(); drawSub(); } }
   if (e.code.startsWith('Arrow')) e.preventDefault();
 });
@@ -211,7 +218,7 @@ function meter(v, col) { return '<div class="meter" style="width:100%;height:8px
 
 // informace o políčku
 PANELS.info = {
-  title: a => { const k = idx(a.x, a.y); if (bld[k]) return SERV[blds.get(bld[k]).type].name; if (road[k]) return ter[k] === 1 ? 'Most' : 'Silnice'; if (zone[k]) return ZONES[zone[k]].name; return ter[k] === 1 ? 'Voda' : ter[k] === 3 ? 'Les' : ter[k] === 4 ? 'Pole' : ter[k] === 5 ? 'Zahrada' : 'Volný pozemek'; },
+  title: a => { const k = idx(a.x, a.y); if (bld[k]) return SERV[blds.get(bld[k]).type].name; if (road[k]) return (ROADS[road[k]] || ROADS[1]).name + (ter[k] === 1 ? ' – most' : ''); if (zone[k]) return ZONES[zone[k]].name; return ter[k] === 1 ? 'Voda' : ter[k] === 3 ? 'Les' : ter[k] === 4 ? 'Pole' : ter[k] === 5 ? 'Zahrada' : 'Volný pozemek'; },
   html: a => {
     const k = idx(a.x, a.y); let h = '';
     if (bld[k]) {
@@ -220,14 +227,15 @@ PANELS.info = {
       if (b.built < 1) h += row('Stavba', pct(b.built * 100)); else if (!b.ok) h += row('Provoz', b.off > 0 ? 'mimo provoz ' + b.off + ' dní' : 'chybí silnice', 'neg'); else h += row('Provoz', b.flooded ? 'pod vodou' : 'v pořádku', b.flooded ? 'neg' : 'pos');
       if (d.power) h += row('Výkon', fmt(b.out || 0) + ' MW');
       if (d.water && b.type === 'pump') h += row('Voda', fmt(d.water * (nearWater(b.x, b.y, 1, 2) ? 1.5 : 1)) + ' m³');
-      if (d.r && d.r < 30) h += row('Dosah', d.r + ' políček');
+      if (d.r && d.r < 30 || d.fireStr) h += row('Dosah', Math.round(d.r * (d.fireStr ? 1 + tfx('fireRange') : 1)) + ' políček');
+      if (d.fireStr) h += row('Vozidla', b.type === 'fireair' ? '2 vrtulníky a ' + d.trucks + ' cisterny' : d.trucks + (d.trucks === 1 ? ' cisterna' : d.trucks < 5 ? ' vozy' : ' vozů')) + row('Síla zásahu', pct(d.fireStr * (1 + tfx('fireEff')) * budF('fire') * 100)) + row('Voda pro hasiče', pct((0.45 + 0.55 * (T.wRatio || 0)) * 100), T.wRatio < 0.9 ? 'neg' : '');
       if (d.police) h += row('Policistů', d.police); if (d.army) h += row('Vojáků', d.army); if (d.trade) h += row('Obchodní kapacita', fmt(d.trade) + ' t/měs.'); if (d.rp) h += row('Výzkum', d.rp + ' bodů/měs.');
       if (d.garbage) h += row('Odpad', 'pro ' + fmt(d.garbage) + ' lidí');
       h += row('Provoz', money(d.up * (BUD_OF[b.type] ? S.bud[BUD_OF[b.type]] / 100 : 1)) + '/měs.');
       if (b.type !== 'townhall') h += '<div class="btns"><button class="btn dan" id="i-demo">Zbořit (' + money(DEMOLISH_COST * b.size) + ')</button></div>';
       return h;
     }
-    if (road[k]) return row('Provoz', traf[k] > 1.1 ? 'zácpy' : traf[k] > 0.6 ? 'hustý' : 'plynulý', traf[k] > 1.1 ? 'neg' : '') + row('Propojeno s dálnicí', conn[k] ? 'ano' : 'ne', conn[k] ? '' : 'neg') + '<div class="btns"><button class="btn dan" id="i-demo">Zbořit</button></div>';
+    if (road[k]) { const R = ROADS[road[k]] || ROADS[1]; return '<p>' + R.desc + '</p>' + row('Provoz', R.noCars ? 'jen chodci' : traf[k] > 1.1 ? 'zácpy' : traf[k] > 0.6 ? 'hustý' : 'plynulý', traf[k] > 1.1 ? 'neg' : '') + row('Vytížení', pct(Math.min(200, traf[k] * 100))) + row('Kapacita', pct(R.cap * (1 + tfx('trafficCap')) * 100)) + row('Údržba', money(R.up * (ter[k] === 1 ? 3 : 1)) + '/měs.') + row('Propojeno s dálnicí', conn[k] ? 'ano' : 'ne', conn[k] ? '' : 'neg') + (traf[k] > 1.1 && road[k] < 3 ? '<p class="hint">Ucpaná ulice: přestav ji na třídu (nástroj Silnice), postav tramvaj, metro nebo autobusy.</p>' : '') + '<div class="btns"><button class="btn dan" id="i-demo">Zbořit</button></div>'; }
     if (zone[k]) {
       const z = zone[k], c = lvl[k] ? capOf(k) : 0;
       h += row('Hustota', dens[k] ? 'hustá zástavba' : 'řídká zástavba') + row('Úroveň budovy', lvl[k] ? lvl[k] + ' z ' + (dens[k] ? (S.techs.skyscraper ? 5 : 4) : 3) : 'prázdná parcela');
@@ -278,7 +286,7 @@ PANELS.budget = {
     else {
       const I = L.inc, E = L.exp, ITEMS = [['Daně z bydlení', I.R], ['Daně z obchodů', I.C], ['Daně z průmyslu', I.I], ['Daně z kanceláří', I.O], ['Prodej elektřiny', I.power], ['Cestovní ruch', I.tourism], ['Recyklace', I.recycle || 0], ['Obchod se zbožím', L.trade.net]];
       for (const [a, v] of ITEMS) if (Math.abs(v) >= 1) h += row(a, (v >= 0 ? '+' : '') + money(v), v >= 0 ? 'pos' : 'neg');
-      for (const [a, v] of [['Provoz služeb', E.services], ['Správa města', E.admin], ['Údržba silnic', E.roads], ['Vyhlášky', E.policies], ['Úroky', E.loan]]) if (v >= 1) h += row(a, '−' + money(v), 'neg');
+      for (const [a, v] of [['Provoz služeb', E.services], ['Správa města', E.admin], ['Údržba silnic', E.roads], ['Financování výzkumu', E.research], ['Vyhlášky', E.policies], ['Úroky', E.loan]]) if (v >= 1) h += row(a, '−' + money(v), 'neg');
       h += row('<b>Celkem</b>', (L.net >= 0 ? '+' : '') + money(L.net), L.net >= 0 ? 'pos' : 'neg');
     }
     $('b-last').innerHTML = h;
@@ -308,21 +316,114 @@ PANELS.trade = {
   },
 };
 
+// ---------- výzkum ----------
+function bodu(n) { const i = Math.round(n); return fmt(n) + (i === 1 ? ' bod' : i >= 2 && i <= 4 ? ' body' : ' bodů'); }
+const fieldOf = id => FIELDS.find(f => f.key === TECHS[id].f);
+function chainCost(id) { const seen = new Set(); let c = 0; const v = t => { if (seen.has(t) || S.techs[t]) return; seen.add(t); c += TECHS[t].cost; for (const r of TECHS[t].req) v(r); }; v(id); return c; }
+function techEta(id) {
+  if (S.techs[id]) return 0; const rate = researchRate(); if (rate <= 0.01) return Infinity;
+  // pořadí: aktuální, fronta, pak tato technologie s předpoklady
+  const order = [S.research].concat(S.rq || []).filter(Boolean); let sum = 0, found = false;
+  for (const t of order) { if (S.techs[t]) continue; sum += TECHS[t].cost; if (t === id) { found = true; break; } }
+  if (!found) { const inO = new Set(order), seen = new Set(), v = t => { if (seen.has(t) || S.techs[t]) return; seen.add(t); for (const r of TECHS[t].req) v(r); if (!inO.has(t)) sum += TECHS[t].cost; }; v(id); }
+  return Math.max(0, Math.ceil((sum - S.rp) / rate));
+}
+const etaTxt = m => m === Infinity ? 'nikdy (žádný výzkum)' : m <= 0 ? 'tento měsíc' : m === 1 ? 'za 1 měsíc' : m < 5 ? 'za ' + m + ' měsíce' : m < 24 ? 'za ' + m + ' měsíců' : 'za ' + (m / 12).toFixed(1).replace('.', ',') + ' roku';
+function fxLine(t) { const f = fxText(t.fx); return (t.u ? 'Odemyká: ' + t.u + '. ' : '') + (f.length ? f.join(', ') + '. ' : '') + t.desc; }
 PANELS.research = {
   title: () => 'Rozvoj a výzkum',
   html: () => {
-    const rp = T.rp + T.fil[4] * 0.003;
-    let h = row('Výzkum měsíčně', fmt(rp) + ' bodů') + row('Naspořeno', fmt(S.rp) + ' bodů');
-    if (S.research) { const t = TECHS[S.research]; h += '<h4>Právě se zkoumá</h4><div class="tech cur"><b>' + t.name + '</b><span class="num">' + fmt(S.rp) + ' / ' + t.cost + '</span><p>' + t.desc + '</p></div>' + meter(S.rp / t.cost * 100, 'var(--accent)'); }
-    if (rp < 1) h += '<p>Výzkum dělají školy, univerzita, výzkumný ústav a kanceláře. Postav aspoň základní školu.</p>';
-    const cats = [...new Set(Object.values(TECHS).map(t => t.cat))];
-    for (const c of cats) { h += '<h4>' + c + '</h4>'; for (const id in TECHS) { const t = TECHS[id]; if (t.cat !== c) continue;
-      const done = S.techs[id], cur = S.research === id, miss = (t.req || []).filter(r => !S.techs[r]);
-      h += '<div class="tech' + (done ? ' done' : cur ? ' cur' : '') + '"><b>' + t.name + '</b><span>' + (done ? pill('hotovo', 'good') : cur ? pill('zkoumá se', 'warn') : miss.length ? pill('nejdřív ' + miss.map(r => TECHS[r].name).join(', ')) : '<button class="btn pri" data-t="' + id + '">Zkoumat · ' + t.cost + '</button>') + '</span><p>' + t.desc + '</p></div>'; } }
+    const rate = researchRate(), base = T.rp, gov = (T.rpGov || 0) + (T.pop || 0) / 2500, off = T.fil[4] * 0.003, fund = (S.resFund || 0) / 40000, bonus = tfx('research');
+    const nDone = Object.keys(S.techs).filter(t => TECHS[t]).length, nAll = Object.keys(TECHS).length;
+    let h = row('Výzkum měsíčně', bodu(rate)) + row('Vyzkoumáno', nDone + ' z ' + nAll) + meter(nDone / nAll * 100, 'var(--accent)');
+    h += '<div class="rs-src">' + [['Školy, univerzity a ústavy', base], ['Úřad a obyvatelé', gov], ['Kanceláře a firmy', off], ['Grant z rozpočtu', fund]].map(([a, v]) => '<span>' + a + ' <b class="num">' + fmt(v) + '</b></span>').join('') + (bonus ? '<span>Bonus z vědy <b class="num">+' + Math.round(bonus * 100) + ' %</b></span>' : '') + '</div>';
+    h += '<button class="btn pri wide" id="rs-tree">Otevřít strom výzkumu</button>';
+    h += '<h4>Financování výzkumu</h4><div class="rs-fund"><input type="range" id="rs-fund" min="0" max="2000000" step="50000" value="' + (S.resFund || 0) + '" aria-label="Grant na výzkum"><b class="num" id="rs-fundv">' + money(S.resFund || 0) + ' / měs.</b></div><p class="hint">Každých 40 000 měsíčně přidá 1 bod výzkumu.</p>';
+    if (S.research) { const t = TECHS[S.research], f = fieldOf(S.research); h += '<h4>Právě se zkoumá</h4><div class="tech cur"><b><i class="dot" style="background:' + f.col + '"></i>' + t.name + '</b><span class="num">' + fmt(Math.min(S.rp, t.cost)) + ' / ' + t.cost + '</span><p>' + fxLine(t) + '</p><p class="eta">Hotovo ' + etaTxt(techEta(S.research)) + '</p></div>' + meter(S.rp / t.cost * 100, 'var(--accent)'); }
+    else h += '<h4>Právě se zkoumá</h4><p>Nic. Vyber výzkum níže nebo ve stromu. Body se zatím střádají (nejvýš 600).</p>';
+    if ((S.rq || []).length) { h += '<h4>Fronta (' + S.rq.length + ')</h4>'; S.rq.forEach((id, i) => { const t = TECHS[id], f = fieldOf(id); h += '<div class="rs-q"><span class="qn">' + (i + 1) + '</span><i class="dot" style="background:' + f.col + '"></i><b>' + t.name + '</b><small class="num">' + etaTxt(techEta(id)) + '</small><button class="btn" data-un="' + id + '" aria-label="Odebrat z fronty">×</button></div>'; }); }
+    if (rate < 1) h += '<p>Výzkum dělají školy, univerzita, výzkumný ústav, technologický park a kanceláře. Můžeš ho i financovat z rozpočtu.</p>';
+    const open = Object.keys(TECHS).filter(id => techState(id) === 'open').sort((a, b) => TECHS[a].t - TECHS[b].t || TECHS[a].cost - TECHS[b].cost);
+    h += '<h4>Dostupné hned (' + open.length + ')</h4>';
+    for (const id of open) { const t = TECHS[id], f = fieldOf(id);
+      h += '<div class="tech"><b><i class="dot" style="background:' + f.col + '"></i>' + t.name + '</b><span class="btns" style="margin:0"><button class="btn pri" data-t="' + id + '">Zkoumat · ' + t.cost + '</button><button class="btn" data-qa="' + id + '" title="Přidat do fronty">+</button></span><p>' + fxLine(t) + '</p></div>'; }
+    const tot = Object.keys(FXN).filter(k => tfx(k));
+    if (tot.length) h += '<h4>Účinky výzkumu celkem</h4><div class="rs-fx">' + fxText(Object.fromEntries(tot.map(k => [k, Math.round(tfx(k) * 100) / 100]))).map(t => '<span>' + t + '</span>').join('') + '</div>';
     return h;
   },
-  bind: () => { $('pbody').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; const err = setResearch(b.dataset.t); if (err) toast(err, 'bad'); renderPanel(); }; },
+  live: () => { if (document.activeElement && document.activeElement.id === 'rs-fund') return; const sc = $('pbody').scrollTop; renderPanel(); $('pbody').scrollTop = sc; },
+  bind: () => {
+    $('pbody').onclick = e => {
+      if (e.target.closest('#rs-tree')) { openTree(); return; }
+      const b = e.target.closest('[data-t]'), q = e.target.closest('[data-qa]'), u = e.target.closest('[data-un]');
+      if (b) { const err = setResearch(b.dataset.t); if (err) toast(err, 'bad'); }
+      if (q) { queueTech(q.dataset.qa); toast('Přidáno do fronty: ' + TECHS[q.dataset.qa].name + '.'); }
+      if (u) unqueueTech(u.dataset.un);
+      if (b || q || u) renderPanel();
+    };
+    const r = $('rs-fund'); if (r) { r.oninput = () => { S.resFund = +r.value; $('rs-fundv').textContent = money(S.resFund) + ' / měs.'; }; r.onchange = () => { renderPanel(); updateTop(); }; }
+  },
 };
+
+// ---------- strom výzkumu přes celou obrazovku ----------
+let treeSel = null;
+function openTree(id) { $('tree').hidden = false; treeSel = id || treeSel || S.research || Object.keys(TECHS).find(t => techState(t) === 'open') || 'gasturb'; drawTree(); }
+function closeTree() { $('tree').hidden = true; }
+function drawTree() {
+  const rate = researchRate(), nDone = Object.keys(S.techs).filter(t => TECHS[t]).length;
+  $('tt-sum').innerHTML = '<span><b class="num">' + bodu(rate) + '</b> měsíčně</span><span>Vyzkoumáno <b class="num">' + nDone + ' / ' + Object.keys(TECHS).length + '</b></span>' + (S.research ? '<span>Zkoumá se <b>' + TECHS[S.research].name + '</b> · ' + etaTxt(techEta(S.research)) + '</span>' : '<span class="warn">Výzkum stojí</span>') + ((S.rq || []).length ? '<span>Ve frontě ' + S.rq.length + '</span>' : '');
+  let g = '<div class="tt-h tt-corner"></div>';
+  for (let t = 1; t <= 5; t++) g += '<div class="tt-h">Stupeň ' + t + ' <small>' + TIER_COST[t] + ' b.</small></div>';
+  for (const f of FIELDS) {
+    g += '<div class="tt-f" style="border-color:' + f.col + '">' + f.name + '</div>';
+    for (let t = 1; t <= 5; t++) {
+      g += '<div class="tt-c">';
+      for (const id in TECHS) { const T0 = TECHS[id]; if (T0.f !== f.key || T0.t !== t) continue; const st = techState(id), qi = (S.rq || []).indexOf(id);
+        g += '<button class="tn ' + st + (treeSel === id ? ' sel' : '') + '" data-tn="' + id + '" style="border-left-color:' + f.col + '"><b>' + T0.name + '</b><small>' + (st === 'done' ? '✓ hotovo' : st === 'cur' ? 'zkoumá se · ' + Math.round(Math.min(1, S.rp / T0.cost) * 100) + ' %' : st === 'queued' ? 've frontě' : st === 'locked' ? 'chybí předpoklady' : T0.cost + ' bodů') + '</small>' + (qi >= 0 ? '<i class="qn">' + (qi + 1) + '</i>' : '') + '</button>'; }
+      g += '</div>';
+    }
+  }
+  const grid = $('tt-grid'); grid.innerHTML = g + '<svg id="tt-svg" aria-hidden="true"></svg>';
+  drawTreeLines(); drawTreeDet();
+}
+function drawTreeLines() {
+  const grid = $('tt-grid'), svg = $('tt-svg'), pos = {};
+  grid.querySelectorAll('.tn').forEach(n => { pos[n.dataset.tn] = [n.offsetLeft, n.offsetTop, n.offsetWidth, n.offsetHeight]; });
+  svg.setAttribute('width', grid.scrollWidth); svg.setAttribute('height', grid.scrollHeight);
+  const rel = new Set(); if (treeSel) { const v = t => { rel.add(t); for (const r of TECHS[t].req) v(r); }; v(treeSel); }
+  let p = '';
+  for (const id in TECHS) for (const r of TECHS[id].req) { const a = pos[r], b = pos[id]; if (!a || !b) continue;
+    const x1 = a[0] + a[2], y1 = a[1] + a[3] / 2, x2 = b[0], y2 = b[1] + b[3] / 2, mx = (x1 + x2) / 2, hi = rel.has(id) && rel.has(r), done = S.techs[r];
+    p += '<path d="M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" stroke="' + (hi ? '#2a64c4' : done ? '#7fbf8f' : '#b9c0c8') + '" stroke-width="' + (hi ? 2.6 : 1.4) + '" fill="none"' + (hi ? '' : ' opacity="' + (rel.size > 1 ? 0.35 : 0.8) + '"') + '/>'; }
+  svg.innerHTML = p;
+}
+function drawTreeDet() {
+  const id = treeSel, d = $('tt-det'); if (!id) { d.innerHTML = '<p>Vyber technologii.</p>'; return; }
+  const t = TECHS[id], f = fieldOf(id), st = techState(id), miss = [];
+  const v = x => { if (S.techs[x] || miss.includes(x)) return; for (const r of TECHS[x].req) v(r); if (x !== id) miss.push(x); }; v(id);
+  let h = '<div class="tt-dh" style="border-color:' + f.col + '"><small>' + f.name + ' · stupeň ' + t.t + '</small><h3>' + t.name + '</h3></div><p>' + t.desc + '</p>';
+  if (t.u) h += row('Odemyká', t.u);
+  const fx = fxText(t.fx); if (fx.length) h += '<div class="rs-fx">' + fx.map(x => '<span>' + x + '</span>').join('') + '</div>';
+  h += row('Cena', t.cost + ' bodů') + (st !== 'done' ? row('Hotovo', etaTxt(techEta(id))) : '');
+  if (t.req.length) h += '<h4>Předpoklady</h4>' + t.req.map(r => '<button class="tt-pre" data-tn="' + r + '">' + (S.techs[r] ? '✓ ' : '○ ') + TECHS[r].name + '</button>').join('');
+  const next = Object.keys(TECHS).filter(x => TECHS[x].req.includes(id)); if (next.length) h += '<h4>Navazuje</h4>' + next.map(r => '<button class="tt-pre" data-tn="' + r + '">' + TECHS[r].name + '</button>').join('');
+  if (st === 'done') h += '<p class="ok">' + pill('vyzkoumáno', 'good') + '</p>';
+  else {
+    if (miss.length) h += '<p class="hint">Nejdřív se vyzkoumá ' + miss.length + ' ' + (miss.length === 1 ? 'předpoklad' : miss.length < 5 ? 'předpoklady' : 'předpokladů') + ': ' + miss.map(x => TECHS[x].name).join(', ') + ' (celkem ' + chainCost(id) + ' bodů).</p>';
+    h += '<div class="btns">' + (st !== 'cur' ? '<button class="btn pri" data-go="' + id + '">Zkoumat hned</button>' : '') + (st === 'queued' || st === 'cur' ? '<button class="btn" data-ux="' + id + '">Zrušit</button>' : '<button class="btn" data-qq="' + id + '">Přidat do fronty</button>') + '</div>';
+  }
+  d.innerHTML = h;
+}
+$('tree').onclick = e => {
+  if (e.target === $('tree') || e.target.closest('#tt-x')) { closeTree(); if (G.panel === 'research') renderPanel(); return; }
+  const n = e.target.closest('[data-tn]'), go = e.target.closest('[data-go]'), qq = e.target.closest('[data-qq]'), ux = e.target.closest('[data-ux]');
+  if (n) { treeSel = n.dataset.tn; drawTree(); if (window.innerWidth < 860) $('tt-det').scrollTop = 0; return; }
+  if (go) { queueTech(go.dataset.go, true); toast('Zkoumá se: ' + TECHS[S.research].name + '.', 'good'); }
+  if (qq) { queueTech(qq.dataset.qq); toast('Přidáno do fronty.'); }
+  if (ux) unqueueTech(ux.dataset.ux);
+  if (go || qq || ux) { drawTree(); if (G.panel === 'research') renderPanel(); }
+};
+window.addEventListener('resize', () => { if (!$('tree').hidden) drawTreeLines(); });
 
 PANELS.policy = {
   title: () => 'Vyhlášky',
@@ -510,6 +611,7 @@ function drawHud() {
     let n = 0;
     for (let k = 0; k < NN && n < 260; k++) {
       if (!zone[k] || !lvl[k] || ruin[k]) continue;
+      if (fire[k]) { const p = project(tileX(k % N), bldH(k) + 2, tileZ((k / N) | 0)); if (p.ok) { icon(p.x, p.y, 'fire'); n++; } continue; }
       const p0 = !acc[k] ? 'road' : !pw[k] ? 'power' : !wt[k] ? 'water' : aband[k] ? 'aband' : null; if (!p0) continue;
       const p = project(tileX(k % N), 5, tileZ((k / N) | 0)); if (!p.ok || p.x < 0 || p.y < 0 || p.x > VW || p.y > VH) continue;
       icon(p.x, p.y, p0); n++;
@@ -520,11 +622,12 @@ function drawHud() {
 }
 function roundRect(x, y, w, h, r) { hx.beginPath(); hx.moveTo(x + r, y); hx.arcTo(x + w, y, x + w, y + h, r); hx.arcTo(x + w, y + h, x, y + h, r); hx.arcTo(x, y + h, x, y, r); hx.arcTo(x, y, x + w, y, r); hx.closePath(); }
 function icon(x, y, t) {
-  hx.fillStyle = t === 'aband' ? '#7a6f66' : '#e0483a'; hx.strokeStyle = '#fff'; hx.lineWidth = 2;
+  hx.fillStyle = t === 'aband' ? '#7a6f66' : t === 'fire' ? '#f07a1a' : '#e0483a'; hx.strokeStyle = '#fff'; hx.lineWidth = 2;
   hx.beginPath(); hx.arc(x, y, 9, 0, 6.29); hx.fill(); hx.stroke(); hx.fillStyle = '#fff'; hx.beginPath();
   if (t === 'power') { hx.moveTo(x + 1, y - 6); hx.lineTo(x - 4, y + 1); hx.lineTo(x, y + 1); hx.lineTo(x - 1, y + 6); hx.lineTo(x + 4, y - 1); hx.lineTo(x, y - 1); hx.closePath(); hx.fill(); }
   else if (t === 'water') { hx.moveTo(x, y - 6); hx.quadraticCurveTo(x + 5, y + 1, x, y + 5); hx.quadraticCurveTo(x - 5, y + 1, x, y - 6); hx.fill(); }
   else if (t === 'road') { hx.fillRect(x - 5, y - 1.5, 10, 3); }
+  else if (t === 'fire') { hx.moveTo(x, y - 7); hx.quadraticCurveTo(x + 7, y, x + 3, y + 6); hx.quadraticCurveTo(x, y + 3, x - 3, y + 6); hx.quadraticCurveTo(x - 7, y, x, y - 7); hx.fill(); }
   else { hx.fillRect(x - 1.5, y - 6, 3, 8); hx.fillRect(x - 1.5, y + 3, 3, 3); }
 }
 const mbase = document.createElement('canvas'); mbase.width = N; mbase.height = N;
@@ -555,7 +658,7 @@ mini.addEventListener('pointerup', () => { mini._d = false; }); mini.addEventLis
 const OPT = { size: 2, tech: 1, crisis: 1, wars: true, elections: true };
 function drawStart() {
   $('s-size').innerHTML = STARTS.map((s, i) => '<button class="pick' + (OPT.size === i ? ' on' : '') + '" data-v="' + i + '"><b>' + s.name + '</b><small>' + (s.pop ? 'asi ' + fmt(s.pop) + ' obyvatel. ' : '') + s.desc + ' V pokladně ' + money(s.money) + '.</small></button>').join('');
-  $('s-tech').innerHTML = TECH_LEVELS.map((t, i) => '<button class="pick' + (OPT.tech === i ? ' on' : '') + '" data-v="' + i + '"><b>' + t.name + '</b><small>' + (i === 0 ? 'Vše se musí vyzkoumat.' : i === 1 ? 'Plyn, vítr, filtry, MHD a protipovodňová ochrana už jsou.' : 'Skoro všechno je vyzkoumané včetně metra a tajné služby.') + '</small></button>').join('');
+  $('s-tech').innerHTML = TECH_LEVELS.map((t, i) => '<button class="pick' + (OPT.tech === i ? ' on' : '') + '" data-v="' + i + '"><b>' + t.name + '</b><small>' + (i === 0 ? 'Vše se musí vyzkoumat.' : i === 1 ? 'Plyn, vítr, filtry, MHD a protipovodňová ochrana už jsou.' : 'Polovina stromu výzkumu: metro, tramvaje, třídy, centrální hasiči i tajná služba.') + '</small></button>').join('');
   $('s-crisis').innerHTML = CRISIS_LEVELS.map((c, i) => '<button class="pick' + (OPT.crisis === i ? ' on' : '') + '" data-v="' + i + '"><b>' + c.name + '</b><small>' + ['Katastrofy a nepokoje jsou vzácné. Hodí se pro klidné budování.', 'Občas něco vyhoří, zaplaví nebo vypukne demonstrace.', 'Pohromy, stávky a extremisté přicházejí často.'][i] + '</small></button>').join('');
   $('s-rules').innerHTML = '<button class="pick' + (OPT.wars ? ' on' : '') + '" data-r="wars"><b>Války a převraty: ' + (OPT.wars ? 'ano' : 'ne') + '</b><small>Sousedé mohou zaútočit a nespokojená armáda se může vzbouřit.</small></button><button class="pick' + (OPT.elections ? ' on' : '') + '" data-r="elections"><b>Volby: ' + (OPT.elections ? 'ano' : 'ne') + '</b><small>Každé čtyři roky. S nízkou důvěrou prohraješ.</small></button>';
   const saves = ['auto', 0, 1, 2].map(n => [n, readSlot(n)]).filter(s => s[1]);

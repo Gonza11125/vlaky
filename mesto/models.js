@@ -181,7 +181,28 @@ function mServ(t) {
     case 'policehq': lot(b, W); b.facade('stone', 4, 1.3, 6, 3.4, 0xebebe8, 0, 0, -1.2).parapet(6, 3.4, 5.2, 0x2c4f8f, 0, -1.2).use('plain').cyl(1.1, 1.1, 0.05, 0x9a9890, 1.4, 5.2, -1.2, 18).box(1.0, 0.06, 0.2, PAL.white, 1.4, 5.25, -1.2);
       b.use('paint'); for (let i = 0; i < 3; i++) b.box(1.3, 0.42, 0.6, 0xf2f2f0, -2.4 + i * 1.6, 0.06, 2.2).box(1.32, 0.1, 0.62, 0x2c4f8f, -2.4 + i * 1.6, 0.24, 2.2); break;
     case 'fire': lot(b, W); b.use('brick').box(3.2, 2.5, 2.4, PAL.brick, -0.2, 0, -0.5).parapet(3.2, 2.4, 2.5, 0x8a4a35, -0.2, -0.5).use('metal').box(1.0, 1.6, 0.06, 0xe4e4e2, -0.9, 0, 0.72).box(1.0, 1.6, 0.06, 0xe4e4e2, 0.4, 0, 0.72).use('brick').box(0.8, 4.4, 0.8, PAL.brick, 1.3, 0, -1.2)
-      .use('paint').box(1.7, 0.7, 0.7, 0xb8251f, -0.6, 0.06, 1.45).use('metal').box(1.4, 0.08, 0.2, PAL.steel, -0.6, 0.8, 1.45); break;
+      .use('paint').box(1.7, 0.7, 0.7, 0xb8251f, -0.6, 0.06, 1.45).use('metal').box(1.4, 0.08, 0.2, PAL.steel, -0.6, 0.8, 1.45); hoseTower(b, 1.3, -1.2, 4.4); break;
+    case 'firevol': mFireVol(b, W); break;
+    case 'firehq': mFireHQ(b, W); break;
+    case 'fireair': mFireAir(b, W); break;
+    case 'hydro': lot(b, W, 0x9a968d);
+      b.use('plain').box(W, 2.2, 1.6, PAL.conc2, 0, -1.2, 2.6).use('water').box(W - 0.4, 0.1, 1.8, 0x4a7a8a, 0, -0.2, 1.4);
+      for (const x of [-2.4, 0, 2.4]) b.use('plain').box(1.4, 0.5, 1.2, 0xd8dde2, x, 1.0, 2.6);
+      b.facade('office', 2, 1.8, 6.2, 2.6, 0xd6d3cb, 0, 0, -1.2).parapet(6.2, 2.6, 3.6, PAL.conc, 0, -1.2).use('metal');
+      for (let i = 0; i < 3; i++) b.box(0.9, 1.1, 0.7, 0x6f777f, -2.2 + i * 1.6, 0, -3.1).cyl(0.04, 0.04, 2.2, PAL.steel, -2.2 + i * 1.6, 0, -3.5, 6);
+      break;
+    case 'geo': lot(b, W, 0xa59f92); b.use('metal').box(3.6, 3.0, 2.6, 0xc7ccd0, -1.2, 0, -1.4).parapet(3.6, 2.6, 3.0, PAL.conc, -1.2, -1.4);
+      for (const [x, z] of [[2.0, -2.0], [2.0, 1.4]]) { b.use('plain').cyl(1.0, 1.3, 3.8, 0xd8d6d0, x, 0, z, 18); (SMOKE[key] = SMOKE[key] || []).push([x, 4.0, z]); }
+      b.use('metal'); for (let i = 0; i < 4; i++) b.hcyl(0.16, 5.6, 0xb8bcc0, -0.4, 0.6 + i * 0.12, 1.8 + i * 0.45, Math.PI / 2, 8);
+      for (let i = 0; i < 3; i++) b.box(0.1, 0.6, 0.1, PAL.steel, -2.6 + i * 2.2, 0, 2.2);
+      break;
+    case 'techpark': lot(b, W, PAL.grass, 'lawn'); b.use('pave').box(W, 0.06, 1.1, 0xc9c4b8, 0, 0.06, 0.6).box(1.1, 0.06, W, 0xc9c4b8, 0.4, 0.06, 0);
+      b.facade('office', 4, 1.25, 3.0, 2.4, 0xcfdbe3, -1.9, 0, -2.0).parapet(3.0, 2.4, 5.0, PAL.conc, -1.9, -2.0);
+      b.facade('office', 2, 1.25, 2.6, 2.4, 0xe6e9ea, 2.2, 0, -2.2).use('lawn').box(2.4, 0.15, 2.2, PAL.grass, 2.2, 2.5, -2.2);
+      b.facade('office', 3, 1.25, 3.2, 2.0, 0xd4dde4, -1.8, 0, 2.6).parapet(3.2, 2.0, 3.75, PAL.conc, -1.8, 2.6);
+      b.use('glass').cyl(1.0, 1.0, 1.6, 0x8fb0c4, 2.4, 0, 2.6, 16).use('plain').cyl(1.08, 1.08, 0.1, PAL.white, 2.4, 1.6, 2.6, 16);
+      b.tree(0.4, 3.4, 0.6, PAL.leaf[1]).tree(3.3, 0.9, 0.55).tree(-3.4, 0.9, 0.55, PAL.leaf[3]);
+      break;
     case 'barracks': lot(b, W, 0x8f8e74); b.use('plain'); for (const [x, z, w, d] of [[0, -5.6, 11.4, 0.3], [0, 5.6, 11.4, 0.3], [-5.6, 0, 0.3, 11.4], [5.6, 0, 0.3, 11.4]]) b.box(w, 1.1, d, 0xb3ad98, x, 0, z);
       b.facade('res', 2, 1.2, 4.5, 2.4, 0x7d8460, -2.5, 0, -3.5).parapet(4.5, 2.4, 2.4, 0x5a6040, -2.5, -3.5).facade('res', 2, 1.2, 3, 2.4, 0x7d8460, 3, 0, -3.5).parapet(3, 2.4, 2.4, 0x5a6040, 3, -3.5);
       b.use('plain'); for (let i = 0; i < 3; i++) b.pyr(1.6, 1.2, 0x6d7650, -3.5 + i * 2.2, 0, 1);
@@ -223,6 +244,14 @@ function mServ(t) {
 }
 function mRubble() { const b = new GB(); b.use('plain').box(3.4, 0.08, 3.4, 0x8c8478, 0, 0, 0); for (let i = 0; i < 9; i++) b.sph(0.4 + (i % 3) * 0.2, [0x7c756c, 0x5f5952, 0x968b7c][i % 3], -1.2 + (i % 3) * 1.1, 0.15, -1.1 + Math.floor(i / 3) * 1, 1, 0.55, 1, 0); b.use('brick').box(1.4, 0.5, 0.3, PAL.brick, 0.6, 0, -0.9, 0.4).use('plain').box(1.6, 0.1, 0.2, PAL.wood, 0.4, 0.5, 0.3, 0.6); return b.geo(); }
 function mTree(v) { const b = new GB(); if (v < 2) b.tree(0, 0, 1, PAL.leaf[v * 2]); else b.pine(0, 0, 1.1); return b.geo(); }
+function mRoadT(rt, mask, bridge) {
+  if (rt === 2 && !bridge) return mRoadRural(mask);
+  if (rt === 3) return mRoadAvenue(mask, bridge);
+  if (rt === 4) return mRoadTram(mask, bridge);
+  if (rt === 5) return mRoadHighway(mask, bridge);
+  if (rt === 6 && !bridge) return mRoadPed(mask);
+  return mRoad(mask, bridge);
+}
 function mRoad(mask, bridge, rural) {   // N=1 E=2 S=4 W=8
   if (rural && !bridge) return mRoadRural(mask);
   const b = new GB(), h = H;
@@ -257,7 +286,9 @@ function mCar(kind) {
   const b = new GB();
   const body = (l, w, h, col, cabL, cabX) => { b.use('paint').box(l, h, w, col, 0, 0.18, 0).add(new THREE.BoxGeometry(cabL, h * 0.75, w * 0.86), col, cabX, 0.18 + h + h * 0.37, 0, 0, 0, 0); b.use('glass').box(cabL + 0.04, h * 0.5, w * 0.88, 0x2b3642, cabX, 0.18 + h + 0.05, 0); };
   if (kind === 'bus') { b.use('paint').box(3.2, 1.0, 1.0, 0xe8e8e4, 0, 0.18, 0).use('glass').box(3.22, 0.36, 1.02, 0x2b3642, 0, 0.7, 0).use('paint').box(3.22, 0.12, 1.02, 0xb8251f, 0, 0.3, 0); }
-  else if (kind === 'fire') { b.use('paint').box(2.6, 0.9, 1.0, 0xb8251f, 0, 0.18, 0).use('glass').box(0.6, 0.4, 0.96, 0x2b3642, 1.0, 0.75, 0).use('metal').box(1.6, 0.08, 0.25, PAL.steel, -0.3, 1.1, 0); }
+  else if (kind === 'fire') { b.use('paint').box(2.6, 0.9, 1.0, 0xb8251f, 0, 0.18, 0).use('plain').box(2.62, 0.07, 1.02, PAL.white, 0, 0.55, 0).use('glass').box(0.6, 0.4, 0.96, 0x2b3642, 1.0, 0.75, 0).use('metal').box(1.8, 0.08, 0.28, PAL.steel, -0.3, 1.1, 0).box(0.08, 0.3, 0.5, 0x3a6fe0, 0.9, 1.08, 0); }
+  else if (kind === 'heli') { heli(b, 0, 0, 0); return b.geo(); }
+  else if (kind === 'tram') return mTram();
   else if (kind === 'police') { sedan(b, 0xf2f2f0); b.use('paint').box(1.74, 0.1, 0.8, 0x2c4f8f, 0, 0.36, 0).use('plain').box(0.25, 0.08, 0.5, 0x3a6fe0, -0.15, 0.77, 0); }
   else if (kind === 'army') { b.use('paint').box(2.4, 0.9, 1.0, 0x4f5a34, 0, 0.25, 0).use('plain').box(1.4, 0.7, 1.02, 0x5d6a40, -0.4, 1.15, 0); }
   else if (kind === 'tank' || kind === 'etank') { const c = kind === 'tank' ? 0x4f5a34 : 0x6e4a3a; b.use('paint').box(2.4, 0.6, 1.4, c, 0, 0.2, 0).box(1.1, 0.45, 0.9, c, -0.1, 0.8, 0).hcyl(0.08, 1.6, 0x2f2f2a, 1.2, 1.0, 0, Math.PI / 2, 8); }
@@ -377,5 +408,118 @@ function mRoadRural(mask) {
   else if (mask === 10) for (const x of [-1.2, 0.8]) b.box(0.8, 0.075, 0.08, 0xe8e6de, x, 0, 0);
   if (mask === 5) b.box(0.06, 0.08, TS, 0xd8d6ce, w / 2 - 0.12, 0, 0).box(0.06, 0.08, TS, 0xd8d6ce, -w / 2 + 0.12, 0, 0);
   if (mask === 10) b.box(TS, 0.08, 0.06, 0xd8d6ce, 0, 0, w / 2 - 0.12).box(TS, 0.08, 0.06, 0xd8d6ce, 0, 0, -w / 2 + 0.12);
+  return b.geo();
+}
+
+// ---------- druhy silnic ----------
+function bridgeBase(b, mask) { b.use('plain').box(TS, 0.5, TS, 0xa8a49b, 0, -0.45, 0); if (!(mask & 1) || !(mask & 4)) b.box(0.6, 1.6, 0.6, 0xa8a49b, 0, -1.6, 0); }
+function sidewalks(b, mask, ch, curb) { const h = H; b.use('pave');
+  if (!(mask & 1)) b.box(TS, ch, 0.55, curb, 0, 0, -h + 0.275); if (!(mask & 4)) b.box(TS, ch, 0.55, curb, 0, 0, h - 0.275);
+  if (!(mask & 8)) b.box(0.55, ch, TS, curb, -h + 0.275, 0, 0); if (!(mask & 2)) b.box(0.55, ch, TS, curb, h - 0.275, 0, 0); }
+function lamp(b, x, z, ry, y) { const pm = b.m; b.use('metal').cyl(0.04, 0.05, 2.4, 0x55595e, x, y || 0, z, 6); const dx = Math.cos(ry) * 0.3, dz = -Math.sin(ry) * 0.3; b.box(0.12 + Math.abs(dx) * 1.3, 0.05, 0.12 + Math.abs(dz) * 1.3, 0x55595e, x + dx, (y || 0) + 2.4, z + dz); b.m = pm; }
+// třída: čtyři pruhy, uprostřed zelený pás se stromy
+function mRoadAvenue(mask, bridge) {
+  const b = new GB(), h = H; if (bridge) bridgeBase(b, mask);
+  b.use('asphalt').box(TS, 0.06, TS, 0x46494e, 0, 0, 0);
+  if (!bridge) sidewalks(b, mask, 0.12, PAL.walk);
+  if (mask === 5 || mask === 10) {
+    const v = mask === 5;
+    b.use('pave').box(v ? 0.7 : TS, 0.14, v ? TS : 0.7, 0xb8b4aa, 0, 0, 0).use('lawn').box(v ? 0.56 : TS, 0.16, v ? TS : 0.56, 0x5c7a43, 0, 0, 0);
+    if (!bridge) b.tree(0, 0, 0.62, PAL.leaf[1]); else b.use('metal').box(v ? 0.1 : TS, 0.5, v ? TS : 0.1, 0x9aa0a6, 0, 0.1, 0);
+    b.use('plain'); for (const o of [-1.0, 1.0]) for (const t of [-1.2, 0.8]) b.box(v ? 0.08 : 0.7, 0.07, v ? 0.7 : 0.08, PAL.line, v ? o : t, 0, v ? t : o);
+    if (!bridge) { lamp(b, v ? -h + 0.3 : 0.6, v ? 0.6 : -h + 0.3, v ? 0 : Math.PI / 2, 0.12); lamp(b, v ? h - 0.3 : -0.6, v ? -0.6 : h - 0.3, v ? Math.PI : -Math.PI / 2, 0.12); }
+  } else {
+    b.use('plain'); for (const [m, x, z, ry] of [[1, 0, -1.65, 0], [4, 0, 1.65, 0], [2, 1.65, 0, 1], [8, -1.65, 0, 1]]) if (mask & m) for (let i = -3; i <= 3; i++) b.box(ry ? 0.55 : 0.22, 0.07, ry ? 0.22 : 0.55, PAL.line, x + (ry ? 0 : i * 0.5), 0, z + (ry ? i * 0.5 : 0));
+  }
+  return b.geo();
+}
+// tramvajová třída: kolejiště uprostřed, trakční stožáry
+function mRoadTram(mask, bridge) {
+  const b = new GB(), h = H; if (bridge) bridgeBase(b, mask);
+  b.use('asphalt').box(TS, 0.06, TS, 0x4a4d52, 0, 0, 0);
+  if (!bridge) sidewalks(b, mask, 0.12, PAL.walk);
+  const arms = [[1, 0, -h / 2, 0], [4, 0, h / 2, 0], [2, h / 2, 0, 1], [8, -h / 2, 0, 1]];
+  b.use('pave').box(1.9, 0.075, 1.9, 0x8c8a84, 0, 0, 0);
+  for (const [m, x, z, ry] of arms) if (mask & m) b.box(ry ? h : 1.9, 0.075, ry ? 1.9 : h, 0x8c8a84, x, 0, z);
+  b.use('metal');
+  for (const [m, x, z, ry] of arms) if (mask & m) for (const o of [-0.75, -0.35, 0.35, 0.75]) b.box(ry ? h + 0.4 : 0.07, 0.04, ry ? 0.07 : h + 0.4, 0xb0b4b8, x + (ry ? 0 : o), 0.075, z + (ry ? o : 0));
+  if ((mask === 5 || mask === 10) && !bridge) { const v = mask === 5;
+    for (const sd of [-1, 1]) b.cyl(0.05, 0.06, 3.0, 0x55595e, v ? sd * (h - 0.3) : 0, 0.12, v ? 0 : sd * (h - 0.3), 6);
+    b.box(v ? TS - 0.6 : 0.05, 0.05, v ? 0.05 : TS - 0.6, 0x2a2c30, 0, 3.0, 0);
+    for (const o of [-0.55, 0.55]) b.box(v ? 0.03 : TS, 0.03, v ? TS : 0.03, 0x2a2c30, v ? o : 0, 2.8, v ? 0 : o); }
+  return b.geo();
+}
+// rychlostní silnice: svodidla, střední zídka, krajnice
+function mRoadHighway(mask, bridge) {
+  const b = new GB();
+  if (bridge) b.use('plain').box(TS, 0.6, TS, 0xa8a49b, 0, -0.55, 0).box(0.9, 2.0, 0.9, 0xa8a49b, 0, -2.0, 0);
+  else b.use('lawn').box(TS, 0.03, TS, 0x617848, 0, 0, 0);
+  b.use('asphalt').box(TS, 0.07, TS, 0x3d4045, 0, 0, 0);
+  if (mask === 5 || mask === 10) { const v = mask === 5;
+    b.use('plain').box(v ? 0.28 : TS, 0.42, v ? TS : 0.28, 0xc6c3bb, 0, 0.07, 0);
+    for (const o of [-1.0, 1.0]) for (const t of [-1.3, 0.7]) b.box(v ? 0.08 : 0.9, 0.075, v ? 0.9 : 0.08, PAL.line, v ? o : t, 0, v ? t : o);
+    for (const o of [-1.72, 1.72]) b.box(v ? 0.07 : TS, 0.075, v ? TS : 0.07, 0xe8e6de, v ? o : 0, 0, v ? 0 : o);
+    b.use('metal'); for (const o of [-1.92, 1.92]) { b.box(v ? 0.06 : TS, 0.14, v ? TS : 0.06, 0xaab0b5, v ? o : 0, 0.32, v ? 0 : o); for (const t of [-1.4, 0, 1.4]) b.box(0.08, 0.4, 0.08, 0x8d949b, v ? o : t, 0.07, v ? t : o); }
+  } else { b.use('plain'); for (const [m, x, z, ry] of [[1, 0, -1.5, 0], [4, 0, 1.5, 0], [2, 1.5, 0, 1], [8, -1.5, 0, 1]]) if (mask & m) for (const o of [-1.0, 1.0]) b.box(ry ? 0.9 : 0.08, 0.075, ry ? 0.08 : 0.9, PAL.line, x + (ry ? 0 : o), 0, z + (ry ? o : 0)); }
+  return b.geo();
+}
+// pěší zóna: dlažba, lavičky, stromy, lampy
+function mRoadPed(mask) {
+  const b = new GB();
+  b.use('pave').box(TS, 0.1, TS, 0xc9bea6, 0, 0, 0);
+  const v = mask === 5;
+  if (mask === 5 || mask === 10) {
+    b.box(v ? 0.12 : TS, 0.105, v ? TS : 0.12, 0xa9a090, v ? -0.9 : 0, 0, v ? 0 : -0.9).box(v ? 0.12 : TS, 0.105, v ? TS : 0.12, 0xa9a090, v ? 0.9 : 0, 0, v ? 0 : 0.9);
+    b.tree(v ? -1.45 : 0.6, v ? 0.6 : -1.45, 0.55, PAL.leaf[1]);
+    b.use('wood').box(v ? 0.35 : 0.9, 0.35, v ? 0.9 : 0.35, PAL.wood, v ? 1.45 : -0.6, 0.1, v ? -0.6 : 1.45); lamp(b, v ? 1.5 : 0.8, v ? 0.8 : 1.5, v ? Math.PI : -Math.PI / 2, 0.1);
+  } else { b.use('pave').cyl(0.55, 0.6, 0.35, 0xb8b0a0, 0, 0.1, 0, 14).use('lawn').cyl(0.45, 0.45, 0.4, 0x5c7a43, 0, 0.1, 0, 14); b.tree(0, 0, 0.5, PAL.leaf[3]); }
+  return b.geo();
+}
+
+// ---------- hasiči ----------
+function hoseTower(b, x, z, h, col) { const pm = b.m; b.use('brick').box(0.9, h, 0.9, col || PAL.brick, x, 0, z).use('tile').pyr(1.15, 0.9, 0x7a4a36, x, h, z).use('plain').box(0.5, 0.6, 0.06, 0x2a2c30, x, h - 1.0, z + 0.46); b.m = pm; }
+function truck(b, x, z, ry, ladder) { const pm = b.m, c = Math.cos(ry), s = Math.sin(ry), P = (dx, dz) => [x + dx * c + dz * s, z - dx * s + dz * c];
+  let p = P(0, 0); b.use('paint').box(1.0, 0.85, 2.4, 0xb8251f, p[0], 0.18, p[1], ry); p = P(0, 0.85); b.use('glass').box(0.96, 0.38, 0.5, 0x2b3642, p[0], 0.62, p[1], ry);
+  p = P(0, -0.3); b.use('metal').box(0.3, 0.1, ladder ? 2.4 : 1.4, PAL.steel, p[0], 1.04, p[1], ry); b.use('plain').box(1.02, 0.08, 2.42, PAL.white, x, 0.55, z, ry); b.m = pm; }
+function mFireVol(b, W) {
+  lot(b, W, 0xb9b3a6, 'pave');
+  b.facade('res', 1, 2.3, 2.6, 2.4, 0xece3cf, -0.3, 0, -0.6).use('tile').gable(2.8, 1.2, 2.6, 0x8f3f2e, -0.3, 2.3, -0.6, Math.PI / 2);
+  b.use('wood').box(1.5, 1.8, 0.06, 0x8f2a22, -0.4, 0, 0.62).use('plain').box(1.3, 0.25, 0.07, PAL.white, -0.4, 1.95, 0.63);
+  hoseTower(b, 1.3, -1.0, 4.0, 0xd8cdb5);
+  b.use('metal').cyl(0.03, 0.03, 1.4, PAL.steel, 1.3, 4.9, -1.0, 6).box(0.3, 0.2, 0.2, 0x55595e, 1.3, 6.1, -1.0);
+  truck(b, -0.4, 1.35, 0); b.tree(1.4, 1.4, 0.5, PAL.leaf[2]);
+}
+function mFireHQ(b, W) {
+  lot(b, W, 0xa9a69e);
+  b.use('asphalt').box(W, 0.07, 2.4, 0x4a4d52, 0, 0.06, 2.4);
+  b.facade('res', 1, 2.8, 5.6, 2.8, 0xe6e2da, -0.6, 0, -0.2).parapet(5.6, 2.8, 2.8, 0xb8251f, -0.6, -0.2);
+  b.use('paint'); for (let i = 0; i < 4; i++) b.box(1.05, 2.1, 0.06, 0xc8372d, -2.7 + i * 1.4, 0, 1.22);
+  b.use('plain').box(5.62, 0.28, 2.82, 0xb8251f, -0.6, 2.3, -0.2);
+  b.facade('office', 3, 1.3, 5.6, 1.6, 0xd8dfe4, -0.6, 0, -2.6).parapet(5.6, 1.6, 3.9, PAL.conc, -0.6, -2.6);
+  b.use('plain').box(1.6, 7.6, 1.6, 0xb8251f, 3.0, 0, -1.8); for (let i = 1; i < 5; i++) b.box(1.7, 0.08, 1.7, PAL.white, 3.0, i * 1.5, -1.8);
+  b.use('metal').box(0.06, 7.4, 0.5, PAL.steel, 3.85, 0, -1.8);
+  truck(b, -2.0, 2.6, 0); truck(b, -0.5, 2.6, 0, true); truck(b, 2.6, 2.4, Math.PI / 2);
+  b.use('paint').box(0.8, 0.7, 1.7, PAL.white, 1.1, 0.06, 2.8).box(0.82, 0.14, 1.72, 0xc8372d, 1.1, 0.4, 2.8);
+}
+function heli(b, x, z, ry) { const pm = b.m, c = Math.cos(ry), s = Math.sin(ry);
+  b.use('paint').sph(0.65, 0xc8372d, x, 0.75, z, 1.7, 0.85, 0.9).box(2.0, 0.22, 0.18, 0xc8372d, x - 1.5 * c, 0.85, z + 1.5 * s, ry).box(0.1, 0.6, 0.5, 0xc8372d, x - 2.4 * c, 0.85, z + 2.4 * s, ry);
+  b.use('glass').sph(0.45, 0x2b3642, x + 0.55 * c, 0.85, z - 0.55 * s, 1, 0.8, 0.9);
+  b.use('metal').box(3.4, 0.03, 0.14, 0x2a2c30, x, 1.5, z, ry + 0.7).box(3.4, 0.03, 0.14, 0x2a2c30, x, 1.5, z, ry - 0.9).cyl(0.06, 0.06, 0.25, 0x2a2c30, x, 1.25, z, 6)
+    .box(1.6, 0.05, 0.06, PAL.steel, x - 0.4 * s, 0.06, z - 0.4 * c, ry).box(1.6, 0.05, 0.06, PAL.steel, x + 0.4 * s, 0.06, z + 0.4 * c, ry); b.m = pm; }
+function mFireAir(b, W) {
+  lot(b, W, 0x9da08f);
+  b.use('asphalt').box(5.2, 0.07, 5.2, 0x4a4d52, -2.6, 0.06, 2.6);
+  for (const [x, z] of [[-4.0, 1.4], [-1.2, 4.0]]) { b.use('plain').cyl(1.15, 1.15, 0.02, 0xd9a933, x, 0.13, z, 24).cyl(1.0, 1.0, 0.025, 0x4a4d52, x, 0.135, z, 24).box(0.18, 0.03, 1.0, PAL.white, x - 0.3, 0.15, z).box(0.18, 0.03, 1.0, PAL.white, x + 0.3, 0.15, z).box(0.6, 0.03, 0.16, PAL.white, x, 0.15, z); heli(b, x, z, 0.4); }
+  b.use('metal').box(5.4, 3.0, 4.4, 0xc9cfd4, 2.6, 0, -2.4); b.add(new THREE.CylinderGeometry(2.2, 2.2, 5.4, 16, 1, false, 0, Math.PI), 0xb4bcc4, 2.6, 3.0, -2.4, 0, 0, Math.PI / 2);
+  b.use('paint').box(4.2, 2.6, 0.06, 0xc8372d, 2.6, 0, -0.18);
+  b.facade('office', 2, 1.4, 2.6, 2.0, 0xe2e4e2, -3.4, 0, -3.6).parapet(2.6, 2.0, 2.8, 0xb8251f, -3.4, -3.6).use('glass').box(1.2, 0.9, 1.2, 0x8fb0c4, -3.4, 2.8, -3.6).use('plain').box(1.4, 0.1, 1.4, PAL.white, -3.4, 3.7, -3.6);
+  b.use('metal').cyl(1.1, 1.1, 3.2, 0xd8dde2, 3.6, 0, 3.4, 18).cyl(0.25, 0.25, 0.3, PAL.steel, 3.6, 3.2, 3.4, 8);
+  truck(b, 1.2, 2.6, Math.PI / 2);
+}
+function mTram() {
+  const b = new GB();
+  b.use('paint').box(5.2, 0.95, 0.95, 0xc8372d, 0, 0.22, 0).box(5.22, 0.35, 0.97, 0xf0e8d8, 0, 0.22, 0).use('glass').box(5.24, 0.42, 0.98, 0x2b3642, 0, 0.66, 0)
+    .use('plain').box(4.8, 0.14, 0.7, 0xd8d6d0, 0, 1.17, 0).use('metal').box(0.6, 0.04, 0.05, 0x2a2c30, 0.2, 1.62, 0).box(0.04, 0.34, 0.04, 0x2a2c30, 0.2, 1.3, 0);
+  b.use('plain'); for (const x of [-1.9, 0, 1.9]) b.box(0.6, 0.2, 0.8, 0x2a2c30, x, 0.04, 0);
   return b.geo();
 }

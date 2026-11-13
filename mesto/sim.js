@@ -36,7 +36,7 @@ function newGame(o) {
     opts: { size: o.size, tech: o.tech, crisis: o.crisis, wars: o.wars, elections: o.elections },
     tax: { R: 9, C: 9, I: 9, O: 9 }, lastTax: 36,
     bud: { police: 100, fire: 100, health: 100, edu: 100, transit: 100, army: 100, parks: 100 },
-    techs: {}, research: null, rp: 0, pol: {},
+    techs: {}, research: null, rq: [], rp: 0, resFund: 0, pol: {},
     stock: { food: 600, goods: 400, tech: 50, fuel: 500 }, price: {}, auto: { food: 'sell', goods: 'sell', tech: 'sell', fuel: 'keep' },
     reserve: { food: 300, goods: 200, tech: 50, fuel: 600 }, tradeUsed: 0, short: {},
     happy: 62, approval: 62, crime: 8, radical: 8, armyLoy: 62, freedom: 85, health: 80,
@@ -45,7 +45,7 @@ function newGame(o) {
     inc: [], incN: 1, asks: [], log: [], hist: [], last: null,
     heat: 0, recession: 0, floodEv: null, epi: null, spills: [], bankrupt: 0, over: null, tips: {},
   });
-  techs.forEach(t => { S.techs[t] = true; });
+  techs.forEach(t => { S.techs[t] = true; }); fxReset();
   for (const g of GOOD_KEYS) S.price[g] = GOODS[g].price;
   for (const b of blds.values()) b.built = 1;
   connDirty = true; covDirty = true;
@@ -67,11 +67,13 @@ function computeWaterDist() {
 // ---------- stavění (volá rozhraní) ----------
 function canAfford(c) { return S.money >= c; }
 function spend(c) { S.money -= c; }
-function buildRoad(x, y) {
-  const k = idx(x, y); if (road[k] || bld[k]) return 0;
-  const c = ter[k] === 1 ? BRIDGE_COST : ROAD_COST + (lvl[k] ? DEMOLISH_COST : 0);
+function roadCost(k, rt) { const R = ROADS[rt]; return ter[k] === 1 ? BRIDGE_COST * Math.max(1, R.cost / 3000) : R.cost + (lvl[k] ? DEMOLISH_COST : 0); }
+function buildRoad(x, y, rt) {
+  rt = rt || 1; const k = idx(x, y); if (road[k] === rt || bld[k]) return 0;
+  if (ROADS[rt].req && !S.techs[ROADS[rt].req]) return -2;
+  const c = roadCost(k, rt) * (road[k] ? 0.7 : 1);
   if (!canAfford(c)) return -1;
-  spend(c); clearTile(k); road[k] = 1; markDirty(k); connDirty = true;
+  spend(c); clearTile(k); road[k] = rt; markDirty(k); connDirty = true;
   for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inb(x + dx, y + dy)) markDirty(idx(x + dx, y + dy));
   return c;
 }
@@ -90,7 +92,7 @@ function servProblem(type, x, y) {
   if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
   if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
   for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
-  if (d.coast && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
+  if (d.coast && !nearWater(x, y, d.size, 1)) return d.name + ' musí stát hned u vody.';
   if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
   let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
   if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
@@ -102,7 +104,7 @@ function placeServ(type, x, y) {
   if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
   if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
   for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
-  if (d.coast && !nearWater(x, y, d.size, 1)) return 'Přístav musí stát hned u vody.';
+  if (d.coast && !nearWater(x, y, d.size, 1)) return d.name + ' musí stát hned u vody.';
   if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
   let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
   if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
@@ -122,7 +124,7 @@ function demolish(x, y) {
 }
 
 // ---------- rozbor města (každých 5 dní) ----------
-const tmpA = new Float32Array(NN), tmpB = new Float32Array(NN);
+const tmpA = new Float32Array(NN), tmpB = new Float32Array(NN), roadLv = new Float32Array(NN);
 function blur(src, dst, r, passes) {
   let a = src, b = tmpB;
   for (let p = 0; p < passes; p++) {
@@ -133,16 +135,16 @@ function blur(src, dst, r, passes) {
     a = dst;
   }
 }
-const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', barracks: 'army', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
+const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', firevol: 'fire', firehq: 'fire', fireair: 'fire', techpark: 'edu', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', barracks: 'army', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
 const budF = cat => cat ? 0.35 + 0.65 * S.bud[cat] / 100 : 1;
 function computeCoverage() {
   for (const c of Object.values(cov)) c.fill(0);
   for (const b of blds.values()) {
     const d = SERV[b.type]; b.ok = b.built >= 1 && hasRoadAccess(b) && !(b.off > 0);
     if (!b.ok || !d.r) continue;
-    const key = d.police ? 'police' : b.type === 'fire' ? 'fire' : d.cat === 'health' ? 'health' : d.edu ? 'edu' : d.park ? 'park' : d.transit ? 'transit' : null;
+    const key = d.police ? 'police' : d.fireStr ? 'fire' : d.cat === 'health' ? 'health' : d.edu ? 'edu' : d.park ? 'park' : d.transit ? 'transit' : null;
     if (!key) continue;
-    const r = d.r * (b.type === 'bus' && S.techs.bus ? 1.3 : 1), str = (d.edu || d.park || d.transit || 1) * budF(BUD_OF[b.type]);
+    const r = d.r * (b.type === 'bus' && S.techs.bus ? 1.3 : 1) * (key === 'fire' ? 1 + tfx('fireRange') : key === 'health' ? 1 + tfx('healthRange') : 1), str = (d.fireStr || d.edu || d.park * (1 + tfx('parkEff')) || d.transit * (1 + tfx('transitEff')) || 1) * budF(BUD_OF[b.type]);
     const cx = b.x + b.size / 2 - 0.5, cy = b.y + b.size / 2 - 0.5, R = Math.ceil(r + b.size);
     for (let y = Math.max(0, Math.floor(cy - R)); y <= Math.min(N - 1, Math.ceil(cy + R)); y++) for (let x = Math.max(0, Math.floor(cx - R)); x <= Math.min(N - 1, Math.ceil(cx + R)); x++) {
       const dd = Math.max(0, Math.hypot(x - cx, y - cy) - b.size / 2); if (dd > r) continue;
@@ -150,6 +152,9 @@ function computeCoverage() {
       m[k] = key === 'park' ? Math.min(1.5, m[k] + v) : Math.max(m[k], v);
     }
   }
+  // tramvajové tratě vozí lidi z okolí
+  const tb = budF('transit') * (1 + tfx('transitEff'));
+  for (let k = 0; k < NN; k++) if (road[k] === 4 && conn[k]) { const x = k % N, y = (k / N) | 0; for (let j = y - 3; j <= y + 3; j++) for (let i = x - 3; i <= x + 3; i++) if (inb(i, j)) { const t = idx(i, j), v = 0.7 * tb * (1 - Math.hypot(i - x, j - y) / 4.5); if (v > cov.transit[t]) cov.transit[t] = v; } }
 }
 function analysis() {
   if (connDirty) { computeConn(); connDirty = false; covDirty = true; }
@@ -168,23 +173,23 @@ function analysis() {
   // služby, energie, voda, odpad
   let pCap = 0, wCap = 0, gCap = 0, sCap = 0, trade = BASE_TRADE, store = BASE_STORE, officers = 0, army = 0, rp = 0, fuelUse = 0, intel = 0, tour = 0, stadium = 0;
   const winter = monthOf(S.day) === 11 || monthOf(S.day) <= 1, wind = 0.6 + 0.5 * Math.abs(Math.sin(S.day * 0.13));
-  const fuelOk = S.short && S.short.fuel ? 0.5 : 1;
+  const fuelOk = S.short && S.short.fuel ? 0.5 : 1; T.rpGov = 0;
   for (const b of blds.values()) {
     const d = SERV[b.type]; if (!b.ok) continue;
     const off = b.flooded || b.fire > 0;
-    if (d.power && !off) { let p = d.power; if (b.type === 'wind') p *= wind; if (b.type === 'solar') p *= winter ? 0.55 : 1.05; if (d.fuel) p *= fuelOk; pCap += p; b.out = p; }
+    if (d.power && !off) { let p = d.power * (1 + tfx('powerOut')); if (b.type === 'wind') p *= wind; if (b.type === 'solar') p *= winter ? 0.55 : 1.05; if (b.type === 'wind' || b.type === 'solar' || b.type === 'hydro') p *= 1 + tfx('renewOut'); if (d.fuel) p *= fuelOk; pCap += p; b.out = p; }
     if (d.water && b.type === 'pump' && !off) wCap += d.water * (nearWater(b.x, b.y, 1, 2) ? 1.5 : 1);
     if (d.garbage) gCap += d.garbage; if (d.sewage) sCap += d.sewage; if (d.trade) trade += d.trade; if (d.store) store += d.store;
     if (d.police) officers += d.police * budF('police'); if (d.army) army += d.army; if (d.rp) rp += d.rp * budF('edu');
-    if (b.type === 'intel') intel += budF('police'); if (d.tourism) tour += 3; if (b.type === 'stadium') stadium++;
+    if (b.type === 'townhall' && !b.off) T.rpGov = 3; if (b.type === 'intel') intel += budF('police'); if (d.tourism) tour += 3; if (b.type === 'stadium') stadium++;
   }
-  if (S.techs.logistics) trade *= 1.3;
+  if (S.techs.logistics) trade *= 1.3; trade *= 1 + tfx('trade'); intel *= 1 + tfx('intel');
   const k_s = S.techs.smartgrid ? 0.85 : 1;
-  const pDem = (pop * PW_RES + jobs * PW_JOB) * k_s * (S.heat > 0 ? 1.2 : 1), wDem = (pop * WT_RES + jobs * WT_JOB) * k_s * (S.heat > 0 ? 1.35 : 1);
+  const pDem = (pop * PW_RES + jobs * PW_JOB) * k_s * (S.heat > 0 ? 1.2 : 1) * (1 + tfx('powerDemand')), wDem = (pop * WT_RES + jobs * WT_JOB) * k_s * (S.heat > 0 ? 1.35 : 1) * (1 + tfx('waterDemand'));
   // palivo: elektrárny jedou jen na potřebný výkon
   const load = pCap > 0 ? Math.min(1, pDem / pCap) : 0;
   for (const b of blds.values()) if (b.ok && SERV[b.type].fuel && b.out) fuelUse += b.out * load * SERV[b.type].fuel;
-  Object.assign(T, { pCap, pDem, wCap, wDem, gCap, gDem: pop + jobs * 0.5, sCap, sDem: pop, trade, store, officers, army, rp, fuelUse, intel, tour, stadium });
+  Object.assign(T, { pCap, pDem, wCap, wDem, gCap, gDem: (pop + jobs * 0.5) * (1 + tfx('garbage')), sCap, sDem: pop, trade, store, officers, army, rp, fuelUse, intel, tour, stadium });
   T.pRatio = pDem > 0 ? Math.min(1, pCap / pDem) : (pCap > 0 ? 1 : 0);
   T.wRatio = wDem > 0 ? Math.min(1, wCap / wDem) : (wCap > 0 ? 1 : 0);
   for (let k = 0; k < NN; k++) {
@@ -195,12 +200,12 @@ function analysis() {
   }
   // znečištění
   tmpA.fill(0);
-  const pk = (S.techs.filters ? 0.65 : 1) * (S.pol.ecolaw ? 0.7 : 1);
+  const pa = tfx('polAll'), pk = (S.techs.filters ? 0.65 : 1) * (S.pol.ecolaw ? 0.7 : 1) * (1 + tfx('polInd') + pa), pp = (S.techs.filters ? 0.65 : 1) * (S.pol.ecolaw ? 0.7 : 1) * (1 + tfx('polPower') + pa), pt = 1 + tfx('polTraffic') + pa;
   for (let k = 0; k < NN; k++) {
     if (isBuilt(k) && zone[k] === 3) tmpA[k] += (dens[k] ? 7 : 4) * lvl[k] * (spec[k] === 2 ? 0.25 : 1) * pk;
-    if (road[k]) tmpA[k] += traf[k] * 3;
+    if (road[k]) tmpA[k] += (traf[k] * 3 + (ROADS[road[k]].poll || 0)) * pt;
   }
-  for (const b of blds.values()) { const d = SERV[b.type]; if (!d.poll || !b.ok) continue; const p = d.poll * (d.power ? pk : 1) / (b.size * b.size); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) tmpA[idx(i, j)] += p * 4; }
+  for (const b of blds.values()) { const d = SERV[b.type]; if (!d.poll || !b.ok) continue; const p = d.poll * (d.power ? pp : 1) / (b.size * b.size); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) tmpA[idx(i, j)] += p * 4; }
   if (T.gCap < T.gDem) { const over = (T.gDem - T.gCap) / Math.max(1, T.gDem); for (let k = 0; k < NN; k++) if (isBuilt(k)) tmpA[k] += over * 6; }
   for (const s of S.spills) for (let j = s.y - 4; j <= s.y + 4; j++) for (let i = s.x - 4; i <= s.x + 4; i++) if (inb(i, j)) tmpA[idx(i, j)] += 30;
   blur(tmpA, poll, 2, 2);
@@ -210,23 +215,28 @@ function analysis() {
   for (let k = 0; k < NN; k++) if (isBuilt(k)) tmpA[k] = occ[k];
   blur(tmpA, tmpB.length ? lv : lv, 3, 1);         // dočasně do lv, přepíše se níž
   const tr = (S.pol.freebus ? 0.82 : 1);
-  let trafSum = 0, roads = 0;
+  let trafSum = 0, roads = 0, roadUp = 0; const capK = 1 + tfx('trafficCap');
   for (let k = 0; k < NN; k++) {
     if (!road[k]) { traf[k] = 0; continue; }
-    roads++; traf[k] = clamp(lv[k] / 26 * (1 - cov.transit[k] * 0.45) * tr, 0, 2); trafSum += traf[k];
+    const R = ROADS[road[k]] || ROADS[1]; roads++; roadUp += R.up * (ter[k] === 1 ? 3 : 1);
+    traf[k] = clamp(lv[k] / 26 * (1 - cov.transit[k] * 0.45) * tr / (R.cap * capK), 0, 2); trafSum += traf[k];
   }
-  T.roads = roads; T.traffic = roads ? trafSum / roads : 0;
+  T.roads = roads; T.roadUp = roadUp; T.traffic = roads ? trafSum / roads : 0;
+  // vliv druhů silnic na cenu pozemků okolo
+  roadLv.fill(0);
+  for (let k = 0; k < NN; k++) { if (!road[k]) continue; const R = ROADS[road[k]]; if (!R || !R.lv) continue; const x = k % N, y = (k / N) | 0, rr = R.lv > 8 ? 2 : 1;
+    for (let j = y - rr; j <= y + rr; j++) for (let i = x - rr; i <= x + rr; i++) if (inb(i, j)) { const t = idx(i, j); roadLv[t] = R.lv < 0 ? Math.min(roadLv[t], R.lv) : Math.max(roadLv[t], R.lv); } }
   // centrum = radnice
   let hx = W.cx, hy = W.cy; for (const b of blds.values()) if (b.type === 'townhall') { hx = b.x + 1; hy = b.y + 1; }
   // cena pozemků, kriminalita, spokojenost
-  const polF = (S.techs.forensics ? 1.25 : 1) * Math.min(1.2, T.officers / Math.max(1, pop / 450)) * (S.martial > 0 ? 1.6 : 1);
-  const crimeMul = (S.pol.patrols ? 0.8 : 1) * (S.pol.cameras ? 0.85 : 1) * (S.pol.youth ? 0.9 : 1) * (S.pol.gunlaw ? 0.92 : 1);
+  const polF = (S.techs.forensics ? 1.25 : 1) * (1 + tfx('police')) * Math.min(1.2, T.officers / Math.max(1, pop / 450)) * (S.martial > 0 ? 1.6 : 1);
+  const crimeMul = (1 + tfx('crime')) * (S.pol.patrols ? 0.8 : 1) * (S.pol.cameras ? 0.85 : 1) * (S.pol.youth ? 0.9 : 1) * (S.pol.gunlaw ? 0.92 : 1);
   let crS = 0, crW = 0, hpS = 0, hpW = 0, polS = 0;
   for (let k = 0; k < NN; k++) {
     const x = k % N, y = (k / N) | 0;
     let nearTraf = 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inb(x + dx, y + dy)) nearTraf = Math.max(nearTraf, traf[idx(x + dx, y + dy)]);
     const center = Math.max(0, 22 - Math.hypot(x - hx, y - hy) * 0.6);
-    let v = 22 + Math.min(1.2, cov.park[k]) * 30 + (wdist[k] <= 3 ? 12 - wdist[k] * 3 : 0) + center + cov.transit[k] * 10 + (cov.health[k] + cov.edu[k] + cov.police[k]) * 4
+    let v = 22 + tfx('landValue') + roadLv[k] + Math.min(1.2, cov.park[k]) * 30 + (wdist[k] <= 3 ? 12 - wdist[k] * 3 : 0) + center + cov.transit[k] * 10 + (cov.health[k] + cov.edu[k] + cov.police[k]) * 4
       - poll[k] * 0.55 - crime[k] * 0.25 - Math.max(0, nearTraf - 0.7) * 10 - (flood[k] ? 15 : 0);
     lv[k] = clamp(v, 0, 100);
     if (!isBuilt(k) || zone[k] === 3) { crime[k] *= 0.9; continue; }
@@ -235,7 +245,7 @@ function analysis() {
     if (zone[k] === 1) {
       const h = 52 + cov.health[k] * 10 + cov.edu[k] * 7 + Math.min(1, cov.police[k]) * 6 + Math.min(1, cov.park[k]) * 9 + lv[k] * 0.12 - poll[k] * 0.35 - crime[k] * 0.3 - Math.max(0, nearTraf - 0.8) * 8 - (pw[k] ? 0 : 15) - (wt[k] ? 0 : 15);
       hap[k] = clamp(h, 0, 100); hpS += hap[k] * occ[k]; hpW += occ[k];
-      eduT[k] = lerp(eduT[k], Math.min(1, cov.edu[k]), 0.04);
+      eduT[k] = lerp(eduT[k], Math.min(1, cov.edu[k]), 0.04 * (1 + tfx('eduGain')));
       polS += poll[k] * occ[k];
     }
   }
@@ -243,7 +253,7 @@ function analysis() {
   // zdraví
   let hs = 0; for (let k = 0; k < NN; k++) if (zone[k] === 1 && isBuilt(k)) hs += Math.min(1, cov.health[k]) * occ[k];
   const sewOk = pop < 8000 ? 1 : Math.min(1, T.sCap / pop);
-  T.healthT = clamp((pop ? hs / pop : 0.8) * 60 + sewOk * 25 + 15 + Math.max(0, 1 - pop / 4000) * 30 - T.pollR * 0.3 - (S.epi ? S.epi.sick * 300 : 0), 0, 100);
+  T.healthT = clamp((pop ? hs / pop : 0.8) * 60 + sewOk * 25 + 15 + tfx('health') + Math.max(0, 1 - pop / 4000) * 30 - T.pollR * 0.3 - (S.epi ? S.epi.sick * 300 : 0), 0, 100);
   // svoboda a globální nálada
   let fr = 100; for (const p in S.pol) if (S.pol[p] && POLICY_FREEDOM[p]) fr += POLICY_FREEDOM[p]; if (S.martial > 0) fr -= 30;
   T.freedomT = clamp(fr, 0, 100);
@@ -254,9 +264,9 @@ function analysis() {
   const Ct = pop * 0.2, Ot = pop * 0.22 * T.eduRate, It = Math.max(pop * 0.12, work - Ct - Ot), free = (work * 1.03 - jobsCap) / (work + 300);
   T.dem = {
     1: clamp(0.7 * (jobsCap * 0.97 - work) / (work + 300) + (S.happy - 50) / 110 - tx('R') + (pop < 300 ? 0.4 : 0) - (S.short.food ? 0.3 : 0), -1, 1),
-    2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
+    2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) + tfx('comDem') - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
     3: clamp(0.5 * (It - cap[3]) / (cap[3] + 150) + 0.6 * free + (pop > 0 && pop < 300 ? 0.3 : 0) - tx('I') - (S.pol.ecolaw ? 0.15 : 0) - (S.pol.minwage ? 0.08 : 0) - rec * 0.25, -1, 1),
-    4: clamp(0.5 * (Ot - cap[4]) / (cap[4] + 150) + 0.6 * free - tx('O') + (S.pol.bizsupport ? 0.15 : 0) + (S.techs.banking ? 0.1 : 0) - rec * 0.2 - (S.short.tech ? 0.25 : 0), -1, 1),
+    4: clamp(0.5 * (Ot - cap[4]) / (cap[4] + 150) + 0.6 * free - tx('O') + (S.pol.bizsupport ? 0.15 : 0) + (S.techs.banking ? 0.1 : 0) + tfx('officeDem') - rec * 0.2 - (S.short.tech ? 0.25 : 0), -1, 1),
   };
   if (pop < 30) { T.dem[2] = Math.min(T.dem[2], 0); T.dem[4] = Math.min(T.dem[4], 0); }
   // pozvolný posun nálad
@@ -264,11 +274,11 @@ function analysis() {
   S.crime = lerp(S.crime, T.crimeT, 0.25);
   S.freedom = lerp(S.freedom, T.freedomT, 0.3);
   S.health = lerp(S.health, T.healthT, 0.25);
-  const apT = clamp(S.happy + S.mood + (S.techs.egov ? 3 : 0) - S.repress * 1.5, 0, 100);
+  const apT = clamp(S.happy + S.mood + tfx('approval') + (S.techs.egov ? 3 : 0) - S.repress * 1.5, 0, 100);
   S.approval = lerp(S.approval, apT, 0.08);
   const radT = clamp(6 + T.unemp * 70 + Math.max(0, 55 - S.happy) * 0.45 + Math.max(0, 75 - S.freedom) * 0.35 + S.repress * 2 - (S.pol.integration ? 10 : 0) - (S.pol.youth ? 4 : 0) - T.eduRate * 10 - Math.min(1, T.intel) * 6 + (S.pol.censorship ? 6 : 0), 0, 100);
-  S.radical = lerp(S.radical, radT, 0.04);
-  if (T.army > 0) { const loyT = clamp(55 + (S.bud.army - 100) * 0.5 + (S.approval - 50) * 0.3 + (S.pol.armypay ? 15 : 0) - S.armyGrudge + S.glory, 0, 100); S.armyLoy = lerp(S.armyLoy, loyT, 0.05); }
+  S.radical = lerp(S.radical, radT * (1 + tfx('radical')), 0.04);
+  if (T.army > 0) { const loyT = clamp(55 + (S.bud.army - 100) * 0.5 + (S.approval - 50) * 0.3 + (S.pol.armypay ? 15 : 0) + tfx('armyLoy') - S.armyGrudge + S.glory, 0, 100); S.armyLoy = lerp(S.armyLoy, loyT, 0.05); }
 }
 function happyMods() {
   const m = [];
@@ -285,6 +295,7 @@ function happyMods() {
   const p = S.pol;
   const pol = (p.freebus ? 4 : 0) + (p.minwage ? 4 : 0) + (p.youth ? 1 : 0) - (p.curfew ? 8 : 0) - (p.censorship ? 3 : 0) - (p.noprotest ? 4 : 0) - (p.cameras ? 2 : 0) - (p.gunlaw ? 1 : 0) - (p.quarantine ? 5 : 0);
   if (pol) m.push(['Vyhlášky', pol]);
+  if (tfx('happy')) m.push(['Výzkum', tfx('happy')]);
   if (T.stadium) m.push(['Stadion', 4]);
   if (S.martial > 0) m.push(['Vojáci v ulicích', -6]);
   if (S.nb.some(n => n.war)) m.push(['Válka', -5]);
@@ -322,7 +333,7 @@ function growTile(k) {
   const top = dens[k] ? (S.techs.skyscraper ? 5 : 4) : 3;
   const need = lvl[k] < top ? LV_NEED[dens[k]][lvl[k] + 1] : 999;
   const eduOk = z !== 4 || lvl[k] < 1 || T.eduRate > 0.22 + lvl[k] * 0.07;
-  if (D > 0 && lvl[k] < top && lv[k] >= need && eduOk && chance(0.1 + D * 0.45)) {
+  if (D > 0 && lvl[k] < top && lv[k] >= need && eduOk && chance((0.1 + D * 0.45) * (1 + tfx('growth')))) {
     lvl[k]++; vari[k] = (vari[k] + 37) & 255; sty[k] = styleFor(k);
     if (lvl[k] === 1 && z === 3) spec[k] = S.techs.hightech && T.eduRate > 0.35 && chance(0.3) ? 2 : chance(0.35) ? 1 : 0;
     markDirty(k); FX.push({ t: 'grow', k });
@@ -347,7 +358,7 @@ function styleFor(k) {
 }
 const strikeOn = z => S.inc.some(i => i.type === 'strike' && i.zone === z);
 function fireRate(k) {
-  let r = 1.3e-5 * 6 * (zone[k] === 3 ? 2 : 1) * (1 + lvl[k] * 0.15) * (S.techs.firecode ? 0.6 : 1) * (S.heat > 0 ? 3 : 1) * CRK();
+  let r = 1.3e-5 * 6 * (zone[k] === 3 ? 2 : 1) * (1 + lvl[k] * 0.15) * (S.techs.firecode ? 0.6 : 1) * (S.pol.firesafety ? 0.75 : 1) * (1 + tfx('fireRisk')) * (S.heat > 0 ? 3 : 1) * CRK();
   return r * (1 - Math.min(1, cov.fire[k]) * 0.5);
 }
 const CRK = () => CRISIS_LEVELS[S.opts.crisis].k;
@@ -356,7 +367,7 @@ const CRK = () => CRISIS_LEVELS[S.opts.crisis].k;
 function igniteTile(k, quiet) {
   if (fire[k] || !lvl[k] || ruin[k] || road[k]) return false;
   fire[k] = 1; markDirty(k);
-  if (!quiet) note('Hoří ' + tileName(k) + '.', 'bad', k);
+  if (!quiet) note('Hoří ' + tileName(k) + '.' + (cov.fire[k] > 0.05 ? ' Hasiči vyjíždějí.' : ' Žádní hasiči nejsou v dosahu!'), 'bad', k);
   FX.push({ t: 'firetruck', k });
   return true;
 }
@@ -366,10 +377,10 @@ function tileName(k) {
 }
 function firesDay() {
   const burning = []; for (let k = 0; k < NN; k++) if (fire[k]) burning.push(k);
-  const fb = budF('fire');
+  const fe = (1 + tfx('fireEff')) * (0.45 + 0.55 * (T.wRatio || 0));   // hasiči bez vody nezmůžou nic
   for (const k of burning) {
-    const x = k % N, y = (k / N) | 0, c = Math.min(1, cov.fire[k] * fb);
-    if (chance(c * 0.5 + (S.techs.firecode ? 0.08 : 0))) { fire[k] = 0; markDirty(k); continue; }
+    const x = k % N, y = (k / N) | 0, c = Math.min(1, cov.fire[k] * fe);
+    if (chance(c * 0.55 + (S.techs.firecode ? 0.08 : 0))) { fire[k] = 0; markDirty(k); if (c > 0.2) note('Hasiči uhasili ' + tileName(k) + '.', 'good', k); continue; }
     fire[k]++;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (!inb(nx, ny)) continue; const n = idx(nx, ny); if (chance(0.11 * (1 - c * 0.8) * (S.heat > 0 ? 1.6 : 1))) igniteTile(n, true); }
     if (fire[k] > 5 + (k % 4)) destroyTile(k, 'shořela');
@@ -570,7 +581,7 @@ function floodDay() {
     for (const b of blds.values()) { let w = false; for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) if (flood[idx(i, j)]) w = true; b.flooded = w; }
     covDirty = true;
   }
-  for (let k = 0; k < NN; k++) if (flood[k] && lvl[k] && chance(0.02 * (f.sand ? 0.6 : 1))) { destroyTile(k); }
+  for (let k = 0; k < NN; k++) if (flood[k] && lvl[k] && chance(0.02 * (f.sand ? 0.6 : 1) * (1 + tfx('flood')))) { destroyTile(k); }
   if (f.day >= f.len) {
     for (let k = 0; k < NN; k++) if (flood[k]) { flood[k] = 0; markDirty(k); }
     for (const b of blds.values()) b.flooded = false;
@@ -580,7 +591,7 @@ function floodDay() {
 }
 function epiDay() {
   const e = S.epi; if (!e) return;
-  const beta = 0.17 * (1.45 - S.health / 100) * (S.techs.vaccines ? 0.6 : 1) * (S.pol.quarantine ? 0.55 : 1) * (e.campaign > 0 ? (S.techs.vaccines ? 0.45 : 0.75) : 1);
+  const beta = 0.17 * (1.45 - S.health / 100) * (1 + tfx('epidemic')) * (S.techs.vaccines ? 0.6 : 1) * (S.pol.quarantine ? 0.55 : 1) * (e.campaign > 0 ? (S.techs.vaccines ? 0.45 : 0.75) : 1);
   const inf = beta * e.sick * Math.max(0, 1 - e.sick - e.imm), rec = 0.08 * e.sick;
   e.sick = clamp(e.sick + inf - rec, 0, 0.5); e.imm = Math.min(0.95, (e.imm || 0) + rec); if (e.campaign > 0) e.campaign--;
   const dead = T.pop * e.sick * 0.0015 * (1.2 - Math.min(1, S.health / 100));
@@ -596,14 +607,15 @@ function monthly() {
   const hall = [...blds.values()].some(b => b.type === 'townhall' && b.ok && !(b.off > 0));
   const coll = hall ? 1 : 0.4;
   const inc = {
-    R: pop * S.tax.R * TAXK.R * coll, C: T.fil[2] * S.tax.C * TAXK.C * coll, I: T.fil[3] * S.tax.I * TAXK.I * coll, O: T.fil[4] * S.tax.O * TAXK.O * coll,
+    R: pop * S.tax.R * TAXK.R * coll, C: T.fil[2] * S.tax.C * TAXK.C * coll, I: T.fil[3] * S.tax.I * TAXK.I * coll, O: T.fil[4] * S.tax.O * TAXK.O * coll * (1 + tfx('officeTax')),
     power: Math.max(0, T.pCap - T.pDem) * 25, tourism: S.techs.tourism ? (T.tour + T.stadium * 2 + sumPark()) * 9000 : 0,
   };
   if (blds.size && [...blds.values()].some(b => b.type === 'recycle' && b.ok)) inc.recycle = 40000;
-  const exp = { services: 0, admin: pop * (6 + pop / 15000), roads: T.roads * ROAD_UP, policies: 0, loan: S.loan * (S.techs.banking ? 0.005 : 0.008) };
+  const exp = { services: 0, admin: pop * (6 + pop / 15000), roads: T.roadUp, research: S.resFund || 0, policies: 0, loan: S.loan * (S.techs.banking ? 0.005 : 0.008) };
   const byCat = {};
   for (const b of blds.values()) { const d = SERV[b.type], c = BUD_OF[b.type], u = d.up * (c ? S.bud[c] / 100 : 1) * (b.built < 1 ? 0.3 : 1); exp.services += u; byCat[d.cat] = (byCat[d.cat] || 0) + u; }
   if (S.techs.egov) exp.services *= 0.95;
+  exp.services *= 1 + tfx('upkeep');
   for (const p in S.pol) if (S.pol[p]) exp.policies += POLICIES[p].cost * pop / 1000;
   const trade = monthlyTrade();
   const tIn = Object.values(inc).reduce((a, b) => a + b, 0), tOut = Object.values(exp).reduce((a, b) => a + b, 0);
@@ -611,9 +623,16 @@ function monthly() {
   S.last = { inc, exp, byCat, trade, net: tIn - tOut + trade.net, day: S.day };
   if (!hall && pop > 0) note([...blds.values()].some(b => b.type === 'townhall') ? 'Radnice nefunguje, vybíráš jen 40 % daní.' : 'Ve městě chybí radnice, vybíráš jen 40 % daní. Postav ji v záložce Správa.', 'bad');
   // výzkum
-  const rp = T.rp + T.fil[4] * 0.003;
-  if (S.research) { S.rp += rp; const t = TECHS[S.research]; if (S.rp >= t.cost) { S.techs[S.research] = true; note('Vyzkoumáno: ' + t.name + '. ' + t.desc, 'good'); S.rp -= t.cost; S.research = null; covDirty = true; } }
-  else S.rp = Math.min(S.rp + rp, 400);
+  const rp = researchRate();
+  S.rp += rp;
+  if (!S.research && S.rq && S.rq.length) S.research = S.rq.shift();
+  while (S.research && S.rp >= TECHS[S.research].cost) {
+    const t = TECHS[S.research]; S.techs[S.research] = true; fxReset(); S.rp -= t.cost;
+    note('Vyzkoumáno: ' + t.name + '. ' + (t.u ? 'Odemyká: ' + t.u + '. ' : '') + [t.desc].concat(fxText(t.fx)).join(' '), 'good');
+    S.research = null; covDirty = true;
+    while (S.rq && S.rq.length && !S.research) { const n = S.rq.shift(); if (!S.techs[n]) S.research = n; }
+  }
+  if (!S.research) S.rp = Math.min(S.rp, 600);
   // vojáci se doplňují
   if (S.soldiers < T.army) S.soldiers = Math.min(T.army, S.soldiers + T.army * 0.08); else S.soldiers = T.army;
   // ceny na trhu
@@ -622,6 +641,7 @@ function monthly() {
   if (S.recession > 0 && --S.recession === 0) note('Hospodářská krize odeznívá.', 'good');
   S.tradeUsed = 0;
   // bankrot
+  if (S.money < 0 && S.resFund) { S.resFund = 0; note('Pokladna je prázdná, grant na výzkum byl zastaven.', 'bad'); }
   if (S.money < -3000000) { S.bankrupt++; note('Město je hluboko v mínusu. Když dluh potrvá, převezme město nucená správa.', 'bad'); if (S.bankrupt >= 4) return gameOver('bankrot'); } else S.bankrupt = 0;
   monthlyEvents(m);
   neighborsMonthly();
@@ -633,7 +653,7 @@ function monthly() {
 function sumPark() { let s = 0; for (const b of blds.values()) if (b.ok && SERV[b.type].park) s += SERV[b.type].size; return s; }
 function tradeCapLeft() { return Math.max(0, T.trade - S.tradeUsed); }
 function monthlyTrade() {
-  const prod = { food: T.prodI[1] * 0.2, goods: T.prodI[0] * 0.12, tech: T.prodI[2] * 0.05, fuel: 0 };
+  const pm = 1 + tfx('prod'), prod = { food: T.prodI[1] * 0.2 * pm, goods: T.prodI[0] * 0.12 * pm, tech: T.prodI[2] * 0.05 * pm, fuel: 0 };
   const cons = { food: T.pop * 0.02, goods: T.fil[2] * 0.08, tech: T.fil[4] * 0.03, fuel: T.fuelUse };
   const out = { prod, cons, sold: {}, bought: {}, net: 0, contracts: 0 };
   S.short = {};
@@ -677,8 +697,8 @@ function monthlyEvents(m) {
   if (T.cap[3] > 600 && chance(0.02 * k * (S.techs.filters ? 0.6 : 1))) chemical();
   for (const b of blds.values()) if (b.type === 'nuclear' && b.ok && chance(0.0015 * k)) nuclearAccident(b);
   // společnost
-  if (chance(0.01 * k)) scandal();
-  const pPr = Math.max(0, (50 - S.approval) / 55) * (S.pol.noprotest ? 0.25 : 1) * (S.pol.censorship ? 0.6 : 1) * Math.min(1.5, k);
+  if (chance(0.01 * k * (1 + tfx('scandal')))) scandal();
+  const pPr = (1 + tfx('protest')) * Math.max(0, (50 - S.approval) / 55) * (S.pol.noprotest ? 0.25 : 1) * (S.pol.censorship ? 0.6 : 1) * Math.min(1.5, k);
   if (chance(pPr)) startProtest(grievance());
   const taxNow = S.tax.R + S.tax.C + S.tax.I + S.tax.O;
   if (taxNow - S.lastTax >= 3 && chance(0.4)) startProtest('taxes');
@@ -704,7 +724,7 @@ function startFlood() {
 function quake() {
   const mag = 0.6 + Math.random() * 0.8; let lost = 0, n = 0;
   for (let k = 0; k < NN; k++) {
-    if (isBuilt(k) && chance(0.035 * mag * (0.5 + lvl[k] * 0.25) * (S.techs.seismic ? 0.4 : 1))) { lost += destroyTile(k) || 0; n++; if (chance(0.2)) { const j = k + 1; if (j < NN) igniteTile(j, true); } }
+    if (isBuilt(k) && chance(0.035 * mag * (0.5 + lvl[k] * 0.25) * (S.techs.seismic ? 0.4 : 1) * (1 + tfx('quake')))) { lost += destroyTile(k) || 0; n++; if (chance(0.2)) { const j = k + 1; if (j < NN) igniteTile(j, true); } }
   }
   for (const b of blds.values()) if (chance(0.06 * mag * (S.techs.seismic ? 0.4 : 1))) b.off = 30;
   covDirty = true; S.mood -= 3;
@@ -716,7 +736,7 @@ function storm() {
   const y0 = Math.random() * N, ang = (Math.random() - 0.5) * 1.2; let n = 0;
   for (let x = 0; x < N; x++) { const yc = Math.round(y0 + Math.tan(ang) * x); for (let y = yc - 1; y <= yc + 1; y++) { if (!inb(x, y)) continue; const k = idx(x, y);
     if (ter[k] === 3 && chance(0.4)) { ter[k] = 0; markDirty(k); }
-    if (isBuilt(k) && !dens[k] && chance(0.25)) { destroyTile(k); n++; } } }
+    if (isBuilt(k) && !dens[k] && chance(0.25 * (1 + tfx('storm')))) { destroyTile(k); n++; } } }
   FX.push({ t: 'storm', y0, ang });
   note('Vichřice prošla městem. Zničených budov: ' + n + '.', 'bad');
 }
@@ -899,7 +919,7 @@ function warTarget() {
 }
 function battle(a, n) {
   endInc(a);
-  const def = S.soldiers * budF('army') * (0.4 + S.armyLoy / 160) * (a.intercept ? 1.25 : 0.9) + T.officers * 0.25;
+  const def = S.soldiers * budF('army') * (1 + tfx('army')) * (0.4 + S.armyLoy / 160) * (a.intercept ? 1.25 : 0.9) + T.officers * 0.25;
   const k = idx(a.x, a.y);
   FX.push({ t: 'battle', k });
   if (def * (0.7 + Math.random() * 0.6) > a.size) {
@@ -930,15 +950,29 @@ function advisor() {
   if (T.traffic > 1.1) tip('traffic', 'Silnice jsou ucpané. Pomůže MHD, metro nebo víc souběžných ulic.');
   if (S.radical > 40) tip('radical', 'Radikálů přibývá. Pomáhá práce, vzdělání, integrační programy a tajná služba.');
   if (S.money < 0) tip('money', 'Pokladna je v mínusu. Zvyš daně, uber výdaje nebo si vezmi úvěr.', 60);
-  if (!S.research && Object.keys(S.techs).length < Object.keys(TECHS).length) tip('research', 'Výzkum stojí. Vyber v Rozvoji, co se má zkoumat.', 120);
+  if (!S.research && Object.keys(S.techs).length < Object.keys(TECHS).length) tip('research', 'Výzkum stojí. V záložce Rozvoj vyber, co se má zkoumat, nebo otevři strom výzkumu.', 120);
 }
 
-// ---------- rozhodnutí vedení ----------
-function setResearch(id) {
-  const t = TECHS[id]; if (!t || S.techs[id]) return 'Už vyzkoumáno.';
-  if (t.req && t.req.some(r => !S.techs[r])) return 'Nejdřív vyzkoumej: ' + t.req.filter(r => !S.techs[r]).map(r => TECHS[r].name).join(', ') + '.';
-  S.research = id; return null;
+// ---------- výzkum ----------
+function researchRate() { return (T.rp + (T.rpGov || 0) + (T.pop || 0) / 2500 + T.fil[4] * 0.003 + (S.resFund || 0) / 40000) * (1 + tfx('research')); }
+function techState(id) { if (S.techs[id]) return 'done'; if (S.research === id) return 'cur'; if ((S.rq || []).includes(id)) return 'queued'; return TECHS[id].req.every(r => S.techs[r]) ? 'open' : 'locked'; }
+// zařadí výzkum do fronty i s chybějícími předpoklady ve správném pořadí
+function queueTech(id, first) {
+  S.rq = S.rq || [];
+  const order = [], seen = new Set();
+  const visit = t => { if (seen.has(t) || S.techs[t]) return; seen.add(t); for (const r of TECHS[t].req) visit(r); order.push(t); };
+  visit(id);
+  const add = order.filter(t => t !== S.research);
+  S.rq = S.rq.filter(t => !add.includes(t));
+  if (first) { if (S.research && !add.includes(S.research)) S.rq.unshift(S.research); S.research = null; S.rq = add.concat(S.rq); }
+  else S.rq = S.rq.concat(add);
+  if (!S.research && S.rq.length) S.research = S.rq.shift();
+  return null;
 }
+function unqueueTech(id) { S.rq = (S.rq || []).filter(t => t !== id); if (S.research === id) S.research = S.rq.shift() || null; }
+
+// ---------- rozhodnutí vedení ----------
+function setResearch(id) { if (S.techs[id]) return 'Už vyzkoumáno.'; return queueTech(id, true); }
 const UNPOPULAR = { curfew: 0.5, censorship: 0.45, noprotest: 0.45, cameras: 0.25, gunlaw: 0.15, quarantine: 0.2 };
 function togglePolicy(id) {
   const p = POLICIES[id]; if (p.req && !S.techs[p.req]) return 'Nejdřív vyzkoumej: ' + TECHS[p.req].name + '.';
@@ -973,6 +1007,6 @@ function loadGame(sv) {
   blds.clear(); bld.fill(0);
   for (const b of sv.blds) { blds.set(b.id, b); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) bld[idx(i, j)] = b.id; }
   nextBid = sv.nextBid; Object.assign(W, sv.W);
-  for (const k in S) delete S[k]; Object.assign(S, sv.S);
+  for (const k in S) delete S[k]; Object.assign(S, sv.S); S.rq = S.rq || []; S.resFund = S.resFund || 0; for (const t in S.techs) if (!TECHS[t]) delete S.techs[t]; if (S.research && !TECHS[S.research]) S.research = null; fxReset();
   computeWaterDist(); connDirty = true; covDirty = true; analysis();
 }

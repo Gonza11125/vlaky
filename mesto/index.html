@@ -108,6 +108,51 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); ou
 .tech { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; }
 .tech b { font-weight: 800; } .tech p { grid-column: 1 / 3; margin: 0 !important; font-size: 12.5px; }
 .tech.done { border-color: #bfe5c7; background: #f4fbf5; } .tech.cur { border-color: var(--accent); }
+.tech b .dot, .rs-q .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.tech .eta { color: var(--accent); font-weight: 700; }
+.btn.wide { width: 100%; margin: 10px 0 2px; padding: 9px; }
+.rs-src { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--ink2); margin: 6px 0 0; }
+.rs-src b { color: var(--ink); }
+.rs-fund { display: flex; align-items: center; gap: 10px; } .rs-fund input { flex: 1; accent-color: var(--accent); } .rs-fund b { font: 700 14px var(--display); white-space: nowrap; }
+.hint { font-size: 12px; color: var(--ink2); margin: 2px 0 6px; }
+.rs-q { display: grid; grid-template-columns: 22px auto 1fr auto auto; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--soft); font-size: 13px; }
+.rs-q small { color: var(--ink2); } .rs-q .btn { padding: 2px 9px; }
+.qn { display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 10px; background: var(--accent); color: #fff; font: 700 11.5px var(--display); font-style: normal; }
+.rs-fx { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; } .rs-fx span { background: var(--soft); border-radius: 5px; padding: 2px 7px; font-size: 12px; font-weight: 600; }
+/* strom výzkumu */
+#tree { align-items: stretch; justify-content: stretch; padding: max(10px, env(safe-area-inset-top, 0px)) var(--gr) max(10px, env(safe-area-inset-bottom, 0px)) var(--gl); }
+.treebox { background: var(--paper); border-radius: 10px; box-shadow: 0 20px 50px rgba(20,30,40,.35); width: 100%; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.treebox > header { display: flex; align-items: center; gap: 6px 16px; padding: 10px 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.treebox h2 { font: 800 24px/1.1 var(--display); margin: 0; }
+#tt-sum { flex: 1; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--ink2); } #tt-sum b { color: var(--ink); } #tt-sum .warn { color: var(--bad); font-weight: 700; }
+#tt-wrap { flex: 1; display: flex; min-height: 0; }
+#tt-scroll { flex: 1; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+#tt-grid { position: relative; display: grid; grid-template-columns: 138px repeat(5, 172px); gap: 4px 30px; padding: 0 20px 16px 0; width: max-content; }
+.tt-h { position: sticky; top: 0; z-index: 4; background: var(--paper); font: 700 14px var(--display); padding: 8px 0 6px; border-bottom: 1px solid var(--line); }
+.tt-h small { color: var(--ink2); font-weight: 600; } .tt-corner { left: 0; z-index: 5; }
+.tt-f { position: sticky; left: 0; z-index: 3; background: var(--paper); padding: 6px 8px 6px 12px; font: 700 14px/1.15 var(--display); border-left: 5px solid; display: flex; align-items: center; box-shadow: 8px 0 8px -6px rgba(20,30,40,.12); }
+.tt-c { display: flex; flex-direction: column; gap: 6px; justify-content: center; padding: 8px 0; min-height: 40px; }
+.tn { position: relative; z-index: 1; border: 1px solid var(--line); border-left: 4px solid; background: #fff; border-radius: 7px; padding: 6px 8px 6px 9px; text-align: left; display: flex; flex-direction: column; gap: 1px; box-shadow: 0 1px 2px rgba(20,30,40,.08); }
+.tn b { font: 700 14px/1.15 var(--display); padding-right: 16px; } .tn small { font-size: 11.5px; color: var(--ink2); }
+.tn .qn { position: absolute; right: 5px; top: 5px; min-width: 18px; height: 18px; }
+.tn.done { background: #eef8f0; border-top-color: #bfe5c7; border-right-color: #bfe5c7; border-bottom-color: #bfe5c7; } .tn.done small { color: var(--good); font-weight: 700; }
+.tn.cur { box-shadow: 0 0 0 2px var(--accent); } .tn.cur small { color: var(--accent); font-weight: 700; }
+.tn.queued { border-style: dashed; border-left-style: solid; }
+.tn.locked { background: #f1f3f5; } .tn.locked b { color: #6a737d; }
+.tn.sel { outline: 3px solid var(--ink); outline-offset: 1px; }
+.tn:hover { border-top-color: var(--ink2); border-right-color: var(--ink2); border-bottom-color: var(--ink2); }
+#tt-svg { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; }
+#tt-det { width: 330px; flex: none; border-left: 1px solid var(--line); padding: 12px 16px 16px; overflow-y: auto; -webkit-user-select: text; user-select: text; }
+#tt-det h3 { font: 800 22px/1.1 var(--display); margin: 2px 0 6px; } #tt-det h4 { margin: 12px 0 4px; font: 700 14px var(--display); }
+.tt-dh { border-left: 5px solid; padding-left: 10px; } .tt-dh small { color: var(--ink2); font-weight: 700; }
+.tt-pre { display: inline-block; margin: 0 5px 5px 0; border: 1px solid var(--line); background: #fff; border-radius: 5px; padding: 3px 8px; font-size: 12.5px; }
+#tt-det .btns { margin-top: 12px; }
+@media (max-width: 860px) {
+  #tt-wrap { flex-direction: column; }
+  #tt-det { width: auto; border-left: 0; border-top: 1px solid var(--line); max-height: 44%; padding: 10px 14px 14px; }
+  #tt-grid { grid-template-columns: 98px repeat(5, 146px); gap: 4px 20px; }
+  .tt-f { font-size: 12.5px; padding: 6px 6px 6px 8px; } .tn b { font-size: 13px; } .treebox h2 { font-size: 20px; } #tt-sum { font-size: 12px; order: 3; flex-basis: 100%; }
+}
 .toggle { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
 .toggle p { grid-column: 1; margin: 0 !important; font-size: 12.5px; }
 .sw2 { width: 46px; height: 26px; border-radius: 13px; border: 0; background: #d9d3c5; position: relative; grid-row: 1 / 3; grid-column: 2; }
@@ -245,6 +290,7 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
   <canvas id="mini" width="180" height="180"></canvas>
   <button class="card mob" id="b-mini">Mapa</button>
   <div id="toolchip" class="card" hidden></div>
+  <div class="overlay" id="tree" hidden><div class="treebox" role="dialog" aria-label="Strom výzkumu"><header><h2>Strom výzkumu</h2><div id="tt-sum"></div><button class="x" id="tt-x" aria-label="Zavřít">×</button></header><div id="tt-wrap"><div id="tt-scroll"><div id="tt-grid"></div></div><aside id="tt-det"></aside></div></div></div>
 
   <div class="overlay" id="start">
     <div class="modal wide">
@@ -273,6 +319,7 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="data.js"></script>
+<script src="tech.js"></script>
 <script src="world.js"></script>
 <script src="sim.js"></script>
 <script src="textures.js"></script>

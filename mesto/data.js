@@ -29,6 +29,8 @@ const SERV = {
   townhall:  { name: 'Radnice', cat: 'gov', size: 2, cost: 800000, up: 15000, unique: true, desc: 'Sídlo vedení města. Bez radnice nejde vybírat daně. Je to i první cíl demonstrací.' },
   coal:      { name: 'Uhelná elektrárna', cat: 'power', size: 2, cost: 1200000, up: 45000, power: 1200, fuel: 0.06, poll: 40, desc: 'Levná a spolehlivá, ale silně znečišťuje a pálí palivo, které se musí dovážet.' },
   gas:       { name: 'Plynová elektrárna', cat: 'power', size: 2, cost: 2000000, up: 60000, power: 1800, fuel: 0.045, poll: 14, req: 'gasturb', desc: 'Čistší než uhlí a výkonnější. Také potřebuje palivo.' },
+  hydro:     { name: 'Vodní elektrárna', cat: 'power', size: 2, cost: 3500000, up: 30000, power: 380, renew: true, req: 'hydro', coast: true, desc: 'Turbíny na řece. Stálý čistý výkon. Musí stát u vody.' },
+  geo:       { name: 'Geotermální elektrárna', cat: 'power', size: 2, cost: 9000000, up: 110000, power: 2600, req: 'geothermal', desc: 'Teplo z hlubin. Velký výkon bez paliva a kouře.' },
   wind:      { name: 'Větrná elektrárna', cat: 'power', size: 1, cost: 420000, up: 6000, power: 90, req: 'wind', desc: 'Bez paliva a bez kouře. Výkon kolísá s větrem.' },
   solar:     { name: 'Solární park', cat: 'power', size: 2, cost: 1500000, up: 14000, power: 420, req: 'solar', desc: 'Čistá energie ze slunce. V zimě dává méně.' },
   nuclear:   { name: 'Jaderná elektrárna', cat: 'power', size: 3, cost: 12000000, up: 260000, power: 9000, req: 'nuclear', desc: 'Obrovský výkon bez kouře. Při špatné údržbě hrozí havárie.' },
@@ -39,7 +41,10 @@ const SERV = {
   recycle:   { name: 'Recyklační centrum', cat: 'water', size: 2, cost: 1500000, up: 36000, garbage: 25000, poll: 2, req: 'recycling', desc: 'Třídí odpad od 25 000 lidí. Skoro neznečišťuje a vydělává na druhotných surovinách.' },
   police:    { name: 'Policejní služebna', cat: 'safety', size: 1, cost: 500000, up: 25000, r: 10, police: 30, desc: '30 policistů. Snižují kriminalitu v okolí a zasahují při demonstracích.' },
   policehq:  { name: 'Policejní ředitelství', cat: 'safety', size: 2, cost: 2200000, up: 90000, r: 18, police: 120, desc: '120 policistů včetně pořádkové jednotky.' },
-  fire:      { name: 'Hasičská stanice', cat: 'safety', size: 1, cost: 450000, up: 22000, r: 11, desc: 'Hasí požáry v dosahu. Bez hasičů požár sežere celou čtvrť.' },
+  firevol:   { name: 'Hasičská zbrojnice', cat: 'rescue', size: 1, cost: 180000, up: 6000, r: 7, fireStr: 0.6, trucks: 1, desc: 'Sbor dobrovolných hasičů. Levná, menší dosah, ideální pro vesnice.' },
+  fire:      { name: 'Hasičská stanice', cat: 'rescue', size: 1, cost: 450000, up: 22000, r: 11, fireStr: 1, trucks: 2, desc: 'Profesionální hasiči hasí požáry v dosahu. Bez hasičů požár sežere celou čtvrť.' },
+  firehq:    { name: 'Centrální hasičská stanice', cat: 'rescue', size: 2, cost: 1800000, up: 70000, r: 17, fireStr: 1.3, trucks: 4, req: 'ems', desc: 'Velká stanice s výškovou technikou a dispečinkem záchranného systému.' },
+  fireair:   { name: 'Letecká hasičská základna', cat: 'rescue', size: 3, cost: 6000000, up: 150000, r: 45, fireStr: 0.75, trucks: 2, req: 'aerialfire', desc: 'Vrtulníky dolétnou k požáru kdekoli ve městě.' },
   barracks:  { name: 'Vojenská základna', cat: 'safety', size: 3, cost: 4000000, up: 150000, army: 400, desc: '400 vojáků. Brání město ve válce. Když je armáda nespokojená, může se pokusit o převrat.' },
   intel:     { name: 'Tajná služba', cat: 'safety', size: 1, cost: 2500000, up: 120000, req: 'intel', desc: 'Odhaluje extremisty dřív, než udeří, a umožňuje tajné operace v sousedních městech.' },
   clinic:    { name: 'Poliklinika', cat: 'health', size: 1, cost: 500000, up: 25000, r: 9, desc: 'Praktičtí lékaři pro okolí.' },
@@ -47,6 +52,7 @@ const SERV = {
   school:    { name: 'Základní škola', cat: 'edu', size: 1, cost: 600000, up: 30000, r: 10, edu: 0.5, rp: 1, desc: 'Základ vzdělání pro děti z okolí.' },
   highschool:{ name: 'Střední škola', cat: 'edu', size: 2, cost: 1600000, up: 60000, r: 16, edu: 0.8, rp: 3, desc: 'Vzdělaní lidé chtějí pracovat v kancelářích.' },
   university:{ name: 'Univerzita', cat: 'edu', size: 3, cost: 6000000, up: 200000, r: 40, edu: 1, rp: 20, desc: 'Vzdělání pro celé město a hodně výzkumu.' },
+  techpark:  { name: 'Technologický park', cat: 'edu', size: 2, cost: 5000000, up: 140000, rp: 40, req: 'techpark', desc: 'Startupy a laboratoře. Hodně výzkumu a práce pro vzdělané lidi.' },
   institute: { name: 'Výzkumný ústav', cat: 'edu', size: 2, cost: 3000000, up: 110000, rp: 25, needs: 'university', desc: 'Jen výzkum. Potřebuje ve městě univerzitu.' },
   park:      { name: 'Park', cat: 'fun', size: 1, cost: 80000, up: 2000, r: 5, park: 0.6, desc: 'Zeleň zvedá cenu pozemků a náladu lidí.' },
   bigpark:   { name: 'Městský park', cat: 'fun', size: 2, cost: 320000, up: 8000, r: 8, park: 1, desc: 'Velký park s jezírkem.' },
@@ -62,12 +68,21 @@ const SERV = {
   dike:      { name: 'Protipovodňová hráz', cat: 'gov', size: 1, cost: 25000, up: 200, req: 'flood', line: true, desc: 'Hráz podél řeky. Zastaví vodu, když lemuje celý břeh.' },
 };
 const SERV_CATS = [
-  { key: 'power', name: 'Energie' }, { key: 'water', name: 'Voda a odpad' }, { key: 'safety', name: 'Bezpečnost' },
+  { key: 'power', name: 'Energie' }, { key: 'water', name: 'Voda a odpad' }, { key: 'rescue', name: 'Hasiči' }, { key: 'safety', name: 'Policie a armáda' },
   { key: 'health', name: 'Zdraví' }, { key: 'edu', name: 'Vzdělání' }, { key: 'fun', name: 'Volný čas' },
   { key: 'trans', name: 'Doprava a obchod' }, { key: 'gov', name: 'Správa' },
 ];
 const PW_RES = 0.05, PW_JOB = 0.08, WT_RES = 0.15, WT_JOB = 0.08;
 const ROAD_COST = 3000, BRIDGE_COST = 18000, DEMOLISH_COST = 2000, ROAD_UP = 50;
+// druhy silnic: cap = kapacita, lv = vliv na cenu pozemků okolo
+const ROADS = {
+  1: { key: 'street', name: 'Ulice', cost: 3000, up: 50, cap: 1, lv: 0, desc: 'Dvouproudá ulice s chodníky a lampami. Základ města.' },
+  2: { key: 'rural', name: 'Venkovská silnice', cost: 2000, up: 35, cap: 0.9, lv: -2, desc: 'Venkovská silnice bez chodníků. Levná, hodí se do vesnic a mezi obce.' },
+  3: { key: 'avenue', name: 'Třída', cost: 9000, up: 110, cap: 2.2, lv: 5, req: 'avenues', desc: 'Čtyřproudá třída se stromořadím uprostřed. Víc než dvojnásobná kapacita.' },
+  4: { key: 'tram', name: 'Tramvajová třída', cost: 18000, up: 220, cap: 2, lv: 8, transit: 0.7, req: 'tram', desc: 'Třída s tramvajovou tratí. Tramvaj odveze lidi z okolí a ubere aut.' },
+  5: { key: 'highway', name: 'Rychlostní silnice', cost: 22000, up: 260, cap: 4, lv: -10, poll: 4, noAccess: true, req: 'highways', desc: 'Čtyři pruhy se svodidly. Obrovská kapacita, ale hluk a smog. Domy a firmy z ní nemají sjezd.' },
+  6: { key: 'ped', name: 'Pěší zóna', cost: 6000, up: 60, cap: 0.3, lv: 12, noCars: true, req: 'pedestrian', desc: 'Dlažba, lavičky a stromy bez aut. Cena pozemků a obchody v okolí rostou.' },
+};
 
 // ---------- obchod ----------
 const GOODS = {
@@ -78,37 +93,6 @@ const GOODS = {
 };
 const GOOD_KEYS = Object.keys(GOODS);
 const BASE_TRADE = 1500, BASE_STORE = 3000;
-
-// ---------- výzkum ----------
-const TECHS = {
-  gasturb:   { name: 'Plynové turbíny', cat: 'Energie', cost: 40, desc: 'Odemyká plynovou elektrárnu.' },
-  wind:      { name: 'Větrná energie', cat: 'Energie', cost: 45, desc: 'Odemyká větrné elektrárny.' },
-  solar:     { name: 'Fotovoltaika', cat: 'Energie', cost: 90, req: ['wind'], desc: 'Odemyká solární parky.' },
-  smartgrid: { name: 'Chytrá síť', cat: 'Energie', cost: 140, req: ['solar'], desc: 'Spotřeba elektřiny a vody klesne o 15 %.' },
-  nuclear:   { name: 'Jaderná energetika', cat: 'Energie', cost: 260, req: ['gasturb'], desc: 'Odemyká jadernou elektrárnu.' },
-  hygiene:   { name: 'Hygiena a kanalizace', cat: 'Zdraví', cost: 35, desc: 'Odemyká čistírnu odpadních vod.' },
-  vaccines:  { name: 'Očkování', cat: 'Zdraví', cost: 90, req: ['hygiene'], desc: 'Epidemie jsou vzácnější a slabší.' },
-  bus:       { name: 'Jízdní řády', cat: 'Doprava', cost: 30, desc: 'Autobusy jezdí častěji: dosah dep +30 %.' },
-  metro:     { name: 'Metro', cat: 'Doprava', cost: 180, req: ['bus'], desc: 'Odemyká stanice metra.' },
-  logistics: { name: 'Logistika', cat: 'Doprava', cost: 80, desc: 'Obchodní kapacita města +30 %.' },
-  aviation:  { name: 'Letectví', cat: 'Doprava', cost: 200, req: ['logistics'], desc: 'Odemyká letiště.' },
-  forensics: { name: 'Kriminalistika', cat: 'Bezpečnost', cost: 60, desc: 'Policie je o 25 % účinnější proti kriminalitě.' },
-  riot:      { name: 'Pořádková jednotka', cat: 'Bezpečnost', cost: 80, req: ['forensics'], desc: 'Rozehnání demonstrace méně často skončí nepokoji.' },
-  intel:     { name: 'Zpravodajství', cat: 'Bezpečnost', cost: 120, req: ['forensics'], desc: 'Odemyká tajnou službu.' },
-  firecode:  { name: 'Požární předpisy', cat: 'Bezpečnost', cost: 50, desc: 'Požáry vznikají o 40 % méně.' },
-  seismic:   { name: 'Seizmické normy', cat: 'Stavebnictví', cost: 90, desc: 'Zemětřesení zboří o 60 % méně budov.' },
-  flood:     { name: 'Protipovodňová ochrana', cat: 'Stavebnictví', cost: 60, desc: 'Odemyká protipovodňové hráze.' },
-  skyscraper:{ name: 'Výškové stavby', cat: 'Stavebnictví', cost: 150, desc: 'Husté zóny mohou růst až do 5. úrovně.' },
-  filters:   { name: 'Průmyslové filtry', cat: 'Ekologie', cost: 70, desc: 'Průmysl a elektrárny znečišťují o 35 % méně.' },
-  recycling: { name: 'Recyklace', cat: 'Ekologie', cost: 100, req: ['filters'], desc: 'Odemyká recyklační centrum.' },
-  incin:     { name: 'Energetické využití odpadu', cat: 'Ekologie', cost: 70, desc: 'Odemyká spalovnu.' },
-  hightech:  { name: 'High-tech výroba', cat: 'Ekonomika', cost: 130, desc: 'Nové továrny mohou vyrábět technologie, pokud jsou lidé vzdělaní.' },
-  banking:   { name: 'Bankovnictví', cat: 'Ekonomika', cost: 70, desc: 'Úvěry jsou levnější, kanceláře se rozrůstají rychleji.' },
-  tourism:   { name: 'Cestovní ruch', cat: 'Ekonomika', cost: 90, desc: 'Parky, stadion a letiště vydělávají na turistech.' },
-  egov:      { name: 'Elektronická správa', cat: 'Správa', cost: 110, desc: 'Provoz úřadů −15 %, důvěra ve vedení roste.' },
-  mediation: { name: 'Mediace konfliktů', cat: 'Správa', cost: 70, desc: 'Vyjednávání s demonstranty a stávkujícími častěji uspěje.' },
-  diplomacy: { name: 'Diplomatický sbor', cat: 'Správa', cost: 90, desc: 'Vztahy se sousedy se lepší rychleji a hůř se kazí.' },
-};
 
 // ---------- vyhlášky ----------
 // cost = Kč měsíčně na 1 000 obyvatel
@@ -127,6 +111,7 @@ const POLICIES = {
   curfew:     { name: 'Zákaz vycházení', cost: 0, desc: 'Nepokoje rychle utichnou. Obchody trpí a svoboda klesá.' },
   quarantine: { name: 'Karanténa', cost: 0, desc: 'Epidemie se šíří pomaleji. Obchody trpí.' },
   armypay:    { name: 'Příplatky vojákům', cost: 3000, desc: 'Armáda je loajálnější.' },
+  firesafety: { name: 'Kontroly požární bezpečnosti', cost: 2500, desc: 'Inspektoři kontrolují budovy. Požárů je o čtvrtinu méně.' },
 };
 const POLICY_FREEDOM = { patrols: -4, cameras: -10, censorship: -25, noprotest: -20, curfew: -25, gunlaw: -3, quarantine: -6 };
 
@@ -137,11 +122,6 @@ const STARTS = [
   { name: 'Městečko', pop: 5000, money: 6000000, r: 12, desc: 'Náměstí, škola, služebna a malá elektrárna.' },
   { name: 'Město', pop: 25000, money: 15000000, r: 20, desc: 'Paneláky, průmyslová zóna, nemocnice a nádraží.' },
   { name: 'Velkoměsto', pop: 90000, money: 25000000, r: 30, desc: 'Hustá výstavba, univerzita, armáda a spousta starostí.' },
-];
-const TECH_LEVELS = [
-  { name: 'Základní', techs: [] },
-  { name: 'Rozvinutá', techs: ['gasturb', 'wind', 'hygiene', 'bus', 'forensics', 'firecode', 'flood', 'filters', 'logistics'] },
-  { name: 'Špičková', techs: ['gasturb', 'wind', 'solar', 'hygiene', 'vaccines', 'bus', 'metro', 'logistics', 'forensics', 'riot', 'intel', 'firecode', 'seismic', 'flood', 'skyscraper', 'filters', 'recycling', 'incin', 'hightech', 'banking', 'tourism', 'egov', 'mediation'] },
 ];
 const CRISIS_LEVELS = [{ name: 'Klidné časy', k: 0.45 }, { name: 'Běžné', k: 1 }, { name: 'Neklidná doba', k: 1.8 }];
 
