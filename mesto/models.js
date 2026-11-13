@@ -155,6 +155,7 @@ function mOff(d, l, v) {
 function mServ(t) {
   const s = SERV[t].size, W = s * TS - 0.6, b = new GB(), key = 'S:' + t;
   if (t === 'church') return mChurch();
+  if (SERV[t].rail) return mRailBld(t);
   switch (t) {
     case 'townhall': lot(b, W, 0xcfc8ba, 'pave'); b.facade('stone', 2, 1.7, 6, 3.6, 0xeee6d5, 0, 0, -0.8).use('tile').gable(6.2, 1.4, 3.8, 0x7a4a36, 0, 3.4, -0.8, Math.PI / 2).use('plain');
       for (let i = 0; i < 6; i++) b.cyl(0.17, 0.19, 2.7, PAL.white, -2.3 + i * 0.92, 0, 1.3, 12); b.box(5.6, 0.45, 0.7, PAL.white, 0, 2.7, 1.3).box(5.8, 0.2, 1.2, 0xd8d2c4, 0, 0, 1.4);

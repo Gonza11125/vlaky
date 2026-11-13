@@ -4,6 +4,9 @@
 const NN = N * N;
 const ter = new Uint8Array(NN);      // 0 tráva, 1 voda, 2 písek, 3 les, 4 pole, 5 zahrada
 const road = new Uint8Array(NN);
+const rail = new Uint8Array(NN);     // 0 nic, 1 trať, 2 elektrizovaná, 3 vysokorychlostní
+const railDmg = new Uint8Array(NN);  // dny do opravy poškozené trati
+const railSt = new Uint8Array(NN);   // 1 = státní trať (údržbu platí stát)
 const zone = new Uint8Array(NN);     // 0–4
 const dens = new Uint8Array(NN);     // 0 nízká, 1 vysoká
 const lvl = new Uint8Array(NN);      // 0 = prázdná parcela
@@ -22,7 +25,7 @@ const eduT = new Float32Array(NN);   // vzdělanost obyvatel dlaždice
 const conn = new Uint8Array(NN), acc = new Uint8Array(NN), pw = new Uint8Array(NN), wt = new Uint8Array(NN);
 const lv = new Float32Array(NN), poll = new Float32Array(NN), crime = new Float32Array(NN), traf = new Float32Array(NN), hap = new Float32Array(NN);
 const cov = { police: new Float32Array(NN), fire: new Float32Array(NN), health: new Float32Array(NN), edu: new Float32Array(NN), park: new Float32Array(NN), transit: new Float32Array(NN) };
-const TILE_ARRAYS = { ter, road, zone, dens, lvl, vari, spec, sty, ruin, fire, flood, fpl, aband, bad };
+const TILE_ARRAYS = { ter, road, rail, railDmg, railSt, zone, dens, lvl, vari, spec, sty, ruin, fire, flood, fpl, aband, bad };
 const FLOAT_ARRAYS = { occ, eduT, lv, poll, crime, hap };
 
 const idx = (x, y) => y * N + x;
@@ -52,7 +55,7 @@ function clearTile(k) { zone[k] = 0; dens[k] = 0; lvl[k] = 0; aband[k] = 0; occ[
 function canBuildAt(x, y, size, allowZone) {
   for (let j = y; j < y + size; j++) for (let i = x; i < x + size; i++) {
     if (!inb(i, j)) return false; const k = idx(i, j);
-    if (ter[k] === 1 || road[k] || bld[k] || (!allowZone && zone[k] && lvl[k])) return false;
+    if (ter[k] === 1 || road[k] || rail[k] || bld[k] || (!allowZone && zone[k] && lvl[k])) return false;
   }
   return true;
 }
@@ -93,7 +96,7 @@ function computeConn() {
 
 // ---------- terén ----------
 function genTerrain(seed) {
-  srand(seed); ter.fill(0); fpl.fill(0); road.fill(0); zone.fill(0); dens.fill(0); lvl.fill(0); bld.fill(0); sty.fill(0);
+  srand(seed); ter.fill(0); fpl.fill(0); road.fill(0); rail.fill(0); railDmg.fill(0); railSt.fill(0); zone.fill(0); dens.fill(0); lvl.fill(0); bld.fill(0); sty.fill(0);
   ruin.fill(0); fire.fill(0); flood.fill(0); aband.fill(0); bad.fill(0); occ.fill(0); eduT.fill(0);
   for (let k = 0; k < NN; k++) vari[k] = (rnd() * 256) | 0;
   blds.clear(); nextBid = 1;
@@ -130,14 +133,25 @@ function genTerrain(seed) {
 function parcel(x, y) { const row = Math.floor(y / 5); return [Math.floor((x + (row % 3) * 2) / 6), row]; }
 function fieldCrop(x, y) { const p = parcel(x, y); return Math.floor(hash2(p[0], p[1], W.seed + 7) * 5); }
 function layRoad(x, y, rt) { const k = idx(x, y); if (bld[k]) return; clearTile(k); road[k] = rt || 1; }
+function layRail(x, y, rt) { const k = idx(x, y); if (bld[k]) return; if (!road[k]) clearTile(k); rail[k] = rt || 1; railSt[k] = 1; }
+function roadNear(x, y, s) { for (let j = y - 2; j < y + s + 2; j++) for (let i = x - 2; i < x + s + 2; i++) if (inb(i, j) && road[idx(i, j)]) return true; return false; }
+// nádraží u trati: severně od kolejí (y = ry - s), jinak jižně
+function placeRailSt(type, prefX, ry, minX, maxX) {
+  const s = SERV[type].size, xs = []; for (let x = Math.max(1, minX || 1); x <= Math.min(N - s - 1, maxX || N); x++) xs.push(x);
+  xs.sort((a, b) => Math.abs(a - prefX) - Math.abs(b - prefX));
+  for (const x of xs) for (const y of [ry - s, ry + 1]) if (canBuildAt(x, y, s, true) && roadNear(x, y, s)) return addBuilding(type, x, y);
+  return null;
+}
 
 // ---------- vesnice podél hlavní silnice ----------
 function genVillage(techs) {
   const cx = W.cx, cy = W.cy, L = 12, lane = cx + 4;
   for (let y = cy - 8; y < cy; y++) if (ter[idx(lane, y)] !== 1) layRoad(lane, y, 2);
+  // polní cesta k železniční zastávce jižně od vsi
+  if (W.railY) { for (let y = cy + 1; y < W.railY; y++) if (ter[idx(cx - 6, y)] !== 1) layRoad(cx - 6, y, 2); placeRailSt('railhalt', cx - 5, W.railY, cx - 9, cx - 2); }
   // hasičská zbrojnice dobrovolných hasičů na rohu návsi
   if (canBuildAt(cx + 3, cy - 1, 1, false)) addBuilding('firevol', cx + 3, cy - 1);
-  const free = (x, y) => inb(x, y) && ter[idx(x, y)] !== 1 && !road[idx(x, y)] && !bld[idx(x, y)] && !zone[idx(x, y)];
+  const free = (x, y) => inb(x, y) && ter[idx(x, y)] !== 1 && !road[idx(x, y)] && !rail[idx(x, y)] && !bld[idx(x, y)] && !zone[idx(x, y)];
   // náves: kostel, obecní úřad a rybník
   if (canBuildAt(cx - 3, cy - 3, 2, false)) addBuilding('church', cx - 3, cy - 3);
   if (canBuildAt(cx + 1, cy - 3, 2, false)) addBuilding('townhall', cx + 1, cy - 3);
@@ -154,9 +168,9 @@ function genVillage(techs) {
   for (let y = cy - 7; y <= cy - 2; y++) for (const s of [-1, 1]) { const x = lane + s; if (house(x, y)) garden(x + s, y); }
   // hospoda a obchod na návsi, statek na kraji vesnice
   for (const [x, y] of [[cx - 2, cy + 1], [cx + 1, cy + 1]]) { const k = idx(x, y); if (zone[k] === 1) zone[k] = 2; }
-  for (let x = cx + L - 2; x <= cx + L; x++) for (const y of [cy + 1, cy + 2]) { const k = idx(x, y); if (!inb(x, y) || ter[k] === 1 || road[k] || bld[k]) continue; clearTile(k); zone[k] = 3; dens[k] = 0; lvl[k] = 1 + (hash2(x, y, 4) < 0.5 ? 1 : 0); spec[k] = 1; sty[k] = 0; }
+  for (let x = cx + L - 2; x <= cx + L; x++) for (const y of [cy + 1, cy + 2]) { const k = idx(x, y); if (!inb(x, y) || ter[k] === 1 || road[k] || rail[k] || bld[k]) continue; clearTile(k); zone[k] = 3; dens[k] = 0; lvl[k] = 1 + (hash2(x, y, 4) < 0.5 ? 1 : 0); spec[k] = 1; sty[k] = 0; }
   // kolem vesnice louky a pole
-  for (let y = cy - 10; y <= cy + 10; y++) for (let x = cx - L - 4; x <= cx + L + 4; x++) { if (!inb(x, y)) continue; const k = idx(x, y); if (ter[k] === 0 && !road[k] && !zone[k] && !bld[k] && Math.abs(y - cy) > 2 && hash2(x >> 2, y >> 2, 3) < 0.7) ter[k] = 4; }
+  for (let y = cy - 10; y <= cy + 10; y++) for (let x = cx - L - 4; x <= cx + L + 4; x++) { if (!inb(x, y)) continue; const k = idx(x, y); if (ter[k] === 0 && !road[k] && !rail[k] && !zone[k] && !bld[k] && Math.abs(y - cy) > 2 && hash2(x >> 2, y >> 2, 3) < 0.7) ter[k] = 4; }
 }
 
 // ---------- generátor hotového města ----------
@@ -166,6 +180,10 @@ function genCity(size, techs) {
   const village = size === 1, hwEnd = village ? cx + 13 : st.r ? cx : 12;
   for (let x = 0; x <= hwEnd; x++) { if (ter[idx(x, cy)] === 1 && village) break; layRoad(x, cy, village || !st.r ? 2 : 1); }
   for (let x = 0; x <= hwEnd + 2; x++) for (const y of [cy - 1, cy + 1]) if (ter[idx(x, y)] === 3) ter[idx(x, y)] = 0;
+  // železniční trať přes celou mapu jižně od středu (mezi uličními bloky, aby ji ulice křížily kolmo)
+  const ry = W.railY = cy + [13, 4, 8, 13, 18][size], rt = size >= 3 ? 2 : 1;
+  for (let x = 0; x < N; x++) layRail(x, ry, rt);
+  W.railInit = [{}, { reg: 1 }, { reg: 2 }, { reg: 4, fr: 2 }, { reg: 6, fr: 3, ic: techs.includes('intercity') ? 2 : 0 }][size];
   if (!st.r) { for (const [x, y] of [[8, cy + 1], [8, cy - 2], [5, cy + 1], [5, cy - 2]]) if (canBuildAt(x, y, 2, false)) { addBuilding('townhall', x, y); break; } return; }
   const R = st.r, sp = 5;
   const blocks = [];
@@ -182,6 +200,8 @@ function genCity(size, techs) {
   for (const b of blocks) {
     for (let i = 0; i <= sp; i++) for (const [x, y] of [[b.x0 + i, b.y0], [b.x0 + i, b.y0 + sp], [b.x0, b.y0 + i], [b.x0 + sp, b.y0 + i]]) if (inb(x, y)) layRoad(x, y);
   }
+  // každý druhý přejezd přes trať zrušit, ať jich není moc
+  for (let x = 0; x < N; x++) { const k = idx(x, ry); if (road[k] && rail[k] && Math.abs(Math.round((x - cx) / sp)) % 2 === 1) road[k] = 0; }
   // odříznuté čtvrti (třeba za řekou) napojit po hlavních ulicích, přes vodu mostem
   computeConn();
   for (const b of blocks) {
@@ -190,6 +210,17 @@ function genCity(size, techs) {
     while (y !== cy) { y += Math.sign(cy - y); layRoad(x, y); }
     while (x !== cx) { x += Math.sign(cx - x); layRoad(x, y); }
     computeConn();
+  }
+  // nádraží a zastávky u trati
+  if (!village) {
+    if (size >= 4) {   // hlavní nádraží: tři řady, kus ulice před ním ustoupí
+      for (const x of [cx + 1, cx + 6, cx - 4, cx + 11, cx - 9]) { const y = ry - 3; let okc = true; for (let i = x; i < x + 3; i++) if ((((i - cx) % sp) + sp) % sp === 0) okc = false; if (!okc) continue;
+        const keep = []; for (let i = x; i < x + 3; i++) keep.push(road[idx(i, y)]); for (let i = x; i < x + 3; i++) road[idx(i, y)] = 0;
+        if (canBuildAt(x, y, 3, true)) { addBuilding('mainst', x, y); break; } for (let i = x; i < x + 3; i++) road[idx(i, y)] = keep[i - x]; }
+    } else placeRailSt('railst', cx + 2, ry, cx - R, cx + R);
+    if (size >= 3) { placeRailSt('railhalt', cx - Math.round(R * 0.6), ry, cx - R, cx - 4); placeRailSt('railhalt', cx + Math.round(R * 0.65), ry, cx + 6, cx + R);
+      placeRailSt('station', cx - Math.round(R * 0.85), ry, 2, cx - 4); placeRailSt('depot', cx + Math.round(R * 0.4), ry, cx + 4, cx + R + 6); }
+    if (size >= 4) { placeRailSt('railhalt', cx - Math.round(R * 0.3), ry, cx - R, cx - 3); if (techs.includes('containers')) placeRailSt('container', cx - Math.round(R * 0.55), ry, 2, cx - 4); }
   }
   // služby
   const has = (t, x, y, dist) => { for (const b of blds.values()) if (b.type === t && Math.hypot(b.x - x, b.y - y) < dist) return true; return false; };
@@ -219,7 +250,7 @@ function genCity(size, techs) {
     return null;
   };
   const placeBig = (t, list, filter) => { for (;;) { const b = pick(list, SERV[t].size, bb => !bb.noBig && (!filter || filter(bb))); if (!b) return ['coal', 'gas', 'wind', 'pump', 'dump'].includes(t) ? placeAlong(t) : null; const r = put(t, b, 0, 0); if (r) { b.used = 16; return r; } b.noBig = true; } };
-  if (size >= 3) { placeBig('hospital', [], b => b.d < 0.6); placeBig('highschool', [], b => b.d < 0.6); placeBig('station', indBlocks); placeBig('policehq', [], b => b.d < 0.5); placeBig('bigpark', [], b => b.d < 0.5); placeBig('bus', [], b => b.d < 0.4); placeBig('warehouse', indBlocks); }
+  if (size >= 3) { placeBig('hospital', [], b => b.d < 0.6); placeBig('highschool', [], b => b.d < 0.6); placeBig('policehq', [], b => b.d < 0.5); placeBig('bigpark', [], b => b.d < 0.5); placeBig('bus', [], b => b.d < 0.4); placeBig('warehouse', indBlocks); }
   if (size >= 4) {
     placeBig('university', [], b => b.d > 0.3 && b.d < 0.7); placeBig('barracks', anyOuter); placeBig('stadium', [], b => b.d > 0.5);
     for (let i = 0; i < 3; i++) placeBig('bus', [], b => b.d < 0.8);
@@ -245,7 +276,7 @@ function genCity(size, techs) {
     const ind = isInd(b), core = b.d < (size >= 4 ? 0.24 : 0.2) && size >= 2;
     for (let j = 1; j < sp; j++) for (let i = 1; i < sp; i++) {
       const x = b.x0 + i, y = b.y0 + j, k = idx(x, y);
-      if (ter[k] === 1 || road[k] || bld[k]) continue;
+      if (ter[k] === 1 || road[k] || rail[k] || bld[k]) continue;
       clearTile(k);
       let z = 1, d = b.d < hiR ? 1 : 0;
       if (ind) { z = 3; d = size >= 4 ? 1 : 0; }

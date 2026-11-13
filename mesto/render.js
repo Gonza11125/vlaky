@@ -148,6 +148,7 @@ function paintTile(k) {
   if (water) hex = TERR.bed;
   else if (flood[k]) hex = TERR.flood;
   else if (road[k]) hex = TERR.road;
+  else if (rail[k]) hex = 0x6f6a60;
   else if (ruin[k]) hex = TERR.ruin;
   else if (bld[k]) { const t = blds.get(bld[k]).type; hex = ['park', 'bigpark', 'university', 'stadium', 'solar', 'airport', 'dike'].includes(t) ? TERR.garden : TERR.lot; }
   else if (zone[k] && lvl[k]) hex = zone[k] === 1 && !dens[k] ? TERR.garden : zone[k] === 3 ? TERR.ind : TERR.lot;
@@ -184,7 +185,8 @@ function refreshTile(k) {
   const ts = treeH[k]; if (ts) { for (const t of ts) if (t.b) t.b.remove(t); treeH[k] = null; }
   paintTile(k);
   const x = k % N, y = (k / N) | 0, wx = tileX(x), wz = tileZ(y);
-  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, rt = road[k]; tileH[k] = batch('R' + rt + (br ? 'b' : '') + m, () => mRoadT(rt, m, br), MATS, { shadow: br || rt === 3 || rt === 6 }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
+  if (rail[k]) { refreshRailTile(k, x, y, wx, wz); if (!road[k]) return; }
+  if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, rt = rail[k] && road[k] === 1 ? 2 : road[k]; tileH[k] = batch('R' + rt + (br ? 'b' : '') + m, () => mRoadT(rt, m, br), MATS, { shadow: br || rt === 3 || rt === 6 }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
   if (bld[k]) return;
   if (ruin[k] && !lvl[k]) { tileH[k] = batch('RUB', mRubble).add({ k }, mtx(wx, 0, wz, (vari[k] % 4) * 1.57)); return; }
   if (zone[k] && lvl[k]) {
@@ -207,7 +209,7 @@ function syncBuildings() {
   for (const b of blds.values()) {
     let h = servH.get(b.id); const s = b.size, wx = tileX(b.x) + (s - 1) * TS / 2, wz = tileZ(b.y) + (s - 1) * TS / 2;
     if (!h) {
-      const ry = faceRoad(b.x, b.y, s), key = 'S:' + b.type;
+      const ry = SERV[b.type].rail ? faceRail(b) : faceRoad(b.x, b.y, s), key = 'S:' + b.type;
       h = batch(key, () => mServ(b.type)).add({ id: b.id, p: [wx, 0, wz, ry], built: -1 }, mtx(wx, 0, wz, ry, 1, 0.1, 1));
       servH.set(b.id, h);
       if (b.type === 'wind') h.r = batch('ROTOR', mRotor).add({ id: b.id }, mtx(wx, 10.3, wz, 0));
@@ -227,7 +229,7 @@ function rebuildAll() {
   for (const b of batches.values()) b.clear();
   tileH.fill(null); treeH.fill(null); servH.clear(); RS.martial = []; for (const p of parts) if (p.h.b) pB.remove(p.h); parts.length = 0; smokers.clear(); anims.length = 0; cars.length = 0; vehicles.length = 0; crowd.clear();
   for (let k = 0; k < NN; k++) refreshTile(k);
-  syncBuildings(); RS.roadsDirty = true;
+  syncBuildings(); RS.roadsDirty = true; resetRail();
 }
 
 // ---------- doprava ----------
@@ -263,7 +265,9 @@ function updateCars(dt) {
   }
   if (cars.length > want + 4) killCar(cars[cars.length - 1]);
   const jam = T.traffic > 1 ? 1 / (0.5 + T.traffic * 0.5) : 1;
+  const xa = RS.crossActive;
   for (const c of cars) {
+    if (xa && xa.size && xa.has(c.n) && c.t > 0.3 && c.t < 0.5) { c.h.b.set(c.h, carPos(c)); continue; }   // před přejezdem stojí
     c.t += dt * c.sp * jam * (road[c.k] === 5 ? 1.7 : 1) / TS;
     while (c.t >= 1) { c.t -= 1; const nk = nextRoad(c.n, c.k); c.prev = c.k; c.k = c.n; c.n = nk; if (nk == null || nk < 0) { c.n = c.prev; } }
     c.h.b.set(c.h, carPos(c));
@@ -507,6 +511,7 @@ function showGhost(type, x, y, ok) {
   if (!ghost) { ghost = new THREE.Mesh(mServ(type), new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false })); ghost.userData.type = type; ghost.layers.set(1); scene.add(ghost); }
   const wx = tileX(x) + (s - 1) * TS / 2, wz = tileZ(y) + (s - 1) * TS / 2;
   ghost.position.set(wx, 0.05, wz); ghost.material.color.setHex(ok ? 0xffffff : 0xff6655);
+  ghost.rotation.y = SERV[type].rail ? faceRail({ x, y, size: s }) : faceRoad(x, y, s);
   const r = SERV[type].r; if (r && r < 30) { ghostRing = new THREE.Mesh(new THREE.RingGeometry(r * TS - 0.5, r * TS, 48), new THREE.MeshBasicMaterial({ color: ok ? 0xffffff : 0xff6655, transparent: true, opacity: 0.6, depthWrite: false })); ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.set(wx, 0.4, wz); ghostRing.layers.set(1); scene.add(ghostRing); }
 }
 function showCursor(x, y, s, col) {
@@ -542,7 +547,7 @@ function renderFrame(dt, t, dayFrac) {
   if (RS.terrDirty) { terrain.geometry.attributes.position.needsUpdate = true; terrain.geometry.attributes.color.needsUpdate = true; terrain.geometry.attributes.uv.needsUpdate = true; terrain.geometry.computeBoundingSphere(); RS.terrDirty = false; }
   for (let i = anims.length - 1; i >= 0; i--) { const a = anims[i]; a.t += dt * 2.2; const h = a.h; if (!h.b) { anims.splice(i, 1); continue; } const p = h.p, k = Math.min(1, a.t); const s = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.18 : 1; h.b.set(h, mtx(p[0], 0, p[2], p[3], 1 / Math.sqrt(s), k * s, 1 / Math.sqrt(s))); if (a.t >= 1) anims.splice(i, 1); }
   for (const h of servH.values()) if (h.r && h.r.b) { const p = h.p; _mtx.makeRotationY(p[3]); const rot = new THREE.Matrix4().makeRotationZ(t * 1.6 + h.id); const m = new THREE.Matrix4().makeTranslation(p[0], 10.3, p[2]).multiply(_mtx).multiply(rot); h.r.b.set(h.r, m); }
-  updateCars(dt); updateTransit(dt, t); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
+  updateCars(dt); updateTransit(dt, t); updateRail(dt, t); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
   waterTex.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
   waterMesh.position.y = S.floodEv ? -0.3 + Math.min(1, S.floodEv.day / 3) * 0.2 : -0.3;
   if (cam.shake > 0) cam.shake = Math.max(0, cam.shake - dt * 1.2);

@@ -19,7 +19,7 @@ function toast(text, cls) { UIH.note({ text, cls: cls || '', k: -1 }); }
 function focusTile(x, y) { cam.x = tileX(x); cam.z = tileZ(y); if (cam.dist > 160) cam.dist = 120; }
 
 // ---------- nástroje ----------
-const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', rescue: '#c8372d', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
+const CAT_COL = { power: '#c99a2e', water: '#3d7fb8', rescue: '#c8372d', rail: '#2f6f6a', safety: '#2c4f8f', health: '#b84a5f', edu: '#c47a2a', fun: '#4f8a3f', trans: '#6a7682', gov: '#7a66a8' };
 const RAIL = [
   { key: 'select', name: 'Prohlížet', sw: '#ffffff' }, { key: 'road', name: 'Silnice', sw: '#5a5f69' }, { key: 'zones', name: 'Zóny', sw: '#6fbf5a' },
   ...SERV_CATS.map(c => ({ key: 'cat:' + c.key, name: c.name, sw: CAT_COL[c.key] })),
@@ -28,7 +28,7 @@ const RAIL = [
 function drawRail() {
   $('tools').innerHTML = RAIL.map(r => '<button class="tool' + (railOn(r.key) ? ' on' : '') + '" data-k="' + r.key + '"><span class="sw" style="background:' + r.sw + '"></span>' + r.name + '</button>').join('');
 }
-function railOn(key) { const t = G.tool; if (key === 'select') return t.kind === 'select' && !G.cat; if (key === 'road') return t.kind === 'road' || G.cat === 'roads'; if (key === 'demolish') return t.kind === 'demolish'; return G.cat === key; }
+function railOn(key) { const t = G.tool; if (key === 'select') return t.kind === 'select' && !G.cat; if (key === 'road') return t.kind === 'road' || G.cat === 'roads'; if (key === 'demolish') return t.kind === 'demolish'; if (key === 'cat:rail' && (t.kind === 'rail' || t.kind === 'unrail')) return true; return G.cat === key; }
 $('tools').onclick = e => {
   const b = e.target.closest('.tool'); if (!b) return; const k = b.dataset.k;
   if (k === 'road') { if (G.tool.kind === 'road' && G.cat === 'roads') { G.cat = null; } else { setTool({ kind: 'road', rt: G.rt || 1 }); G.cat = 'roads'; } }
@@ -40,7 +40,7 @@ function setTool(t) { G.tool = t; G.drag = null; showPreview([]); showGhost(null
 // štítek aktivního nástroje (hlavně pro dotyk): co dělá a tlačítko Hotovo
 function drawToolChip() {
   const c = $('toolchip'), t = G.tool; if (!G.playing || t.kind === 'select') { c.hidden = true; return; }
-  const name = t.kind === 'road' ? ROADS[t.rt || 1].name : t.kind === 'zone' ? ZONES[t.z].short + (t.d ? ' – hustá' : ' – řídká') : t.kind === 'dezone' ? 'Zrušit zónu' : t.kind === 'demolish' ? 'Bourat' : SERV[t.type].name;
+  const name = t.kind === 'road' ? ROADS[t.rt || 1].name : t.kind === 'rail' ? RAILS[t.rt || 1].name : t.kind === 'unrail' ? 'Zbourat trať' : t.kind === 'zone' ? ZONES[t.z].short + (t.d ? ' – hustá' : ' – řídká') : t.kind === 'dezone' ? 'Zrušit zónu' : t.kind === 'demolish' ? 'Bourat' : SERV[t.type].name;
   const touch = RS.coarse || window.innerWidth < 860, drag = t.kind !== 'build' || SERV[t.type].line;
   c.innerHTML = '<span><b>' + name + '</b> <small>' + (touch ? (drag ? 'táhni prstem, mapu posuneš dvěma' : 'klepni na místo stavby') : (drag ? 'táhni myší, Esc ukončí' : 'klikni na místo, Esc ukončí')) + '</small></span><button class="btn pri" id="tc-done">Hotovo</button>';
   c.hidden = false; $('tc-done').onclick = () => { setTool({ kind: 'select' }); G.cat = null; drawRail(); drawSub(); };
@@ -63,6 +63,12 @@ function drawSub() {
   } else {
     const cat = G.cat.slice(4), c = SERV_CATS.find(c => c.key === cat);
     h = '<h3>' + c.name + '</h3>';
+    if (cat === 'rail') {
+      h += '<p style="margin:0 0 8px;color:var(--ink2);font-size:12.5px">Táhni trať přes mapu. Napoj ji na okraj mapy, postav u ní nádraží a v záložce Železnice nastav spoje. Silnici kříží jen kolmo (přejezd).</p>';
+      for (const rt in RAILS) { const R = RAILS[rt], lock = R.req && !S.techs[R.req], on = G.tool.kind === 'rail' && (G.tool.rt || 1) === +rt;
+        h += '<button class="opt' + (on ? ' on' : '') + (lock ? ' lock' : '') + '" data-rl="' + rt + '"><span class="sw" style="background:' + ['', '#6f6a60', '#3f6f8f', '#c8372d'][rt] + '"></span><b>' + R.name + '</b><span class="c num">' + money(R.cost) + '</span><em>' + (lock ? 'Vyžaduje výzkum: ' + TECHS[R.req].name + '. ' : '') + R.desc + ' Údržba ' + money(R.up) + ' měsíčně za políčko.</em></button>'; }
+      h += '<button class="opt' + (G.tool.kind === 'unrail' ? ' on' : '') + '" data-unrail="1"><span class="sw" style="background:#e0483a"></span><b>Zbourat trať</b><span class="c num">' + money(DEMOLISH_COST) + '</span></button><h3 style="margin-top:10px">Stanice a depa</h3>';
+    }
     for (const t in SERV) { const d = SERV[t]; if (d.cat !== cat || t === 'townhall' && [...blds.values()].some(b => b.type === 'townhall')) continue;
       const lock = d.req && !S.techs[d.req], on = G.tool.kind === 'build' && G.tool.type === t;
       h += '<button class="opt' + (on ? ' on' : '') + (lock ? ' lock' : '') + '" data-b="' + t + '"><span class="sw" style="background:' + CAT_COL[cat] + '"></span><b>' + d.name + '</b><span class="c num">' + money(d.cost) + '</span><em>' + (lock ? 'Vyžaduje výzkum: ' + TECHS[d.req].name + '. ' : '') + d.desc + ' Provoz ' + money(d.up) + ' měsíčně.' + (d.size > 1 ? ' Zabere ' + d.size + '×' + d.size + ' políček.' : '') + '</em></button>'; }
@@ -70,13 +76,15 @@ function drawSub() {
   s.innerHTML = h;
 }
 $('sub').onclick = e => {
-  const z = e.target.closest('[data-zone]'), b = e.target.closest('[data-b]'), ov = e.target.closest('[data-ov]'), rb = e.target.closest('[data-rt]');
+  const z = e.target.closest('[data-zone]'), b = e.target.closest('[data-b]'), ov = e.target.closest('[data-ov]'), rb = e.target.closest('[data-rt]'), rl = e.target.closest('[data-rl]'), ur = e.target.closest('[data-unrail]');
+  if (rl) { const rt = +rl.dataset.rl, R = RAILS[rt]; if (R.req && !S.techs[R.req]) { toast('Nejdřív vyzkoumej: ' + TECHS[R.req].name + '.', 'bad'); return; } setTool({ kind: 'rail', rt }); G.cat = 'cat:rail'; }
+  if (ur) { setTool({ kind: 'unrail' }); G.cat = 'cat:rail'; }
   if (rb) { const rt = +rb.dataset.rt, R = ROADS[rt]; if (R.req && !S.techs[R.req]) { toast('Nejdřív vyzkoumej: ' + TECHS[R.req].name + '.', 'bad'); return; } G.rt = rt; setTool({ kind: 'road', rt }); G.cat = 'roads'; }
   if (z) { const v = z.dataset.zone; setTool(v === '0' ? { kind: 'dezone' } : { kind: 'zone', z: +v[0], d: +v[1] }); G.cat = 'zones'; }
   if (b) { const t = b.dataset.b, d = SERV[t]; if (d.req && !S.techs[d.req]) { toast('Nejdřív vyzkoumej: ' + TECHS[d.req].name + '.', 'bad'); return; } setTool({ kind: 'build', type: t }); G.cat = 'cat:' + d.cat; }
   if (ov) { setOverlay(ov.dataset.ov || null); }
   drawRail(); drawSub();
-  if (window.innerWidth < 860 && (z || b || rb)) $('sub').hidden = true;
+  if (window.innerWidth < 860 && (z || b || rb || rl || ur)) $('sub').hidden = true;
 };
 function setOverlay(k) { RS.overlay = k; updateOverlay(); const o = $('ovbar'); o.hidden = !k; if (k) o.innerHTML = '<b>' + OVERLAYS[k].name + '</b><button class="btn" id="ovx">Skrýt</button>'; if (k) $('ovx').onclick = () => { setOverlay(null); drawSub(); }; }
 
@@ -87,22 +95,31 @@ function lineCells(a, b) {
   seg(a, corner); out.pop(); seg(corner, b);
   return out.filter(c => inb(c.x, c.y));
 }
+// směr tažené čáry v daném políčku: 'h' vodorovně, 'v' svisle, roh = nevíme
+function cellDir(L, i) { const p = L[i - 1], n = L[i + 1], c = L[i]; const dp = p ? (p.y === c.y ? 'h' : 'v') : null, dn = n ? (n.y === c.y ? 'h' : 'v') : null; return dp && dn && dp !== dn ? undefined : dp || dn || undefined; }
 function rectCells(a, b) { const out = []; for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) if (inb(x, y)) out.push({ x, y }); return out.slice(0, 1600); }
 function previewCells(a, b) {
   const t = G.tool; let cells = [], cost = 0;
-  if (t.kind === 'road' || (t.kind === 'build' && SERV[t.type].line)) {
-    cells = lineCells(a, b).map(c => { const k = idx(c.x, c.y); if (t.kind === 'build') { const ok = !servProblem(t.type, c.x, c.y); if (ok) cost += SERV[t.type].cost; return { ...c, col: ok ? 0x8f99a3 : 0xe0483a }; }
-      const rt = t.rt || 1; if (road[k] === rt) return null; const bad = bld[k] || (ROADS[rt].req && !S.techs[ROADS[rt].req]); if (!bad) cost += roadCost(k, rt) * (road[k] ? 0.7 : 1); return { ...c, col: bad ? 0xe0483a : ter[k] === 1 ? 0x4a7fd9 : 0x5a5f69 }; }).filter(Boolean);
+  if (t.kind === 'rail') {
+    const L = lineCells(a, b); cells = L.map((c, i) => { const k = idx(c.x, c.y), rt = t.rt || 1; if (rail[k] === rt) return null; const err = railProblem(c.x, c.y, rt, cellDir(L, i)); if (!err) cost += railCost(k, rt) * (rail[k] ? 0.7 : 1); return { ...c, dir: cellDir(L, i), col: err ? 0xe0483a : ter[k] === 1 ? 0x4a7fd9 : 0x8a6a4a }; }).filter(Boolean);
+  } else if (t.kind === 'unrail') {
+    cells = rectCells(a, b).map(c => { const k = idx(c.x, c.y); if (!rail[k]) return null; cost += DEMOLISH_COST; return { ...c, col: 0xe0483a }; }).filter(Boolean);
+  } else if (t.kind === 'road' || (t.kind === 'build' && SERV[t.type].line)) {
+    const L0 = lineCells(a, b); L0.forEach((c, i) => { c.dir = cellDir(L0, i); });
+    cells = L0.map(c => { const k = idx(c.x, c.y); if (t.kind === 'build') { const ok = !servProblem(t.type, c.x, c.y); if (ok) cost += SERV[t.type].cost; return { ...c, col: ok ? 0x8f99a3 : 0xe0483a }; }
+      const rt = t.rt || 1; if (road[k] === rt) return null; const bad = bld[k] || (ROADS[rt].req && !S.techs[ROADS[rt].req]) || (rail[k] && roadOverRail(c.x, c.y, rt, c.dir)); if (!bad) cost += roadCost(k, rt) * (road[k] ? 0.7 : 1); return { ...c, col: bad ? 0xe0483a : ter[k] === 1 ? 0x4a7fd9 : 0x5a5f69 }; }).filter(Boolean);
   } else if (t.kind === 'zone') {
     cells = rectCells(a, b).map(c => { const k = idx(c.x, c.y); if (ter[k] === 1 || road[k] || bld[k]) return null; return { ...c, col: ZONES[t.z].hex }; }).filter(Boolean);
   } else if (t.kind === 'dezone' || t.kind === 'demolish') {
-    cells = rectCells(a, b).map(c => { const k = idx(c.x, c.y); const any = t.kind === 'dezone' ? zone[k] : (road[k] || bld[k] || zone[k] || ruin[k] || ter[k] === 3); if (!any) return null; if (t.kind === 'demolish' && (lvl[k] || road[k] || bld[k] || ruin[k])) cost += DEMOLISH_COST; return { ...c, col: 0xe0483a }; }).filter(Boolean);
+    cells = rectCells(a, b).map(c => { const k = idx(c.x, c.y); const any = t.kind === 'dezone' ? zone[k] : (road[k] || rail[k] || bld[k] || zone[k] || ruin[k] || ter[k] === 3); if (!any) return null; if (t.kind === 'demolish' && (lvl[k] || road[k] || rail[k] || bld[k] || ruin[k])) cost += DEMOLISH_COST; return { ...c, col: 0xe0483a }; }).filter(Boolean);
   }
   showPreview(cells); G.dragCost = cost; G.dragCells = cells;
 }
 function applyDrag() {
   const t = G.tool, cells = G.dragCells || []; let n = 0, poor = false, err = null;
-  if (t.kind === 'road') for (const c of cells) { const r = buildRoad(c.x, c.y, t.rt || 1); if (r === -1) { poor = true; break; } if (r === -2) { err = 'Nejdřív vyzkoumej: ' + TECHS[ROADS[t.rt].req].name + '.'; break; } if (r > 0) n++; }
+  if (t.kind === 'rail') for (const c of cells) { const r = buildRail(c.x, c.y, t.rt || 1, c.dir); if (r === -1) { poor = true; break; } if (typeof r === 'string') { if (!err) err = r; continue; } if (r > 0) n++; }
+  else if (t.kind === 'unrail') for (const c of cells) { const e = removeRail(c.x, c.y); if (e && e.startsWith('Nemáš')) { poor = true; break; } if (!e) n++; }
+  else if (t.kind === 'road') for (const c of cells) { const r = buildRoad(c.x, c.y, t.rt || 1, c.dir); if (r === -3) { if (!err) err = lastRoadErr; continue; } if (r === -1) { poor = true; break; } if (r === -2) { err = 'Nejdřív vyzkoumej: ' + TECHS[ROADS[t.rt].req].name + '.'; break; } if (r > 0) n++; }
   else if (t.kind === 'zone') for (const c of cells) { const r = setZone(c.x, c.y, t.z, t.d); if (r === -1) { poor = true; break; } if (r > 0) n++; }
   else if (t.kind === 'dezone') for (const c of cells) { if (zone[idx(c.x, c.y)]) { const e = demolish(c.x, c.y); if (!e) n++; } }
   else if (t.kind === 'demolish') { const done = new Set(); for (const c of cells) { const k = idx(c.x, c.y); if (bld[k]) { if (done.has(bld[k])) continue; done.add(bld[k]); } const e = demolish(c.x, c.y); if (e && cells.length === 1) err = e; else if (!e) n++; } }
@@ -218,7 +235,7 @@ function meter(v, col) { return '<div class="meter" style="width:100%;height:8px
 
 // informace o políčku
 PANELS.info = {
-  title: a => { const k = idx(a.x, a.y); if (bld[k]) return SERV[blds.get(bld[k]).type].name; if (road[k]) return (ROADS[road[k]] || ROADS[1]).name + (ter[k] === 1 ? ' – most' : ''); if (zone[k]) return ZONES[zone[k]].name; return ter[k] === 1 ? 'Voda' : ter[k] === 3 ? 'Les' : ter[k] === 4 ? 'Pole' : ter[k] === 5 ? 'Zahrada' : 'Volný pozemek'; },
+  title: a => { const k = idx(a.x, a.y); if (bld[k]) return SERV[blds.get(bld[k]).type].name; if (rail[k] && road[k]) return 'Železniční přejezd'; if (rail[k]) return RAILS[rail[k]].name + (ter[k] === 1 ? ' – most' : ''); if (road[k]) return (ROADS[road[k]] || ROADS[1]).name + (ter[k] === 1 ? ' – most' : ''); if (zone[k]) return ZONES[zone[k]].name; return ter[k] === 1 ? 'Voda' : ter[k] === 3 ? 'Les' : ter[k] === 4 ? 'Pole' : ter[k] === 5 ? 'Zahrada' : 'Volný pozemek'; },
   html: a => {
     const k = idx(a.x, a.y); let h = '';
     if (bld[k]) {
@@ -227,6 +244,7 @@ PANELS.info = {
       if (b.built < 1) h += row('Stavba', pct(b.built * 100)); else if (!b.ok) h += row('Provoz', b.off > 0 ? 'mimo provoz ' + b.off + ' dní' : 'chybí silnice', 'neg'); else h += row('Provoz', b.flooded ? 'pod vodou' : 'v pořádku', b.flooded ? 'neg' : 'pos');
       if (d.power) h += row('Výkon', fmt(b.out || 0) + ' MW');
       if (d.water && b.type === 'pump') h += row('Voda', fmt(d.water * (nearWater(b.x, b.y, 1, 2) ? 1.5 : 1)) + ' m³');
+      if (d.rail) h += railBldInfo(b);
       if (d.r && d.r < 30 || d.fireStr) h += row('Dosah', Math.round(d.r * (d.fireStr ? 1 + tfx('fireRange') : 1)) + ' políček');
       if (d.fireStr) h += row('Vozidla', b.type === 'fireair' ? '2 vrtulníky a ' + d.trucks + ' cisterny' : d.trucks + (d.trucks === 1 ? ' cisterna' : d.trucks < 5 ? ' vozy' : ' vozů')) + row('Síla zásahu', pct(d.fireStr * (1 + tfx('fireEff')) * budF('fire') * 100)) + row('Voda pro hasiče', pct((0.45 + 0.55 * (T.wRatio || 0)) * 100), T.wRatio < 0.9 ? 'neg' : '');
       if (d.police) h += row('Policistů', d.police); if (d.army) h += row('Vojáků', d.army); if (d.trade) h += row('Obchodní kapacita', fmt(d.trade) + ' t/měs.'); if (d.rp) h += row('Výzkum', d.rp + ' bodů/měs.');
@@ -235,7 +253,8 @@ PANELS.info = {
       if (b.type !== 'townhall') h += '<div class="btns"><button class="btn dan" id="i-demo">Zbořit (' + money(DEMOLISH_COST * b.size) + ')</button></div>';
       return h;
     }
-    if (road[k]) { const R = ROADS[road[k]] || ROADS[1]; return '<p>' + R.desc + '</p>' + row('Provoz', R.noCars ? 'jen chodci' : traf[k] > 1.1 ? 'zácpy' : traf[k] > 0.6 ? 'hustý' : 'plynulý', traf[k] > 1.1 ? 'neg' : '') + row('Vytížení', pct(Math.min(200, traf[k] * 100))) + row('Kapacita', pct(R.cap * (1 + tfx('trafficCap')) * 100)) + row('Údržba', money(R.up * (ter[k] === 1 ? 3 : 1)) + '/měs.') + row('Propojeno s dálnicí', conn[k] ? 'ano' : 'ne', conn[k] ? '' : 'neg') + (traf[k] > 1.1 && road[k] < 3 ? '<p class="hint">Ucpaná ulice: přestav ji na třídu (nástroj Silnice), postav tramvaj, metro nebo autobusy.</p>' : '') + '<div class="btns"><button class="btn dan" id="i-demo">Zbořit</button></div>'; }
+    if (rail[k] && !road[k]) return railInfo(k) + '<div class="btns"><button class="btn dan" id="i-unrail">Zbourat trať (' + money(DEMOLISH_COST) + ')</button></div>';
+    if (road[k]) { const R = ROADS[road[k]] || ROADS[1]; return (rail[k] ? railInfo(k) + '<h4>Silnice</h4>' : '') + '<p>' + R.desc + '</p>' + row('Provoz', R.noCars ? 'jen chodci' : traf[k] > 1.1 ? 'zácpy' : traf[k] > 0.6 ? 'hustý' : 'plynulý', traf[k] > 1.1 ? 'neg' : '') + row('Vytížení', pct(Math.min(200, traf[k] * 100))) + row('Kapacita', pct(R.cap * (1 + tfx('trafficCap')) * 100)) + row('Údržba', money(R.up * (ter[k] === 1 ? 3 : 1)) + '/měs.') + row('Propojeno s dálnicí', conn[k] ? 'ano' : 'ne', conn[k] ? '' : 'neg') + (traf[k] > 1.1 && road[k] < 3 ? '<p class="hint">Ucpaná ulice: přestav ji na třídu (nástroj Silnice), postav tramvaj, metro nebo autobusy.</p>' : '') + '<div class="btns"><button class="btn dan" id="i-demo">Zbořit silnici</button>' + (rail[k] ? '<button class="btn dan" id="i-unrail">Zbourat trať</button>' : '') + '</div>'; }
     if (zone[k]) {
       const z = zone[k], c = lvl[k] ? capOf(k) : 0;
       h += row('Hustota', dens[k] ? 'hustá zástavba' : 'řídká zástavba') + row('Úroveň budovy', lvl[k] ? lvl[k] + ' z ' + (dens[k] ? (S.techs.skyscraper ? 5 : 4) : 3) : 'prázdná parcela');
@@ -260,7 +279,8 @@ PANELS.info = {
     if (ter[k] === 5) h += '<p>Zahrada. Při stavbě zmizí.</p>';
     return h;
   },
-  bind: a => { const b = $('i-demo'); if (b) b.onclick = () => { const e = demolish(a.x, a.y); if (e) toast(e, 'bad'); closePanel(); refreshNow(); }; },
+  bind: a => { const b = $('i-demo'); if (b) b.onclick = () => { const e = demolish(a.x, a.y); if (e) toast(e, 'bad'); closePanel(); refreshNow(); };
+    const u = $('i-unrail'); if (u) u.onclick = () => { const e = removeRail(a.x, a.y); if (e) toast(e, 'bad'); closePanel(); refreshNow(); }; },
 };
 function openInfo(x, y) { openPanel('info', { x, y }); }
 
@@ -270,7 +290,7 @@ PANELS.budget = {
     let h = '<h4>Daně</h4><p>Vyšší daně dají víc peněz, ale lidé a firmy je nemají rádi. Prudké zvýšení vyvolá demonstrace.</p>';
     for (const z of ['R', 'C', 'I', 'O']) { const zz = { R: 1, C: 2, I: 3, O: 4 }[z]; h += '<div class="slider"><label for="tx' + z + '">' + ZONES[zz].name + '</label><output id="otx' + z + '">' + S.tax[z] + ' %</output><input type="range" id="tx' + z + '" min="0" max="25" value="' + S.tax[z] + '"></div>'; }
     h += '<h4>Rozpočet služeb</h4><p>Pod 100 % služby slábnou, nad 100 % pracují lépe a víc stojí.</p>';
-    const BN = { police: 'Policie a tajná služba', fire: 'Hasiči', health: 'Zdravotnictví', edu: 'Školství a výzkum', transit: 'Městská doprava', army: 'Armáda', parks: 'Parky a sport' };
+    const BN = { police: 'Policie a tajná služba', fire: 'Hasiči', health: 'Zdravotnictví', edu: 'Školství a výzkum', transit: 'Městská doprava', rail: 'Železnice', army: 'Armáda', parks: 'Parky a sport' };
     for (const c in BN) h += '<div class="slider"><label for="bd' + c + '">' + BN[c] + '</label><output id="obd' + c + '">' + S.bud[c] + ' %</output><input type="range" id="bd' + c + '" min="50" max="150" step="5" value="' + S.bud[c] + '"></div>';
     h += '<h4>Minulý měsíc</h4><div id="b-last"></div><h4>Úvěry</h4><div id="b-loan"></div>';
     return h;
@@ -284,9 +304,9 @@ PANELS.budget = {
     const L = S.last; let h = '';
     if (!L) h = '<p>První vyúčtování bude na konci měsíce.</p>';
     else {
-      const I = L.inc, E = L.exp, ITEMS = [['Daně z bydlení', I.R], ['Daně z obchodů', I.C], ['Daně z průmyslu', I.I], ['Daně z kanceláří', I.O], ['Prodej elektřiny', I.power], ['Cestovní ruch', I.tourism], ['Recyklace', I.recycle || 0], ['Obchod se zbožím', L.trade.net]];
+      const I = L.inc, E = L.exp, ITEMS = [['Daně z bydlení', I.R], ['Daně z obchodů', I.C], ['Daně z průmyslu', I.I], ['Daně z kanceláří', I.O], ['Prodej elektřiny', I.power], ['Cestovní ruch', I.tourism], ['Recyklace', I.recycle || 0], ['Jízdné a nákladní poplatky', I.rail || 0], ['Dotace kraje na vlaky', I.railSub || 0], ['Obchod se zbožím', L.trade.net]];
       for (const [a, v] of ITEMS) if (Math.abs(v) >= 1) h += row(a, (v >= 0 ? '+' : '') + money(v), v >= 0 ? 'pos' : 'neg');
-      for (const [a, v] of [['Provoz služeb', E.services], ['Správa města', E.admin], ['Údržba silnic', E.roads], ['Financování výzkumu', E.research], ['Vyhlášky', E.policies], ['Úroky', E.loan]]) if (v >= 1) h += row(a, '−' + money(v), 'neg');
+      for (const [a, v] of [['Provoz služeb', E.services], ['Správa města', E.admin], ['Údržba silnic', E.roads], ['Železnice: vlaky a tratě', E.rail || 0], ['Financování výzkumu', E.research], ['Vyhlášky', E.policies], ['Úroky', E.loan]]) if (v >= 1) h += row(a, '−' + money(v), 'neg');
       h += row('<b>Celkem</b>', (L.net >= 0 ? '+' : '') + money(L.net), L.net >= 0 ? 'pos' : 'neg');
     }
     $('b-last').innerHTML = h;
@@ -313,6 +333,62 @@ PANELS.trade = {
     let m = ''; for (const g of GOOD_KEYS) m += '<div class="row"><span>' + GOODS[g].name + '</span><span class="btns" style="margin:0"><button class="btn" data-g="' + g + '" data-q="100" data-buy="1">Koupit 100</button><button class="btn" data-g="' + g + '" data-q="100">Prodat 100</button><button class="btn" data-g="' + g + '" data-q="500">Prodat 500</button></span></div>';
     $('tr-man').innerHTML = m;
     $('tr-con').innerHTML = S.nb.filter(n => n.contract).map(n => row(n.name, (n.contract.sell ? 'prodej ' : 'nákup ') + n.contract.q + ' t ' + GOODS[n.contract.g].name.toLowerCase() + ', ještě ' + n.contract.months + ' měs.')).join('') || '<p>Žádné smlouvy. Uzavřeš je v záložce Sousedé.</p>';
+  },
+};
+
+// ---------- železnice ----------
+function railInfo(k) {
+  const R = RAILS[rail[k]], c = railComps[railComp[k]], sv = T.railSv;
+  let h = '<p>' + R.desc + '</p>' + row('Správce', railSt[k] ? 'Správa železnic (údržbu platí stát)' : 'město') + row('Stav', railDmg[k] ? 'poškozená, oprava asi ' + railDmg[k] + ' dní' : 'v pořádku', railDmg[k] ? 'neg' : '');
+  h += row('Napojení', c ? (c.edge ? 'celostátní síť' : 'jen místní trať') : 'odříznutá', c && c.edge ? '' : 'neg');
+  if (!railSt[k]) h += row('Údržba', money(R.up * (ter[k] === 1 ? 3 : 1)) + '/měs.');
+  if (sv) h += row('Vlaků v provozu', sv.eff.reg + sv.eff.ic + sv.eff.fr + sv.eff.hs);
+  if (road[k]) h += row('Zabezpečení přejezdu', S.techs.crossings ? 'závory a světla' : 'jen světla', S.techs.crossings ? '' : 'neg');
+  return h;
+}
+function railBldInfo(b) {
+  const d = SERV[b.type], c = b.rc >= 0 ? railComps[b.rc] : null; let h = row('Trať', c ? (c.edge ? 'napojeno na celostátní síť' : c.pass.length >= 2 ? 'místní trať' : 'trať nikam nevede') : 'chybí trať', c && (c.edge || c.pass.length >= 2) ? '' : 'neg');
+  if (d.rail === 'pass') { h += row('Cestujících měsíčně', fmt(b.pax || 0)) + row('Obyvatel v dosahu', fmt(b.catch || 0)) + row('Četnost spojů', pct((b.sf || 0) * 100)); if (!b.sf) h += '<p class="hint">Nejezdí sem žádné vlaky. Nastav osobní vlaky v záložce Železnice.</p>'; }
+  if (d.rail === 'freight') h += row('Kapacita', fmt(d.freight) + ' t/měs.') + row('Nákladních vlaků', (T.railSv ? T.railSv.eff.fr : 0));
+  if (d.rail === 'depot') h += row('Udrží v provozu', d.trains + ' vlaků');
+  return h;
+}
+const railWhy = t => { const c = railComps, ok = b => b.ok;
+  if (TRAINS[t].req && !S.techs[TRAINS[t].req]) return 'Vyžaduje výzkum: ' + TECHS[TRAINS[t].req].name + '.';
+  if (t === 'reg') return c.some(x => x.pass.some(ok)) ? 'Trať se zastávkou musí vést na okraj mapy nebo k další stanici.' : 'Postav u trati zastávku nebo nádraží.';
+  if (t === 'fr') return 'Potřebuješ nákladové nádraží nebo terminál u trati napojené na okraj mapy.';
+  if (t === 'ic') return 'Potřebuješ hlavní nádraží u trati napojené na okraj mapy.';
+  return 'Potřebuješ hlavní nádraží a aspoň 8 políček vysokorychlostní trati vedoucí na okraj mapy.'; };
+PANELS.rail = {
+  title: () => 'Železnice',
+  html: () => {
+    const sv = T.railSv || railService(), R = S.rail, st = R.stats;
+    let tiles = 0, el = 0, hsT = 0, cross = 0, dmg = 0, own = 0; for (let k = 0; k < NN; k++) if (rail[k]) { tiles++; if (RAILS[rail[k]].elec) el++; if (rail[k] === 3) hsT++; if (road[k]) cross++; if (railDmg[k]) dmg++; if (!railSt[k]) own++; }
+    const edge = railComps.some(c => c.edge);
+    let h = row('Délka tratí', tiles + ' políček' + (own ? ' (městských ' + own + ')' : '')) + row('Elektrizováno', pct(tiles ? el / tiles * 100 : 0)) + row('Napojení na celostátní síť', edge ? 'ano' : 'ne', edge ? '' : 'neg') + row('Přejezdy', cross + (cross ? (S.techs.crossings ? ' se závorami' : ' bez závor') : ''));
+    if (dmg) h += row('Poškozená trať', dmg + ' políček', 'neg');
+    if (R.strike > 0) h += '<p class="warnp">Železničáři stávkují, vlaky nejezdí ještě ' + R.strike + ' dní.</p>';
+    if (!tiles) h += '<p class="hint">Ve městě nevede žádná trať. Postav ji nástrojem Železnice a napoj na okraj mapy.</p>';
+    h += '<h4>Vlakové spoje</h4><p class="hint">Vlaků může jezdit ' + sv.cap + ' (' + RAIL_BASE_CAP + ' bez depa, každé depo +' + SERV.depot.trains + '). ' + (sv.total > sv.cap ? '<b class="neg">Chceš ' + sv.total + ', postav další depo.</b>' : '') + '</p>';
+    for (const t in TRAINS) { const T0 = TRAINS[t], av = sv.avail[t], cost = (sv.electric ? T0.costE : T0.cost) * (1 + tfx('railCost'));
+      h += '<div class="rs-tr' + (av ? '' : ' off') + '"><div><b>' + T0.name + '</b><small>' + money(cost) + ' za vlak měsíčně' + (sv.eff[t] !== (R[t] || 0) && av ? ' · jezdí ' + sv.eff[t] : '') + '</small></div><span class="step"><button class="btn" data-tr="' + t + '" data-d="-1" aria-label="Ubrat">−</button><b class="num">' + (R[t] || 0) + '</b><button class="btn" data-tr="' + t + '" data-d="1" aria-label="Přidat">+</button></span><p>' + (av ? T0.desc : railWhy(t)) + '</p></div>'; }
+    h += '<h4>Jízdné</h4><div class="rs-fund"><input type="range" id="rl-fare" min="0" max="80" step="5" value="' + R.fare + '" aria-label="Jízdné"><b class="num" id="rl-farev">' + money(R.fare) + '</b></div><p class="hint">Levné jízdné přiláká víc lidí, drahé vydělá víc z každého, ale lidé pojedou autem. Městu připadá polovina.</p>';
+    const pass = [...blds.values()].filter(b => SERV[b.type].rail);
+    if (pass.length) { h += '<h4>Stanice</h4>'; for (const b of pass) { const d = SERV[b.type]; h += '<button class="rs-st" data-go="' + b.x + ',' + b.y + '"><b>' + d.name + '</b><span class="num">' + (d.rail === 'pass' ? fmt(b.pax || 0) + ' cest./měs.' : d.rail === 'freight' ? fmt(d.freight) + ' t' : d.trains + ' vlaků') + '</span>' + (b.ok ? '' : '<em class="neg">' + (b.rc < 0 ? 'chybí trať' : !hasRoadAccess(b) ? 'chybí silnice' : 'trať nikam nevede') + '</em>') + '</button>'; } }
+    h += '<h4>Přínos pro město</h4>' + row('Cestujících měsíčně', fmt(R.pax || T.railPax || 0)) + row('Dojíždí za prací mimo město', fmt(T.extJobs || 0) + ' lidí') + row('Obchodní kapacita z vlaků', fmt(T.railTrade || 0) + ' t/měs.') + (T.railTour ? row('Cestovní ruch', '+' + T.railTour.toFixed(1).replace('.', ',')) : '');
+    if (T.railCrowd > 1.05) h += '<p class="warnp">Vlaky jsou přeplněné (' + pct(T.railCrowd * 100) + ' kapacity). Přidej spoje, jinak lidé pojedou autem.</p>';
+    if (st) { const net = st.fares + st.freight + st.sub - st.ops - st.track; h += '<h4>Hospodaření minulý měsíc</h4>' + row('Jízdné', '+' + money(st.fares), 'pos') + row('Nákladní poplatky', '+' + money(st.freight), 'pos') + row('Dotace kraje', '+' + money(st.sub), 'pos') + row('Provoz vlaků', '−' + money(st.ops), 'neg') + row('Údržba městských tratí', '−' + money(st.track), 'neg') + row('<b>Celkem</b>', (net >= 0 ? '+' : '−') + money(Math.abs(net)), net >= 0 ? 'pos' : 'neg') + '<p class="hint">Údržbu stanic najdeš v provozu služeb. Rozpočet železnice v Rozpočtu ovlivňuje nehody a stávky.</p>'; }
+    h += '<h4>Bezpečnost</h4>' + row('Nehody letos', R.accY || 0, R.accY ? 'neg' : '') + row('Rozpočet železnice', S.bud.rail + ' %');
+    return h;
+  },
+  live: () => { if (document.activeElement && document.activeElement.id === 'rl-fare') return; const sc = $('pbody').scrollTop; renderPanel(); $('pbody').scrollTop = sc; },
+  bind: () => {
+    $('pbody').onclick = e => {
+      const b = e.target.closest('[data-tr]'), g = e.target.closest('[data-go]');
+      if (b) { const t = b.dataset.tr, err = setRailService(t, (S.rail[t] || 0) + +b.dataset.d); if (err) toast(err, 'bad'); T.railSv = railService(); renderPanel(); }
+      if (g) { const [x, y] = g.dataset.go.split(',').map(Number); cam.x = tileX(x); cam.z = tileZ(y); if (window.innerWidth < 860) closePanel(); }
+    };
+    const f = $('rl-fare'); if (f) { f.oninput = () => { S.rail.fare = +f.value; $('rl-farev').textContent = money(S.rail.fare); }; f.onchange = () => { covDirty = true; renderPanel(); }; }
   },
 };
 
@@ -510,6 +586,8 @@ function incTitle(i) {
     case 'quake': return ['Po zemětřesení', 'Zřítilo se ' + i.size + ' budov. Lidé hledají blízké v troskách.'];
     case 'aftermath': return ['Po útoku extremistů', 'Město je v šoku. Lidé čekají, co uděláš.'];
     case 'spill': return ['Chemická havárie', 'Okolí továrny je zamořené.'];
+    case 'derail': return [i.sabotage ? 'Sabotáž na trati' : i.freight ? 'Vykolejil nákladní vlak' : 'Železniční neštěstí', (anyRailDmg() ? 'Trať je zavřená, opravy běží.' : 'Trať je opravená.') + (i.freight ? '' : ' Lidé chtějí vědět, kdo za to může.')];
+    case 'railstrike': return ['Stávka železničářů', 'Vlaky nejezdí ještě ' + Math.max(0, S.rail.strike) + ' dní.' + (i.buses ? ' Jezdí náhradní autobusy.' : '')];
     case 'coupwarn': return ['Neklid v armádě', 'Loajalita armády je ' + Math.round(S.armyLoy) + ' %.'];
     case 'assault': return ['Útok: ' + NEIGHBORS[i.nb].name, fmt(i.size) + ' vojáků dorazí za ' + Math.max(0, i.eta - S.day) + ' dní.' + (i.intercept ? ' Armáda jim jde naproti.' : '')];
   }
@@ -593,7 +671,7 @@ const mkEls = new Map();
 function updateMarkers() {
   const live = new Set();
   for (const i of S.inc) {
-    if (!['protest', 'riot', 'assault', 'bigfire', 'spill', 'aftermath'].includes(i.type)) continue; live.add(i.id);
+    if (!['protest', 'riot', 'assault', 'bigfire', 'spill', 'aftermath', 'derail', 'railstrike'].includes(i.type)) continue; live.add(i.id);
     let el = mkEls.get(i.id);
     if (!el) { el = document.createElement('button'); el.className = 'mk ' + (['protest', 'riot', 'assault'].includes(i.type) ? i.type : 'other'); el.onclick = () => openPanel('crisis'); $('markers').appendChild(el); mkEls.set(i.id, el); }
     el.className = 'mk ' + (['protest', 'riot', 'assault'].includes(i.type) ? i.type : 'other');
@@ -635,7 +713,7 @@ function drawMiniBase() {
   const c = mbase.getContext('2d'), img = c.createImageData(N, N);
   for (let k = 0; k < NN; k++) {
     let col = ter[k] === 1 ? [62, 110, 134] : ter[k] === 3 ? [70, 105, 58] : ter[k] === 2 ? [160, 150, 115] : ter[k] === 4 ? [196, 178, 112] : ter[k] === 5 ? [104, 140, 76] : [112, 140, 80];
-    if (road[k]) col = [80, 85, 95]; else if (bld[k]) col = [150, 140, 170]; else if (zone[k]) { const z = new THREE.Color(ZONES[zone[k]].hex); const f = lvl[k] ? 0.85 : 0.55; col = [z.r * 255 * f + (lvl[k] ? 0 : 143 * 0.45), z.g * 255 * f + (lvl[k] ? 0 : 207 * 0.45), z.b * 255 * f + (lvl[k] ? 0 : 104 * 0.45)]; }
+    if (road[k]) col = [80, 85, 95]; else if (rail[k]) col = railDmg[k] ? [220, 120, 40] : [92, 64, 52]; else if (bld[k]) col = [150, 140, 170]; else if (zone[k]) { const z = new THREE.Color(ZONES[zone[k]].hex); const f = lvl[k] ? 0.85 : 0.55; col = [z.r * 255 * f + (lvl[k] ? 0 : 143 * 0.45), z.g * 255 * f + (lvl[k] ? 0 : 207 * 0.45), z.b * 255 * f + (lvl[k] ? 0 : 104 * 0.45)]; }
     if (fire[k]) col = [255, 110, 40]; if (flood[k]) col = [60, 120, 230]; if (ruin[k]) col = [160, 150, 135];
     img.data.set([col[0], col[1], col[2], 255], k * 4);
   }

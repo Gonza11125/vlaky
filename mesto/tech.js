@@ -5,6 +5,7 @@ const FIELDS = [
   { key: 'energie', name: 'Energetika', col: '#c99a2e' }, { key: 'doprava', name: 'Doprava', col: '#5a6a7a' }, { key: 'stavby', name: 'Stavby a urbanismus', col: '#8a6a4a' },
   { key: 'zachrana', name: 'Hasiči, policie, záchrana', col: '#b8402f' }, { key: 'zdravi', name: 'Zdravotnictví', col: '#b84a6a' }, { key: 'veda', name: 'Školství a věda', col: '#c47a2a' },
   { key: 'ekonomika', name: 'Ekonomika a průmysl', col: '#3d6a9a' }, { key: 'ekologie', name: 'Ekologie', col: '#4f8a3f' }, { key: 'sprava', name: 'Správa a společnost', col: '#7a66a8' }, { key: 'obrana', name: 'Obrana', col: '#5a6a3a' },
+  { key: 'zeleznice', name: 'Železnice', col: '#2f6f6a' },
 ];
 const TIER_COST = [0, 45, 100, 200, 360, 600];
 // t: stupeň 1–5, r: předpoklady, fx: účinky, u: co odemyká (pro popis)
@@ -100,6 +101,18 @@ const TECHS = {
   mechanized:{ name: 'Mechanizované jednotky', f: 'obrana', t: 3, r: ['airdef'], fx: { army: 0.3 }, desc: 'Obrněné transportéry a tanky.' },
   counterintel: { name: 'Kontrarozvědka', f: 'obrana', t: 4, r: ['intel'], fx: { intel: 0.3 }, desc: 'Cizí agenti se hůř dostanou do města.' },
   uav:       { name: 'Bezpilotní letouny', f: 'obrana', t: 4, r: ['mechanized', 'compsys'], fx: { army: 0.3 }, desc: 'Průzkum a obrana bez rizika pro vojáky.' },
+  // železnice
+  railsignal:{ name: 'Staniční zabezpečení', f: 'zeleznice', t: 1, fx: { railSafe: -0.3 }, desc: 'Návěstidla a stavědla. Méně železničních nehod.' },
+  taktfahr:  { name: 'Taktový jízdní řád', f: 'zeleznice', t: 1, fx: { railRide: 0.15 }, desc: 'Vlaky jezdí v pravidelných intervalech a lidé se na ně můžou spolehnout.' },
+  electrification: { name: 'Elektrizace tratí', f: 'zeleznice', t: 2, r: ['railsignal'], u: 'Elektrizovaná trať', desc: 'Trolejové vedení: elektrické vlaky jsou rychlejší, levnější na provoz a nekouří.' },
+  crossings: { name: 'Zabezpečené přejezdy', f: 'zeleznice', t: 2, r: ['railsignal'], fx: { crossSafe: -0.7 }, desc: 'Závory, světla a kamery na přejezdech.' },
+  intercity: { name: 'Dálková železnice', f: 'zeleznice', t: 2, r: ['taktfahr'], u: 'Hlavní nádraží, rychlíky', desc: 'Rychlíky do velkých měst přivezou turisty a firmy.' },
+  containers:{ name: 'Kontejnerová přeprava', f: 'zeleznice', t: 2, r: ['taktfahr'], u: 'Kontejnerový terminál', fx: { trade: 0.05 }, desc: 'Zboží v kontejnerech se překládá mezi vlakem, kamionem a lodí.' },
+  suburban:  { name: 'Příměstská železnice', f: 'zeleznice', t: 3, r: ['electrification', 'taktfahr'], fx: { railRide: 0.25, railRange: 0.25 }, desc: 'Hustá síť zastávek a časté spoje do předměstí.' },
+  railmaint: { name: 'Diagnostika tratí', f: 'zeleznice', t: 3, r: ['electrification'], fx: { railSafe: -0.25, railCost: -0.1 }, desc: 'Měřicí vozy odhalí vady kolejí dřív, než se něco stane.' },
+  hsr:       { name: 'Vysokorychlostní železnice', f: 'zeleznice', t: 4, r: ['intercity', 'suburban'], u: 'Vysokorychlostní trať, rychlovlaky', desc: 'Vlaky přes 300 km/h. Do metropole za hodinu.' },
+  etcs:      { name: 'Zabezpečovač ETCS', f: 'zeleznice', t: 4, r: ['railmaint', 'compsys'], fx: { railSafe: -0.4, railRide: 0.1 }, desc: 'Evropský vlakový zabezpečovač hlídá rychlost a odstupy vlaků.' },
+  autotrain: { name: 'Automatické vlaky', f: 'zeleznice', t: 5, r: ['etcs', 'ai'], fx: { railCost: -0.3, railRide: 0.1 }, desc: 'Vlaky bez strojvedoucích jezdí častěji a levněji.' },
 };
 for (const id in TECHS) { const t = TECHS[id]; t.cost = t.cost || TIER_COST[t.t]; t.req = t.r || []; t.fx = t.fx || {}; }
 
@@ -113,6 +126,7 @@ const FXN = {
   trade: ['Obchodní kapacita', '%', 1], upkeep: ['Provoz služeb', '%', 0], happy: ['Spokojenost', 'b', 1], approval: ['Důvěra ve vedení', 'b', 1], flood: ['Škody povodní', '%', 0], quake: ['Škody zemětřesení', '%', 0],
   storm: ['Škody vichřic', '%', 0], garbage: ['Množství odpadu', '%', 0], landValue: ['Cena pozemků', 'b', 1], army: ['Síla armády', '%', 1], armyLoy: ['Loajalita armády', 'b', 1], intel: ['Účinnost tajné služby', '%', 1],
   growth: ['Rychlost výstavby', '%', 1], protest: ['Četnost demonstrací', '%', 0], scandal: ['Četnost afér', '%', 0], parkEff: ['Účinek parků', '%', 1], transitEff: ['Účinek MHD', '%', 1],
+  railRide: ['Cestující vlakem', '%', 1], railSafe: ['Železniční nehody', '%', 0], crossSafe: ['Nehody na přejezdech', '%', 0], railCost: ['Provoz vlaků', '%', 0], railRange: ['Spádová oblast stanic', '%', 1],
 };
 function fxText(fx) {
   return Object.keys(fx).map(k => { const n = FXN[k]; if (!n) return ''; const v = fx[k], s = v > 0 ? '+' : '−', a = Math.abs(v);
@@ -127,7 +141,7 @@ function fxReset() { _fxCache = null; }
 
 const TECH_LEVELS = [
   { name: 'Základní', techs: [] },
-  { name: 'Rozvinutá', techs: ['gasturb', 'wind', 'gridmaint', 'hygiene', 'bus', 'signals', 'zoning', 'flood', 'firecode', 'firetech', 'forensics', 'pedagogy', 'massprod', 'banking', 'filters', 'publicrel', 'logistics', 'proarmy'] },
+  { name: 'Rozvinutá', techs: ['gasturb', 'wind', 'gridmaint', 'hygiene', 'bus', 'signals', 'zoning', 'flood', 'firecode', 'firetech', 'forensics', 'pedagogy', 'massprod', 'banking', 'filters', 'publicrel', 'logistics', 'proarmy', 'railsignal', 'taktfahr'] },
   { name: 'Špičková', techs: ['gasturb', 'wind', 'gridmaint', 'hydro', 'solar', 'cogen', 'storage', 'hygiene', 'ambulance', 'vaccines', 'bus', 'signals', 'pedestrian', 'avenues', 'logistics', 'highways', 'tram', 'metro', 'zoning', 'flood', 'firecode', 'prefab', 'seismic', 'skyscraper',
-    'firetech', 'forensics', 'ems', 'riot', 'intel', 'pedagogy', 'compsys', 'grants', 'internet', 'banking', 'massprod', 'tourism', 'hightech', 'filters', 'incin', 'urbangreen', 'recycling', 'publicrel', 'egov', 'mediation', 'proarmy', 'airdef'] },
+    'firetech', 'forensics', 'ems', 'riot', 'intel', 'pedagogy', 'compsys', 'grants', 'internet', 'banking', 'massprod', 'tourism', 'hightech', 'filters', 'incin', 'urbangreen', 'recycling', 'publicrel', 'egov', 'mediation', 'proarmy', 'airdef', 'railsignal', 'taktfahr', 'electrification', 'crossings', 'intercity', 'containers', 'suburban'] },
 ];

@@ -35,7 +35,8 @@ function newGame(o) {
     v: 1, name: o.name || 'Nové Město', day: 0, money: STARTS[o.size].money, loan: 0,
     opts: { size: o.size, tech: o.tech, crisis: o.crisis, wars: o.wars, elections: o.elections },
     tax: { R: 9, C: 9, I: 9, O: 9 }, lastTax: 36,
-    bud: { police: 100, fire: 100, health: 100, edu: 100, transit: 100, army: 100, parks: 100 },
+    bud: { police: 100, fire: 100, health: 100, edu: 100, transit: 100, rail: 100, army: 100, parks: 100 },
+    rail: Object.assign(RAIL_DEF(), W.railInit || {}),
     techs: {}, research: null, rq: [], rp: 0, resFund: 0, pol: {},
     stock: { food: 600, goods: 400, tech: 50, fuel: 500 }, price: {}, auto: { food: 'sell', goods: 'sell', tech: 'sell', fuel: 'keep' },
     reserve: { food: 300, goods: 200, tech: 50, fuel: 600 }, tradeUsed: 0, short: {},
@@ -48,7 +49,7 @@ function newGame(o) {
   techs.forEach(t => { S.techs[t] = true; }); fxReset();
   for (const g of GOOD_KEYS) S.price[g] = GOODS[g].price;
   for (const b of blds.values()) b.built = 1;
-  connDirty = true; covDirty = true;
+  connDirty = true; covDirty = true; railDirty = true;
   analysis();
   for (let k = 0; k < NN; k++) if (isBuilt(k) && zone[k] !== 1) occ[k] = capOf(k) * T.jobFill;
   analysis();
@@ -68,17 +69,19 @@ function computeWaterDist() {
 function canAfford(c) { return S.money >= c; }
 function spend(c) { S.money -= c; }
 function roadCost(k, rt) { const R = ROADS[rt]; return ter[k] === 1 ? BRIDGE_COST * Math.max(1, R.cost / 3000) : R.cost + (lvl[k] ? DEMOLISH_COST : 0); }
-function buildRoad(x, y, rt) {
+let lastRoadErr = '';
+function buildRoad(x, y, rt, dir) {
   rt = rt || 1; const k = idx(x, y); if (road[k] === rt || bld[k]) return 0;
   if (ROADS[rt].req && !S.techs[ROADS[rt].req]) return -2;
+  const re = roadOverRail(x, y, rt, dir); if (re) { lastRoadErr = re; return -3; }
   const c = roadCost(k, rt) * (road[k] ? 0.7 : 1);
   if (!canAfford(c)) return -1;
-  spend(c); clearTile(k); road[k] = rt; markDirty(k); connDirty = true;
+  spend(c); clearTile(k); road[k] = rt; markDirty(k); connDirty = true; if (rail[k]) railDirty = true;
   for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inb(x + dx, y + dy)) markDirty(idx(x + dx, y + dy));
   return c;
 }
 function setZone(x, y, z, d) {
-  const k = idx(x, y); if (ter[k] === 1 || road[k] || bld[k]) return 0;
+  const k = idx(x, y); if (ter[k] === 1 || road[k] || rail[k] || bld[k]) return 0;
   if (zone[k] === z && dens[k] === d) return 0;
   if (lvl[k] && zone[k] !== z) { if (!canAfford(DEMOLISH_COST)) return -1; spend(DEMOLISH_COST); }
   if (zone[k] !== z) { lvl[k] = 0; occ[k] = 0; aband[k] = 0; }
@@ -91,8 +94,9 @@ function servProblem(type, x, y) {
   if (d.req && !S.techs[d.req]) return 'Nejdřív musíš vyzkoumat: ' + TECHS[d.req].name + '.';
   if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
   if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
-  for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
+  for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || rail[k] || bld[k]) return 'Místo není volné.'; }
   if (d.coast && !nearWater(x, y, d.size, 1)) return d.name + ' musí stát hned u vody.';
+  if (d.rail && !railAround(x, y, d.size).length) return d.name + ' musí stát hned u železniční trati.';
   if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
   let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
   if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
@@ -103,8 +107,9 @@ function placeServ(type, x, y) {
   if (d.req && !S.techs[d.req]) return 'Nejdřív musíš vyzkoumat: ' + TECHS[d.req].name + '.';
   if (d.unique) for (const b of blds.values()) if (b.type === type) return 'Tahle stavba může stát jen jednou.';
   if (d.needs && ![...blds.values()].some(b => b.type === d.needs)) return 'Potřebuje ve městě stavbu: ' + SERV[d.needs].name + '.';
-  for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || bld[k]) return 'Místo není volné.'; }
+  for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) { if (!inb(i, j)) return 'Mimo mapu.'; const k = idx(i, j); if (ter[k] === 1 || road[k] || rail[k] || bld[k]) return 'Místo není volné.'; }
   if (d.coast && !nearWater(x, y, d.size, 1)) return d.name + ' musí stát hned u vody.';
+  if (d.rail && !railAround(x, y, d.size).length) return d.name + ' musí stát hned u železniční trati.';
   if (type === 'dike' && !fpl[idx(x, y)] && !nearWater(x, y, 1, 1)) return 'Hráz má smysl jen u řeky.';
   let demo = 0; for (let j = y; j < y + d.size; j++) for (let i = x; i < x + d.size; i++) if (lvl[idx(i, j)]) demo += DEMOLISH_COST;
   if (!canAfford(d.cost + demo)) return 'Nemáš dost peněz (' + money(d.cost + demo) + ').';
@@ -118,6 +123,7 @@ function demolish(x, y) {
   const k = idx(x, y);
   if (bld[k]) { const b = blds.get(bld[k]); if (b.type === 'townhall') return 'Radnici zbořit nejde.'; if (!canAfford(DEMOLISH_COST * b.size)) return 'Nemáš dost peněz.'; spend(DEMOLISH_COST * b.size); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) markDirty(idx(i, j)); removeBuilding(b); covDirty = true; return null; }
   if (road[k]) { if (!canAfford(DEMOLISH_COST)) return 'Nemáš dost peněz.'; spend(DEMOLISH_COST); road[k] = 0; connDirty = true; markDirty(k); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (inb(x + dx, y + dy)) markDirty(idx(x + dx, y + dy)); return null; }
+  if (rail[k]) return removeRail(x, y);
   if (zone[k] || ruin[k]) { if (lvl[k] || ruin[k]) { if (!canAfford(DEMOLISH_COST)) return 'Nemáš dost peněz.'; spend(DEMOLISH_COST); } clearTile(k); markDirty(k); return null; }
   if (ter[k] === 3) { ter[k] = 0; markDirty(k); return null; }
   return 'Tady není co bourat.';
@@ -135,12 +141,12 @@ function blur(src, dst, r, passes) {
     a = dst;
   }
 }
-const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', firevol: 'fire', firehq: 'fire', fireair: 'fire', techpark: 'edu', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', barracks: 'army', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
+const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', firevol: 'fire', firehq: 'fire', fireair: 'fire', techpark: 'edu', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', railhalt: 'rail', railst: 'rail', mainst: 'rail', station: 'rail', container: 'rail', depot: 'rail', barracks: 'army', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
 const budF = cat => cat ? 0.35 + 0.65 * S.bud[cat] / 100 : 1;
 function computeCoverage() {
   for (const c of Object.values(cov)) c.fill(0);
   for (const b of blds.values()) {
-    const d = SERV[b.type]; b.ok = b.built >= 1 && hasRoadAccess(b) && !(b.off > 0);
+    const d = SERV[b.type]; b.ok = b.built >= 1 && hasRoadAccess(b) && !(b.off > 0) && railBuildingOk(b);
     if (!b.ok || !d.r) continue;
     const key = d.police ? 'police' : d.fireStr ? 'fire' : d.cat === 'health' ? 'health' : d.edu ? 'edu' : d.park ? 'park' : d.transit ? 'transit' : null;
     if (!key) continue;
@@ -152,12 +158,14 @@ function computeCoverage() {
       m[k] = key === 'park' ? Math.min(1.5, m[k] + v) : Math.max(m[k], v);
     }
   }
+  railCoverage();
   // tramvajové tratě vozí lidi z okolí
   const tb = budF('transit') * (1 + tfx('transitEff'));
   for (let k = 0; k < NN; k++) if (road[k] === 4 && conn[k]) { const x = k % N, y = (k / N) | 0; for (let j = y - 3; j <= y + 3; j++) for (let i = x - 3; i <= x + 3; i++) if (inb(i, j)) { const t = idx(i, j), v = 0.7 * tb * (1 - Math.hypot(i - x, j - y) / 4.5); if (v > cov.transit[t]) cov.transit[t] = v; } }
 }
 function analysis() {
   if (connDirty) { computeConn(); connDirty = false; covDirty = true; }
+  if (railDirty) { computeRailNet(); railDirty = false; covDirty = true; }
   if (covDirty) { computeCoverage(); covDirty = false; }
   let pop = 0, eduS = 0, cap = { 2: 0, 3: 0, 4: 0 }, fil = { 2: 0, 3: 0, 4: 0 }, prodI = [0, 0, 0], bt = 0, ab = 0;
   for (let k = 0; k < NN; k++) {
@@ -168,8 +176,10 @@ function analysis() {
   }
   const jobsCap = cap[2] + cap[3] + cap[4], jobs = fil[2] + fil[3] + fil[4], work = pop * 0.55;
   Object.assign(T, { pop, work, jobsCap, jobs, cap, fil, prodI, eduRate: pop ? eduS / pop : 0, bTiles: bt, abandoned: ab });
+  railAnalysis();
+  const ext = T.extJobs || 0;
   T.jobFill = jobsCap ? Math.min(1, work / jobsCap) : 1;
-  T.unemp = work > 1 ? Math.max(0, work - jobsCap * 0.97) / work : 0;
+  T.unemp = work > 1 ? Math.max(0, work - (jobsCap + ext) * 0.97) / work : 0;
   // služby, energie, voda, odpad
   let pCap = 0, wCap = 0, gCap = 0, sCap = 0, trade = BASE_TRADE, store = BASE_STORE, officers = 0, army = 0, rp = 0, fuelUse = 0, intel = 0, tour = 0, stadium = 0;
   const winter = monthOf(S.day) === 11 || monthOf(S.day) <= 1, wind = 0.6 + 0.5 * Math.abs(Math.sin(S.day * 0.13));
@@ -183,6 +193,7 @@ function analysis() {
     if (d.police) officers += d.police * budF('police'); if (d.army) army += d.army; if (d.rp) rp += d.rp * budF('edu');
     if (b.type === 'townhall' && !b.off) T.rpGov = 3; if (b.type === 'intel') intel += budF('police'); if (d.tourism) tour += 3; if (b.type === 'stadium') stadium++;
   }
+  trade += T.railTrade || 0; tour += T.railTour || 0;
   if (S.techs.logistics) trade *= 1.3; trade *= 1 + tfx('trade'); intel *= 1 + tfx('intel');
   const k_s = S.techs.smartgrid ? 0.85 : 1;
   const pDem = (pop * PW_RES + jobs * PW_JOB) * k_s * (S.heat > 0 ? 1.2 : 1) * (1 + tfx('powerDemand')), wDem = (pop * WT_RES + jobs * WT_JOB) * k_s * (S.heat > 0 ? 1.35 : 1) * (1 + tfx('waterDemand'));
@@ -204,6 +215,7 @@ function analysis() {
   for (let k = 0; k < NN; k++) {
     if (isBuilt(k) && zone[k] === 3) tmpA[k] += (dens[k] ? 7 : 4) * lvl[k] * (spec[k] === 2 ? 0.25 : 1) * pk;
     if (road[k]) tmpA[k] += (traf[k] * 3 + (ROADS[road[k]].poll || 0)) * pt;
+    if (rail[k] && T.railDiesel && !RAILS[rail[k]].elec) tmpA[k] += Math.min(6, T.railDiesel * 0.5) * pt;
   }
   for (const b of blds.values()) { const d = SERV[b.type]; if (!d.poll || !b.ok) continue; const p = d.poll * (d.power ? pp : 1) / (b.size * b.size); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) tmpA[idx(i, j)] += p * 4; }
   if (T.gCap < T.gDem) { const over = (T.gDem - T.gCap) / Math.max(1, T.gDem); for (let k = 0; k < NN; k++) if (isBuilt(k)) tmpA[k] += over * 6; }
@@ -226,6 +238,7 @@ function analysis() {
   roadLv.fill(0);
   for (let k = 0; k < NN; k++) { if (!road[k]) continue; const R = ROADS[road[k]]; if (!R || !R.lv) continue; const x = k % N, y = (k / N) | 0, rr = R.lv > 8 ? 2 : 1;
     for (let j = y - rr; j <= y + rr; j++) for (let i = x - rr; i <= x + rr; i++) if (inb(i, j)) { const t = idx(i, j); roadLv[t] = R.lv < 0 ? Math.min(roadLv[t], R.lv) : Math.max(roadLv[t], R.lv); } }
+  railLand(roadLv);
   // centrum = radnice
   let hx = W.cx, hy = W.cy; for (const b of blds.values()) if (b.type === 'townhall') { hx = b.x + 1; hy = b.y + 1; }
   // cena pozemků, kriminalita, spokojenost
@@ -261,12 +274,12 @@ function analysis() {
   T.mods = mods; T.happyT = clamp(T.localHappy + mods.reduce((a, m) => a + m[1], 0), 0, 100);
   // poptávka
   const tx = z => (S.tax[z] - 9) * 0.045, rec = S.recession > 0 ? 1 : 0;
-  const Ct = pop * 0.2, Ot = pop * 0.22 * T.eduRate, It = Math.max(pop * 0.12, work - Ct - Ot), free = (work * 1.03 - jobsCap) / (work + 300);
+  const Ct = pop * 0.2, Ot = pop * 0.22 * T.eduRate, It = Math.max(pop * 0.12, work - Ct - Ot), free = (work * 1.03 - jobsCap - ext) / (work + 300), RD = T.railDem || {};
   T.dem = {
-    1: clamp(0.7 * (jobsCap * 0.97 - work) / (work + 300) + (S.happy - 50) / 110 - tx('R') + (pop < 300 ? 0.4 : 0) - (S.short.food ? 0.3 : 0), -1, 1),
-    2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) + tfx('comDem') - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
-    3: clamp(0.5 * (It - cap[3]) / (cap[3] + 150) + 0.6 * free + (pop > 0 && pop < 300 ? 0.3 : 0) - tx('I') - (S.pol.ecolaw ? 0.15 : 0) - (S.pol.minwage ? 0.08 : 0) - rec * 0.25, -1, 1),
-    4: clamp(0.5 * (Ot - cap[4]) / (cap[4] + 150) + 0.6 * free - tx('O') + (S.pol.bizsupport ? 0.15 : 0) + (S.techs.banking ? 0.1 : 0) + tfx('officeDem') - rec * 0.2 - (S.short.tech ? 0.25 : 0), -1, 1),
+    1: clamp(0.7 * ((jobsCap + ext) * 0.97 - work) / (work + 300) + (S.happy - 50) / 110 - tx('R') + (pop < 300 ? 0.4 : 0) - (S.short.food ? 0.3 : 0), -1, 1),
+    2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) + tfx('comDem') + (RD[2] || 0) - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
+    3: clamp(0.5 * (It - cap[3]) / (cap[3] + 150) + 0.6 * free + (RD[3] || 0) + (pop > 0 && pop < 300 ? 0.3 : 0) - tx('I') - (S.pol.ecolaw ? 0.15 : 0) - (S.pol.minwage ? 0.08 : 0) - rec * 0.25, -1, 1),
+    4: clamp(0.5 * (Ot - cap[4]) / (cap[4] + 150) + 0.6 * free - tx('O') + (S.pol.bizsupport ? 0.15 : 0) + (S.techs.banking ? 0.1 : 0) + tfx('officeDem') + (RD[4] || 0) - rec * 0.2 - (S.short.tech ? 0.25 : 0), -1, 1),
   };
   if (pop < 30) { T.dem[2] = Math.min(T.dem[2], 0); T.dem[4] = Math.min(T.dem[4], 0); }
   // pozvolný posun nálad
@@ -309,7 +322,7 @@ function simDay() {
   if (S.over) return;
   S.day++;
   growthStep();
-  firesDay(); floodDay(); epiDay(); incidentsDay(); warDay();
+  firesDay(); floodDay(); epiDay(); incidentsDay(); warDay(); railDay();
   for (const b of blds.values()) {
     if (b.built < 1) { b.built = Math.min(1, b.built + 1 / Math.max(4, SERV[b.type].size * 5)); if (b.built >= 1) covDirty = true; }
     if (b.off > 0 && --b.off === 0) covDirty = true;
@@ -494,6 +507,8 @@ function incActions(i) {
   } else if (i.type === 'flood') {
     if (S.floodEv && !S.floodEv.sand) a.push({ id: 'sandbags', label: 'Pytle s pískem', cost: 400000, hint: 'Voda zaplaví jen nejbližší pás u řeky.' });
     a.push({ id: 'evacuate', label: 'Evakuovat ohrožené', cost: 250000, hint: 'Nikdo nezahyne a lidé ocení péči.' });
+  } else if (i.type === 'derail' || i.type === 'railstrike') {
+    return railIncActions(i);
   } else if (i.type === 'assault') {
     if (T.army > 0 && !i.intercept) a.push({ id: 'intercept', label: 'Vyslat armádu naproti', hint: 'Vojáci se postaví útočníkům dřív, než dorazí do města.' });
   }
@@ -560,6 +575,7 @@ function incAction(id, act) {
     case 'flood:sandbags': if (S.floodEv) S.floodEv.sand = true; note('Hasiči a dobrovolníci staví valy z pytlů.', 'good'); break;
     case 'flood:evacuate': S.mood += 3; i.evac = true; note('Lidé ze záplavového území jsou v bezpečí.', 'good'); break;
     case 'assault:intercept': i.intercept = true; FX.push({ t: 'intercept', id: i.id }); note('Armáda vyrazila útočníkům naproti.'); break;
+    default: railIncAction(i, act);
   }
   return null;
 }
@@ -611,7 +627,8 @@ function monthly() {
     power: Math.max(0, T.pCap - T.pDem) * 25, tourism: S.techs.tourism ? (T.tour + T.stadium * 2 + sumPark()) * 9000 : 0,
   };
   if (blds.size && [...blds.values()].some(b => b.type === 'recycle' && b.ok)) inc.recycle = 40000;
-  const exp = { services: 0, admin: pop * (6 + pop / 15000), roads: T.roadUp, research: S.resFund || 0, policies: 0, loan: S.loan * (S.techs.banking ? 0.005 : 0.008) };
+  const RL = railMonth(); inc.rail = RL.inc; inc.railSub = RL.sub;
+  const exp = { services: 0, admin: pop * (6 + pop / 15000), roads: T.roadUp, rail: RL.cost, research: S.resFund || 0, policies: 0, loan: S.loan * (S.techs.banking ? 0.005 : 0.008) };
   const byCat = {};
   for (const b of blds.values()) { const d = SERV[b.type], c = BUD_OF[b.type], u = d.up * (c ? S.bud[c] / 100 : 1) * (b.built < 1 ? 0.3 : 1); exp.services += u; byCat[d.cat] = (byCat[d.cat] || 0) + u; }
   if (S.techs.egov) exp.services *= 0.95;
@@ -643,7 +660,7 @@ function monthly() {
   // bankrot
   if (S.money < 0 && S.resFund) { S.resFund = 0; note('Pokladna je prázdná, grant na výzkum byl zastaven.', 'bad'); }
   if (S.money < -3000000) { S.bankrupt++; note('Město je hluboko v mínusu. Když dluh potrvá, převezme město nucená správa.', 'bad'); if (S.bankrupt >= 4) return gameOver('bankrot'); } else S.bankrupt = 0;
-  monthlyEvents(m);
+  monthlyEvents(m); railMonthlyEvents();
   neighborsMonthly();
   if (S.opts.elections && m === 9 && (yearOf(S.day) - 2026) % 4 === 2) election();
   advisor();
@@ -943,6 +960,11 @@ function advisor() {
   if (zNoAcc > zt * 0.3 && zt > 8) tip('noroad', 'Část zón je daleko od silnice napojené na dálnici. Parcela musí mít silnici nejvýš dvě políčka daleko.', 60);
   if (T.pDem > T.pCap * 0.95 && T.pDem > 0) tip('power', 'Elektřiny je málo. Postav další elektrárnu, než začnou výpadky.', 90);
   if (T.wDem > T.wCap * 0.95 && T.wDem > 0) tip('water', 'Vody je málo. Postav další vodárnu.', 90);
+  const rsv = T.railSv;
+  if (rsv && rsv.avail.reg && !(S.rail.reg > 0)) tip('rail0', 'Nádraží stojí u trati, ale nejezdí sem vlaky. Nastav osobní vlaky v záložce Železnice.', 120);
+  if (rsv && rsv.avail.fr && !(S.rail.fr > 0) && T.trade < 3000) tip('railfr', 'Máš nákladové nádraží bez vlaků. Nákladní vlaky zvednou obchodní kapacitu (záložka Železnice).', 150);
+  if (T.railCrowd > 1.2) tip('railcrowd', 'Vlaky jsou přeplněné. Přidej osobní vlaky v záložce Železnice.', 120);
+  if (rsv && rsv.total > rsv.cap) tip('depot', 'Na všechny vlaky nestačí depa. Postav železniční depo, jinak část spojů nevyjede.', 120);
   if (T.gDem > T.gCap && T.pop > 300) tip('garbage', 'Odpadky se hromadí. Město potřebuje skládku.');
   if (T.unemp > 0.12) tip('unemp', 'Hodně lidí je bez práce. Vyznač průmysl, obchody nebo kanceláře.');
   if (T.dem[1] > 0.5 && T.pop > 100) tip('housing', 'Lidé chtějí bydlet ve tvém městě. Vyznač další zóny bydlení.');
@@ -1008,5 +1030,8 @@ function loadGame(sv) {
   for (const b of sv.blds) { blds.set(b.id, b); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) bld[idx(i, j)] = b.id; }
   nextBid = sv.nextBid; Object.assign(W, sv.W);
   for (const k in S) delete S[k]; Object.assign(S, sv.S); S.rq = S.rq || []; S.resFund = S.resFund || 0; for (const t in S.techs) if (!TECHS[t]) delete S.techs[t]; if (S.research && !TECHS[S.research]) S.research = null; fxReset();
+  S.rail = Object.assign(RAIL_DEF(), S.rail || {}); if (S.bud.rail == null) S.bud.rail = 100;
+  if (!sv.t.rail) { S.legacyRail = true; if ([...blds.values()].some(b => b.type === 'station')) S.rail.fr = Math.max(S.rail.fr, 3); }
+  railDirty = true;
   computeWaterDist(); connDirty = true; covDirty = true; analysis();
 }
