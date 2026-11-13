@@ -608,20 +608,75 @@ PANELS.crisis = {
     const b = e.target.closest('[data-a]'); if (!b) return; const err = incAction(+b.dataset.i, b.dataset.a); if (err) toast(err, 'bad'); renderPanel(); updateTop(); }; },
 };
 
-// ---------- uložení ----------
-const SLOT = n => 'starosta-' + n;
-function readSlot(n) { try { const s = localStorage.getItem(SLOT(n)); return s ? JSON.parse(s) : null; } catch (_) { return null; } }
+// ---------- uložení: účet na Claude (funguje na všech zařízeních), prohlížeč a soubor ----------
+const SLOT = n => 'starosta-' + n, SLOTS = ['auto', 0, 1, 2];
+const CLOUD = { db: null, uid: null, ready: false, tried: false, slots: {}, parsed: {}, busy: {}, pending: {}, lastWrite: 0, dl: null };
+(async () => {
+  try {
+    if (!window.claude || typeof window.claude.use !== 'function') throw 0;
+    const [db, user, dl] = await Promise.all([claude.use('db'), claude.use('user'), claude.use('downloads')]);
+    CLOUD.dl = dl;
+    const uid = user ? await user.id() : null;
+    if (db && uid) {
+      CLOUD.db = db; CLOUD.uid = uid;
+      const col = db.collection('data/users/' + uid);
+      const snaps = await Promise.race([Promise.all(SLOTS.map(n => col.doc('save-' + n).get().catch(() => null))), new Promise((_, rej) => setTimeout(() => rej(0), 12000))]);
+      SLOTS.forEach((n, i) => { const sn = snaps[i]; if (sn && sn.exists) CLOUD.slots[n] = sn.data(); });
+      CLOUD.ready = true;
+    }
+  } catch (_) { CLOUD.ready = false; }
+  CLOUD.tried = true;
+  if (!G.playing) drawStart(); if (G.panel === 'menu') renderPanel();
+})();
+function readLocal(n) { try { const s = localStorage.getItem(SLOT(n)); return s ? JSON.parse(s) : null; } catch (_) { return null; } }
+function readCloud(n) { const d = CLOUD.slots[n]; if (!d || typeof d.data !== 'string') return null; if (!CLOUD.parsed[n] || CLOUD.parsed[n].saved !== d.saved) { try { CLOUD.parsed[n] = JSON.parse(d.data); } catch (_) { return null; } } return CLOUD.parsed[n]; }
+// novější z obou míst
+function readSlot(n) { const a = readLocal(n), c = readCloud(n); if (!a) return c; if (!c) return a; return (c.saved || 0) >= (a.saved || 0) ? c : a; }
+function cloudWrite(n, body) {
+  if (!CLOUD.db) return;
+  if (CLOUD.busy[n]) { CLOUD.pending[n] = body; return; }
+  CLOUD.busy[n] = true; CLOUD.lastWrite = Date.now();
+  CLOUD.db.collection('data/users/' + CLOUD.uid).doc('save-' + n).set(body)
+    .then(() => { CLOUD.slots[n] = body; })
+    .catch(e => { if (e && (e.code === 'quota_exceeded' || e.code === 'invalid_argument')) toast('Do účtu se hru nepodařilo uložit, zůstala jen v tomto prohlížeči.', 'bad'); })
+    .finally(() => { CLOUD.busy[n] = false; const nx = CLOUD.pending[n]; if (nx) { delete CLOUD.pending[n]; cloudWrite(n, nx); } });
+}
+function makeSave() { const sv = saveGame(); sv.cam = { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw, pitch: cam.pitch }; return sv; }
 function writeSlot(n, quiet) {
   if (!G.playing || S.over) return false;
-  try { const sv = saveGame(); sv.cam = { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw, pitch: cam.pitch }; localStorage.setItem(SLOT(n), JSON.stringify(sv)); if (!quiet) toast('Hra uložena.', 'good'); return true; }
-  catch (e) { if (!quiet) toast('Uložení se nepovedlo. Prohlížeč nemá místo nebo ukládání nedovolí.', 'bad'); return false; }
+  let sv, str; try { sv = makeSave(); str = JSON.stringify(sv); } catch (e) { if (!quiet) toast('Uložení se nepovedlo.', 'bad'); return false; }
+  let local = false; try { localStorage.setItem(SLOT(n), str); local = true; } catch (_) { }
+  const cloud = !!CLOUD.db && str.length < 240000;
+  if (cloud) cloudWrite(n, { v: 2, saved: sv.saved, label: slotLabel(sv), data: str });
+  if (!quiet) toast(cloud ? 'Hra uložena do tvého účtu. Načteš ji i na jiném zařízení.' : local ? 'Hra uložena v tomto prohlížeči.' : 'Uložení se nepovedlo. Stáhni si hru do souboru (záložka Hra).', cloud || local ? 'good' : 'bad');
+  return cloud || local;
 }
-function slotLabel(sv) { return esc(sv.S.name) + ' · ' + dateStr(sv.S.day) + ' · ' + fmt((sv.S.hist[sv.S.hist.length - 1] || {}).pop || 0) + ' obyvatel'; }
+function slotLabel(sv) { const pop = sv.pop != null ? sv.pop : (sv.S.hist[sv.S.hist.length - 1] || {}).pop || 0; return esc(sv.S.name) + ' · ' + dateStr(sv.S.day) + ' · ' + fmt(pop) + ' obyvatel'; }
+function whenSaved(sv) { if (!sv.saved) return ''; const d = new Date(sv.saved); return ' · uloženo ' + d.getDate() + '. ' + (d.getMonth() + 1) + '. ' + d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function storageNote() {
+  if (CLOUD.ready) return 'Hra se ukládá do tvého účtu na Claude, takže ji načteš na počítači i na telefonu. Automaticky každý měsíc hry a při odchodu ze stránky.';
+  if (!CLOUD.tried) return 'Připojuji úložiště…';
+  return 'Hra se ukládá jen do tohoto prohlížeče (k účtu se teď připojit nejde). Pro jistotu si ji stáhni do souboru.';
+}
+// soubor: stažení a nahrání
+async function exportSave() {
+  if (!G.playing) { toast('Nejdřív rozehraj nebo načti hru.', 'bad'); return; }
+  const str = JSON.stringify(makeSave()), name = 'starosta-' + (S.name || 'mesto').normalize('NFD').replace(/[^\w]+/g, '-').replace(/-+/g, '-').toLowerCase() + '-' + yearOf(S.day) + '.json';
+  if (CLOUD.dl) { try { await CLOUD.dl.save({ filename: name, data: new Blob([str], { type: 'application/json' }) }); toast('Soubor s hrou je stažený.', 'good'); return; } catch (e) { if (e && (e.code === 'declined' || e.code === 'rate_limited')) return; } }
+  try { const u = URL.createObjectURL(new Blob([str], { type: 'application/json' })), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); toast('Soubor s hrou je stažený.', 'good'); }
+  catch (_) { toast('Stažení tady nejde.', 'bad'); }
+}
+const fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = '.json,application/json'; fileIn.style.display = 'none'; document.body.appendChild(fileIn);
+fileIn.onchange = () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return; const r = new FileReader();
+  r.onload = () => { let sv; try { sv = JSON.parse(r.result); } catch (_) { toast('Tohle není uložená hra Starosty.', 'bad'); return; } if (!sv || !sv.S || !sv.t) { toast('Tohle není uložená hra Starosty.', 'bad'); return; } applySave(sv); };
+  r.onerror = () => toast('Soubor se nepodařilo přečíst.', 'bad'); r.readAsText(f); };
+function importSave() { fileIn.click(); }
 PANELS.menu = {
-  title: () => 'Hra',
+  title: () => 'Hra', static: true,
   html: () => {
-    let h = '<h4>Uložené hry</h4><p>Hra se ukládá do tohoto prohlížeče. Automaticky každé dva měsíce a při odchodu ze stránky.</p>';
-    for (const n of ['auto', 0, 1, 2]) { const sv = readSlot(n); h += '<div class="item"><h5>' + (n === 'auto' ? 'Automatické uložení' : 'Pozice ' + (n + 1)) + '</h5><p>' + (sv ? slotLabel(sv) : 'prázdná') + '</p><div class="btns">' + (n !== 'auto' ? '<button class="btn pri" data-s="' + n + '">Uložit sem</button>' : '') + (sv ? '<button class="btn" data-l="' + n + '">Načíst</button>' : '') + '</div></div>'; }
+    let h = '<h4>Uložené hry</h4><p>' + storageNote() + '</p>';
+    for (const n of SLOTS) { const sv = readSlot(n); h += '<div class="item"><h5>' + (n === 'auto' ? 'Automatické uložení' : 'Pozice ' + (n + 1)) + '</h5><p>' + (sv ? slotLabel(sv) + whenSaved(sv) : 'prázdná') + '</p><div class="btns">' + (n !== 'auto' ? '<button class="btn pri" data-s="' + n + '">Uložit sem</button>' : '') + (sv ? '<button class="btn" data-l="' + n + '">Načíst</button>' : '') + '</div></div>'; }
+    h += '<h4>Soubor</h4><p>Hru si můžeš stáhnout do souboru a později ji nahrát, třeba na jiném zařízení.</p><div class="btns"><button class="btn" id="g-exp">Stáhnout hru do souboru</button><button class="btn" id="g-imp">Nahrát hru ze souboru</button></div>';
     h += '<h4>Kvalita grafiky</h4><div class="btns">' + ['Nízká', 'Střední', 'Vysoká'].map((n, i) => '<button class="btn' + (RS.quality === i ? ' pri' : '') + '" data-q="' + i + '">' + n + '</button>').join('') + '</div><p>Vysoká má ostré dlouhé stíny a plné rozlišení. Nízká vypne stíny a sníží rozlišení, hodí se pro slabší telefony a notebooky.</p>';
     h += '<h4>Ovládání</h4><p>Myš: levým tlačítkem stavíš nebo vybíráš, pravým posouváš mapu, kolečkem přibližuješ, prostředním otáčíš. Klávesy: WASD posun, Q a E otáčení, R a F sklon, mezerník pauza, 1 až 3 rychlost, Esc zruší nástroj.</p><p>Dotyk: jedním prstem stavíš nebo posouváš mapu (s nástrojem Prohlížet), dvěma prsty přibližuješ, otáčíš a posouváš.</p>';
     h += '<div class="btns"><button class="btn dan" id="g-new">' + (G.newArm ? 'Opravdu začít znovu?' : 'Nová hra') + '</button></div>';
@@ -632,16 +687,21 @@ PANELS.menu = {
       const s = e.target.closest('[data-s]'), l = e.target.closest('[data-l]');
       if (s) { writeSlot(+s.dataset.s); renderPanel(); }
       if (l) { const n = l.dataset.l; loadSlot(n === 'auto' ? 'auto' : +n); }
+      if (e.target.id === 'g-exp') exportSave();
+      if (e.target.id === 'g-imp') importSave();
       const q = e.target.closest('[data-q]'); if (q) { setQuality(+q.dataset.q); try { localStorage.setItem('starosta-quality', q.dataset.q); } catch (_) { } renderPanel(); }
       if (e.target.id === 'g-new') { if (G.newArm) { G.newArm = false; closePanel(); showStart(); } else { G.newArm = true; renderPanel(); setTimeout(() => { G.newArm = false; }, 4000); } }
     };
   },
 };
+function applySave(sv) {
+  try { loadGame(sv); } catch (e) { toast('Uloženou hru se nepodařilo načíst.', 'bad'); return false; }
+  if (sv.cam) Object.assign(cam, sv.cam);
+  startPlaying(); toast('Hra načtena: ' + S.name + '.', 'good'); return true;
+}
 function loadSlot(n) {
   const sv = readSlot(n); if (!sv) { toast('Tahle pozice je prázdná.', 'bad'); return; }
-  try { loadGame(sv); } catch (e) { toast('Uloženou hru se nepodařilo načíst.', 'bad'); return; }
-  if (sv.cam) Object.assign(cam, sv.cam);
-  startPlaying(); toast('Hra načtena: ' + S.name + '.', 'good');
+  applySave(sv);
 }
 
 // ---------- otázky a konec hry ----------
@@ -739,12 +799,13 @@ function drawStart() {
   $('s-tech').innerHTML = TECH_LEVELS.map((t, i) => '<button class="pick' + (OPT.tech === i ? ' on' : '') + '" data-v="' + i + '"><b>' + t.name + '</b><small>' + (i === 0 ? 'Vše se musí vyzkoumat.' : i === 1 ? 'Plyn, vítr, filtry, MHD a protipovodňová ochrana už jsou.' : 'Polovina stromu výzkumu: metro, tramvaje, třídy, centrální hasiči i tajná služba.') + '</small></button>').join('');
   $('s-crisis').innerHTML = CRISIS_LEVELS.map((c, i) => '<button class="pick' + (OPT.crisis === i ? ' on' : '') + '" data-v="' + i + '"><b>' + c.name + '</b><small>' + ['Katastrofy a nepokoje jsou vzácné. Hodí se pro klidné budování.', 'Občas něco vyhoří, zaplaví nebo vypukne demonstrace.', 'Pohromy, stávky a extremisté přicházejí často.'][i] + '</small></button>').join('');
   $('s-rules').innerHTML = '<button class="pick' + (OPT.wars ? ' on' : '') + '" data-r="wars"><b>Války a převraty: ' + (OPT.wars ? 'ano' : 'ne') + '</b><small>Sousedé mohou zaútočit a nespokojená armáda se může vzbouřit.</small></button><button class="pick' + (OPT.elections ? ' on' : '') + '" data-r="elections"><b>Volby: ' + (OPT.elections ? 'ano' : 'ne') + '</b><small>Každé čtyři roky. S nízkou důvěrou prohraješ.</small></button>';
-  const saves = ['auto', 0, 1, 2].map(n => [n, readSlot(n)]).filter(s => s[1]);
-  $('s-saves').innerHTML = saves.length ? '<h3>Pokračovat</h3>' + saves.map(([n, sv]) => '<div class="item"><span>' + slotLabel(sv) + '</span><button class="btn pri" data-load="' + n + '">Pokračovat</button></div>').join('') : '';
+  const saves = SLOTS.map(n => [n, readSlot(n)]).filter(s => s[1]).sort((a, b) => (b[1].saved || 0) - (a[1].saved || 0));
+  $('s-saves').innerHTML = (saves.length ? '<h3>Pokračovat</h3>' + saves.map(([n, sv]) => '<div class="item"><span>' + slotLabel(sv) + '<small>' + (n === 'auto' ? 'automatické uložení' : 'pozice ' + (n + 1)) + whenSaved(sv) + '</small></span><button class="btn pri" data-load="' + n + '">Pokračovat</button></div>').join('') : '')
+    + '<div class="s-store"><small>' + (CLOUD.ready ? 'Uložené hry se berou z tvého účtu na Claude.' : CLOUD.tried ? 'Uložené hry jsou jen v tomto prohlížeči.' : 'Hledám uložené hry…') + '</small><button class="btn" data-imp="1">Nahrát hru ze souboru</button></div>';
 }
 for (const id of ['s-size', 's-tech', 's-crisis']) $(id).onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; OPT[{ 's-size': 'size', 's-tech': 'tech', 's-crisis': 'crisis' }[id]] = +b.dataset.v; drawStart(); };
 $('s-rules').onclick = e => { const b = e.target.closest('[data-r]'); if (!b) return; OPT[b.dataset.r] = !OPT[b.dataset.r]; drawStart(); };
-$('s-saves').onclick = e => { const b = e.target.closest('[data-load]'); if (!b) return; const n = b.dataset.load; loadSlot(n === 'auto' ? 'auto' : +n); };
+$('s-saves').onclick = e => { if (e.target.closest('[data-imp]')) { importSave(); return; } const b = e.target.closest('[data-load]'); if (!b) return; const n = b.dataset.load; loadSlot(n === 'auto' ? 'auto' : +n); };
 $('s-go').onclick = () => {
   const name = ($('s-name').value || '').trim() || 'Nové Lhoty';
   newGame({ name, size: OPT.size, tech: OPT.tech, crisis: OPT.crisis, wars: OPT.wars, elections: OPT.elections });
@@ -778,7 +839,7 @@ function loop(now) {
     const blocked = S.asks.length > 0 || S.over || !$('ask').hidden;
     if (G.speed && !blocked) { G.acc += dt; let n = 0; const ds = DAY_SEC[G.speed]; while (G.acc >= ds && n < 8) { simDay(); G.acc -= ds; n++; } if (n === 8) G.acc = 0; dayFrac = G.acc / ds; }
     if (S.asks.length && $('ask').hidden) showAsk();
-    if (S.day - G.lastAuto >= 60) { G.lastAuto = S.day; writeSlot('auto', true); }
+    if (S.day - G.lastAuto >= 30 && Date.now() - CLOUD.lastWrite > 15000) { G.lastAuto = S.day; writeSlot('auto', true); }
   } else { cam.yaw += dt * 0.05; simDayDemo(dt); }
   renderFrame(dt, t, dayFrac);
   if (G.playing) {

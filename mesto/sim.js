@@ -1018,14 +1018,27 @@ function martialLaw() {
 // ---------- uložení ----------
 const b64 = a => { let s = ''; const u = new Uint8Array(a.buffer, a.byteOffset, a.byteLength); for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); };
 const unb64 = (s, A) => { const bin = atob(s), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new A(u.buffer); };
+// úsporné uložení: řídká pole se komprimují (RLE), plovoucí čísla se zaokrouhlí
+function rle(a) { const out = []; for (let i = 0; i < a.length;) { const v = a[i]; let n = 1; while (i + n < a.length && a[i + n] === v && n < 255) n++; out.push(v, n); i += n; } return Uint8Array.from(out); }
+function unrle(r, len) { const a = new Uint8Array(len); let o = 0; for (let i = 0; i + 1 < r.length; i += 2) { a.fill(r[i], o, o + r[i + 1]); o += r[i + 1]; } return a; }
+function packU8(a) { const r = rle(a); return r.length < a.length ? { r: b64(r) } : b64(a); }
+function unpackU8(v, len) { return typeof v === 'string' ? unb64(v, Uint8Array) : unrle(unb64(v.r, Uint8Array), len); }
+const QSCALE = { eduT: 250, lv: 2, poll: 2, crime: 2, hap: 2 };
 function saveGame() {
-  const t = {}; for (const k in TILE_ARRAYS) t[k] = b64(TILE_ARRAYS[k]);
-  const f = {}; for (const k in FLOAT_ARRAYS) f[k] = b64(FLOAT_ARRAYS[k]);
-  return { S: JSON.parse(JSON.stringify(S)), t, f, blds: [...blds.values()], nextBid, W: Object.assign({}, W), saved: Date.now() };
+  const t = {}; for (const k in TILE_ARRAYS) t[k] = packU8(TILE_ARRAYS[k]);
+  const q = {};
+  const o16 = new Uint16Array(NN); for (let k = 0; k < NN; k++) o16[k] = clamp(Math.round(occ[k]), 0, 65535); q.occ = packU8(new Uint8Array(o16.buffer));
+  for (const k in QSCALE) { const src = FLOAT_ARRAYS[k], u = new Uint8Array(NN); for (let i = 0; i < NN; i++) u[i] = clamp(Math.round(src[i] * QSCALE[k]), 0, 255); q[k] = packU8(u); }
+  const bl = [...blds.values()].map(b => { const c = Object.assign({}, b); delete c.rt; delete c.pax; delete c.catch; delete c.sf; return c; });
+  return { fmt: 2, S: JSON.parse(JSON.stringify(S)), t, q, blds: bl, nextBid, W: Object.assign({}, W), saved: Date.now(), pop: Math.round(T.pop || 0) };
 }
 function loadGame(sv) {
-  for (const k in TILE_ARRAYS) { if (sv.t[k]) TILE_ARRAYS[k].set(unb64(sv.t[k], Uint8Array)); else TILE_ARRAYS[k].fill(k === 'sty' ? 1 : 0); }
-  for (const k in FLOAT_ARRAYS) FLOAT_ARRAYS[k].set(unb64(sv.f[k], Float32Array));
+  if (!sv || !sv.S || !sv.t || !sv.blds) throw new Error('Neplatná uložená hra');
+  for (const k in TILE_ARRAYS) { if (sv.t[k]) TILE_ARRAYS[k].set(unpackU8(sv.t[k], NN)); else TILE_ARRAYS[k].fill(k === 'sty' ? 1 : 0); }
+  if (sv.q) {
+    const ob = unpackU8(sv.q.occ, NN * 2), o16 = new Uint16Array(ob.buffer, 0, NN); for (let k = 0; k < NN; k++) occ[k] = o16[k];
+    for (const k in QSCALE) { const u = sv.q[k] ? unpackU8(sv.q[k], NN) : new Uint8Array(NN); for (let i = 0; i < NN; i++) FLOAT_ARRAYS[k][i] = u[i] / QSCALE[k]; }
+  } else for (const k in FLOAT_ARRAYS) FLOAT_ARRAYS[k].set(unb64(sv.f[k], Float32Array));
   blds.clear(); bld.fill(0);
   for (const b of sv.blds) { blds.set(b.id, b); for (let j = b.y; j < b.y + b.size; j++) for (let i = b.x; i < b.x + b.size; i++) bld[idx(i, j)] = b.id; }
   nextBid = sv.nextBid; Object.assign(W, sv.W);
