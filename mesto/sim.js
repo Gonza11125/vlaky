@@ -266,11 +266,11 @@ function analysis() {
       polS += poll[k] * occ[k];
     }
   }
-  T.crimeT = crW ? crS / crW : 5; T.localHappy = hpW ? hpS / hpW : 60; T.pollR = hpW ? polS / hpW : 0;
+  T.crimeT = (crW ? crS / crW : 5) + (T.evCrime || 0); T.localHappy = hpW ? hpS / hpW : 60; T.pollR = hpW ? polS / hpW : 0;
   // zdraví
   let hs = 0; for (let k = 0; k < NN; k++) if (zone[k] === 1 && isBuilt(k)) hs += Math.min(1, cov.health[k]) * occ[k];
   const sewOk = pop < 8000 ? 1 : Math.min(1, T.sCap / pop);
-  T.healthT = clamp((pop ? hs / pop : 0.8) * 60 + sewOk * 25 + 15 + tfx('health') + Math.max(0, 1 - pop / 4000) * 30 - T.pollR * 0.3 - (S.epi ? S.epi.sick * 300 : 0), 0, 100);
+  T.healthT = clamp((pop ? hs / pop : 0.8) * 60 + sewOk * 25 + 15 + tfx('health') + (T.evHealth || 0) + Math.max(0, 1 - pop / 4000) * 30 - T.pollR * 0.3 - (S.epi ? S.epi.sick * 300 : 0), 0, 100);
   // svoboda a globální nálada
   let fr = 100; for (const p in S.pol) if (S.pol[p] && POLICY_FREEDOM[p]) fr += POLICY_FREEDOM[p]; if (S.martial > 0) fr -= 30;
   T.freedomT = clamp(fr, 0, 100);
@@ -281,7 +281,7 @@ function analysis() {
   const Ct = pop * 0.2, Ot = pop * 0.22 * T.eduRate, It = Math.max(pop * 0.12, work - Ct - Ot), free = (work * 1.03 - jobsCap - ext) / (work + 300), RD = T.railDem || {};
   T.dem = {
     1: clamp(0.7 * ((jobsCap + ext) * 0.97 - work) / (work + 300) + (S.happy - 50) / 110 - tx('R') + (pop < 300 ? 0.4 : 0) - (S.short.food ? 0.3 : 0), -1, 1),
-    2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) + tfx('comDem') + (RD[2] || 0) - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
+    2: clamp(0.5 * (Ct - cap[2]) / (cap[2] + 150) + 0.6 * free - tx('C') + (S.pol.bizsupport ? 0.15 : 0) + tfx('comDem') + (RD[2] || 0) + (T.evCom || 0) - rec * 0.3 - (S.short.goods ? 0.3 : 0) - (S.pol.curfew || S.pol.quarantine ? 0.2 : 0), -1, 1),
     3: clamp(0.5 * (It - cap[3]) / (cap[3] + 150) + 0.6 * free + (RD[3] || 0) + (pop > 0 && pop < 300 ? 0.3 : 0) - tx('I') - (S.pol.ecolaw ? 0.15 : 0) - (S.pol.minwage ? 0.08 : 0) - rec * 0.25, -1, 1),
     4: clamp(0.5 * (Ot - cap[4]) / (cap[4] + 150) + 0.6 * free - tx('O') + (S.pol.bizsupport ? 0.15 : 0) + (S.techs.banking ? 0.1 : 0) + tfx('officeDem') + (RD[4] || 0) - rec * 0.2 - (S.short.tech ? 0.25 : 0), -1, 1),
   };
@@ -315,6 +315,7 @@ function happyMods() {
   if (tfx('happy')) m.push(['Výzkum', tfx('happy')]);
   if (T.stadium) m.push(['Stadion', 4]);
   if (T.landN) m.push(['Památky', Math.min(6, T.landN * 1.2)]);
+  if (T.evHappy) m.push(['Akce ve městě', T.evHappy]);
   if (S.martial > 0) m.push(['Vojáci v ulicích', -6]);
   if (S.nb.some(n => n.war)) m.push(['Válka', -5]);
   if (S.crime > 30) m.push(['Kriminalita', -(S.crime - 30) * 0.3]);
@@ -328,6 +329,7 @@ function simDay() {
   S.day++;
   growthStep();
   firesDay(); floodDay(); epiDay(); incidentsDay(); warDay(); railDay();
+  if (typeof extrasDay === 'function') extrasDay();
   for (const b of blds.values()) {
     if (b.built < 1) { b.built = Math.min(1, b.built + 1 / Math.max(4, SERV[b.type].size * 5)); if (b.built >= 1) covDirty = true; }
     if (b.off > 0 && --b.off === 0) covDirty = true;
@@ -629,7 +631,7 @@ function monthly() {
   const coll = hall ? 1 : 0.4;
   const inc = {
     R: pop * S.tax.R * TAXK.R * coll, C: T.fil[2] * S.tax.C * TAXK.C * coll, I: T.fil[3] * S.tax.I * TAXK.I * coll, O: T.fil[4] * S.tax.O * TAXK.O * coll * (1 + tfx('officeTax')),
-    power: Math.max(0, T.pCap - T.pDem) * 25, tourism: (T.tour * 9000 + (T.landTour || 0) * 14000) * (S.techs.tourism ? 1.5 : 1) + (S.techs.tourism ? (T.stadium * 2 + sumPark()) * 9000 : 0),
+    power: Math.max(0, T.pCap - T.pDem) * 25, tourism: (T.tour * 9000 + ((T.landTour || 0) + (T.evTour || 0)) * 14000) * (S.techs.tourism ? 1.5 : 1) + (S.techs.tourism ? (T.stadium * 2 + sumPark()) * 9000 : 0),
     share: pop > 0 ? 55000 * Math.sqrt(pop / 450) * coll : 0,
   };
   if (blds.size && [...blds.values()].some(b => b.type === 'recycle' && b.ok)) inc.recycle = 40000;
@@ -674,6 +676,7 @@ function monthly() {
     net: Math.round(S.last ? S.last.net : 0), unemp: Math.round(T.unemp * 1000) / 10, poll: Math.round(T.pollR || 0), traf: Math.round((T.traffic || 0) * 100), pax: Math.round(S.rail ? S.rail.pax : 0), tour: Math.round(S.last ? S.last.inc.tourism : 0), health: Math.round(S.health), loan: Math.round(S.loan) });
   if (S.hist.length > 240) S.hist.shift();
   if (typeof missionMonthly === 'function') missionMonthly();
+  if (typeof extrasMonthly === 'function') extrasMonthly();
 }
 function sumPark() { let s = 0; for (const b of blds.values()) if (b.ok && SERV[b.type].park) s += SERV[b.type].size; return s; }
 function tradeCapLeft() { return Math.max(0, T.trade - S.tradeUsed); }

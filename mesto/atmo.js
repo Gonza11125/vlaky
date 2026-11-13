@@ -163,10 +163,10 @@ function timeName() { const t = ATM.mode === 0 ? 0.42 : ATM.mode === 2 ? 0.02 : 
 
 // ---------- ohňostroj ----------
 const FW = { b: null, p: [] };
-function firework() {
+function firework(fx, fz) {
   if (!FW.b) FW.b = new Batch(new THREE.SphereGeometry(0.28, 6, 4), new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), { cap: 512, shadow: false, layer: 1 });
   if (FW.p.length > 420) return;
-  const x = cam.x + (Math.random() - 0.5) * cam.dist * 0.7, z = cam.z + (Math.random() - 0.5) * cam.dist * 0.7, y = 26 + Math.random() * 22;
+  const x = fx != null ? fx + (Math.random() - 0.5) * 30 : cam.x + (Math.random() - 0.5) * cam.dist * 0.7, z = fz != null ? fz + (Math.random() - 0.5) * 30 : cam.z + (Math.random() - 0.5) * cam.dist * 0.7, y = 26 + Math.random() * 22;
   const cols = [[3, 0.6, 0.4], [0.5, 1.6, 3], [3, 2.4, 0.5], [0.8, 3, 0.8], [3, 0.8, 2.6], [3, 3, 3]], c = cols[(Math.random() * cols.length) | 0];
   for (let i = 0; i < 34; i++) { const a = Math.random() * 6.283, e = Math.acos(2 * Math.random() - 1), sp = 7 + Math.random() * 4;
     const h = FW.b.add({}, mtx(x, y, z), _col2.setRGB(c[0], c[1], c[2])); FW.p.push({ h, x, y, z, vx: Math.cos(a) * Math.sin(e) * sp, vy: Math.cos(e) * sp, vz: Math.sin(a) * Math.sin(e) * sp, life: 1.6 + Math.random() * 0.6, max: 2.2 }); }

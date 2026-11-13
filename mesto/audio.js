@@ -71,6 +71,7 @@ function sfx(name, x, z) {
     case 'fanfare': [[523, 0], [659, 0.16], [784, 0.32], [1046, 0.5], [784, 0.75], [1046, 0.9]].forEach(([f, d]) => { tone(f, t + d, 0.35, 0.09, 'triangle'); tone(f / 2, t + d, 0.35, 0.05, 'sine'); }); break;
     case 'coin': if (!rate('coin', 0.4)) return; tone(988, t, 0.08, 0.06, 'square'); tone(1319, t + 0.07, 0.25, 0.06, 'square'); break;
     case 'firework': { const d = 0.05 + Math.random() * 0.2; noise(t + d, 0.5, 0.35 * v, 'lowpass', 1800, 200); for (let i = 0; i < 6; i++) noise(t + d + 0.25 + Math.random() * 0.6, 0.04, 0.12 * v, 'highpass', 3000, 5000); break; }
+    case 'jet': noise(t, 4.5, 0.32 * v, 'lowpass', 400, 1600); noise(t + 0.3, 4, 0.12 * v, 'bandpass', 2500, 900, null, 2); break;
     case 'crowd': { if (!rate('crowd', 6)) return; noise(t, 2.5, 0.25 * v, 'bandpass', 600, 900, null, 0.6); break; }
   }
 }

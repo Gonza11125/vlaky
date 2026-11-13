@@ -210,6 +210,16 @@ select.sel { border: 2px solid var(--line); border-radius: 9px; padding: 4px 6px
 .choice b { font-weight: 800; } .choice small { color: var(--ink2); }
 .saves .item { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .saves .item small { display: block; color: var(--ink2); font-size: 12px; }
+/* kamera, sledování, fotorežim, přání */
+#cammenu { position: absolute; top: calc(var(--topH, 62px) + 4px); left: 50%; transform: translateX(-50%); z-index: 8; padding: 10px; display: grid; grid-template-columns: repeat(4, auto); gap: 6px; max-width: min(520px, 94vw); }
+#cammenu b { grid-column: 1 / -1; font: 700 15px var(--display); } #cammenu small { grid-column: 1 / -1; color: var(--ink2); font-size: 12px; }
+#follow { position: absolute; bottom: 210px; left: 50%; transform: translateX(-50%); z-index: 6; padding: 6px 8px 6px 14px; display: flex; gap: 8px; align-items: center; font-size: 13px; }
+#photo-x { position: absolute; top: max(12px, env(safe-area-inset-top, 0px)); right: var(--gr); z-index: 30; display: none; }
+body.photo #photo-x { display: block; }
+body.photo #top, body.photo #tools, body.photo #sub, body.photo #panel, body.photo #feed, body.photo #demand, body.photo #mini, body.photo #b-mini, body.photo #markers, body.photo #hud, body.photo #mission, body.photo #toolchip, body.photo #ovbar, body.photo #follow, body.photo #cammenu, body.photo .mob { display: none !important; }
+.mk.req { background: #2a64c4; font-weight: 700; } .mk.req::before { content: '💬 '; }
+.item h5 small { font: 600 12px var(--body); color: var(--ink2); }
+@media (max-width: 860px) { #cammenu { grid-template-columns: repeat(3, auto); } #follow { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); } }
 /* mise, grafy, odznaky */
 #mission { position: absolute; right: var(--gr); top: calc(var(--topH, 62px) + 4px); width: 270px; padding: 0; z-index: 4; overflow: hidden; }
 body.panelopen #mission { display: none; }
@@ -304,7 +314,7 @@ body.panelopen #mission { display: none; }
       <div class="st"><small>Důvěra</small><b id="t-appr" class="num">0 %</b><div class="meter"><span id="m-appr"></span></div></div>
     </div>
     <div id="speed" class="card">
-      <button class="sp" data-s="0" title="Pauza (mezerník)">II</button><button class="sp on" data-s="1" title="Rychlost 1">1×</button><button class="sp" data-s="2" title="Rychlost 2">2×</button><button class="sp" data-s="3" title="Rychlost 3">3×</button><button class="sp" id="b-snd" title="Zvuk"></button>
+      <button class="sp" data-s="0" title="Pauza (mezerník)">II</button><button class="sp on" data-s="1" title="Rychlost 1">1×</button><button class="sp" data-s="2" title="Rychlost 2">2×</button><button class="sp" data-s="3" title="Rychlost 3">3×</button><button class="sp" id="b-snd" title="Zvuk"></button><button class="sp" id="b-cam" title="Kamera a fotorežim" aria-label="Kamera"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 7h3l2-2h6l2 2h3v12H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
     </div>
     <button class="mob" id="b-manage" aria-expanded="false">Správa</button>
     <div id="tabs" class="card">
@@ -323,6 +333,9 @@ body.panelopen #mission { display: none; }
   <button class="card mob" id="b-mini">Mapa</button>
   <div id="toolchip" class="card" hidden></div>
   <div id="mission" class="card" hidden></div>
+  <div id="cammenu" class="card" hidden></div>
+  <div id="follow" class="card" hidden></div>
+  <button id="photo-x" class="btn pri">Ukončit fotorežim</button>
   <div class="overlay" id="tree" hidden><div class="treebox" role="dialog" aria-label="Strom výzkumu"><header><h2>Strom výzkumu</h2><div id="tt-sum"></div><button class="x" id="tt-x" aria-label="Zavřít">×</button></header><div id="tt-wrap"><div id="tt-scroll"><div id="tt-grid"></div></div><aside id="tt-det"></aside></div></div></div>
 
   <div class="overlay" id="start">
@@ -366,3 +379,4 @@ body.panelopen #mission { display: none; }
 <script src="audio.js"></script>
 <script src="ui.js"></script>
 <script src="missions.js"></script>
+<script src="extras.js"></script>

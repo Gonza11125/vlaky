@@ -185,7 +185,7 @@ function refreshTile(k) {
   const ts = treeH[k]; if (ts) { for (const t of ts) if (t.b) t.b.remove(t); treeH[k] = null; }
   paintTile(k);
   const x = k % N, y = (k / N) | 0, wx = tileX(x), wz = tileZ(y);
-  ATM.lampsDirty = true;
+  ATM.lampsDirty = true; if (ter[k] === 1) RS.waterDirty = true;
   if (rail[k]) { refreshRailTile(k, x, y, wx, wz); if (!road[k]) return; }
   if (road[k]) { const m = roadMask(x, y), br = ter[k] === 1, rt = rail[k] && road[k] === 1 ? 2 : road[k]; tileH[k] = batch('R' + rt + (br ? 'b' : '') + m, () => mRoadT(rt, m, br), MATS, { shadow: br || rt === 3 || rt === 6 }).add({ k }, mtx(wx, br ? 0.1 : 0.01, wz, 0)); return; }
   if (bld[k]) return;
@@ -230,7 +230,7 @@ function rebuildAll() {
   for (const b of batches.values()) b.clear();
   tileH.fill(null); treeH.fill(null); servH.clear(); RS.martial = []; for (const p of parts) if (p.h.b) pB.remove(p.h); parts.length = 0; smokers.clear(); anims.length = 0; cars.length = 0; vehicles.length = 0; crowd.clear();
   for (let k = 0; k < NN; k++) refreshTile(k);
-  syncBuildings(); RS.roadsDirty = true; resetRail();
+  syncBuildings(); RS.roadsDirty = true; resetRail(); if (typeof resetExtras === 'function') resetExtras();
 }
 
 // ---------- doprava ----------
@@ -260,7 +260,7 @@ function updateCars(dt) {
   while (cars.length < want && spawn--) {
     const k = roadList[(Math.random() * roadList.length) | 0], n = nextRoad(k, -1); if (n === -1 || n === k || n == null) continue;
     const bus = Math.random() < 0.06 && T.pop > 3000, kind = bus ? 'CARbus' : 'CAR';
-    const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4), fast: Math.random() < 0.4 };
+    const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4), fast: Math.random() < 0.4, bus };
     c.h = batch(kind, () => mCar(bus ? 'bus' : 'car'), MATS, { shadow: true, cap: 64 }).add({}, carPos(c), bus ? WHITE : lin(CAR_COLS[(Math.random() * CAR_COLS.length) | 0]));
     cars.push(c);
   }
@@ -551,7 +551,7 @@ function renderFrame(dt, t, dayFrac) {
   if (RS.terrDirty) { terrain.geometry.attributes.position.needsUpdate = true; terrain.geometry.attributes.color.needsUpdate = true; terrain.geometry.attributes.uv.needsUpdate = true; terrain.geometry.computeBoundingSphere(); RS.terrDirty = false; }
   for (let i = anims.length - 1; i >= 0; i--) { const a = anims[i]; a.t += dt * 2.2; const h = a.h; if (!h.b) { anims.splice(i, 1); continue; } const p = h.p, k = Math.min(1, a.t); const s = k < 1 ? 1 + Math.sin(k * Math.PI) * 0.18 : 1; h.b.set(h, mtx(p[0], 0, p[2], p[3], 1 / Math.sqrt(s), k * s, 1 / Math.sqrt(s))); if (a.t >= 1) anims.splice(i, 1); }
   for (const h of servH.values()) if (h.r && h.r.b) { const p = h.p; _mtx.makeRotationY(p[3]); const rot = new THREE.Matrix4().makeRotationZ(t * 1.6 + h.id); const m = new THREE.Matrix4().makeTranslation(p[0], 10.3, p[2]).multiply(_mtx).multiply(rot); h.r.b.set(h.r, m); }
-  updateCars(dt); updateTransit(dt, t); updateRail(dt, t); updateVehicles(dt); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
+  updateCars(dt); updateTransit(dt, t); updateRail(dt, t); updateVehicles(dt); if (typeof updateExtras === 'function') updateExtras(dt, t); updateCrowds(dt, t, dayFrac); updateEffects(dt, t); updateParticles(dt);
   updateAtmo(dt, t);
   waterTex.offset.set((t * 0.004) % 1, (t * 0.0025) % 1);
   waterMesh.position.y = S.floodEv ? -0.3 + Math.min(1, S.floodEv.day / 3) * 0.2 : -0.3;
