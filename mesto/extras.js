@@ -14,10 +14,10 @@ function districtName(x, y) {
 // ---------- přání občanů ----------
 const REQ = {
   park: { t: 'Park', ask: 'Chceme park, kde si děti můžou hrát.', ok: k => cov.park[k] >= 0.45, spawn: k => cov.park[k] < 0.15 },
-  school: { t: 'Škola blíž domovům', ask: 'Děti chodí do školy přes celé město.', ok: k => cov.edu[k] >= 0.45, spawn: k => cov.edu[k] < 0.15 },
-  clinic: { t: 'Lékař ve čtvrti', ask: 'K doktorovi jezdíme přes půl města.', ok: k => cov.health[k] >= 0.45, spawn: k => cov.health[k] < 0.15 },
+  school: { t: 'Víc míst ve školách', ask: 'Třídy jsou přeplněné, děti se nevejdou.', ok: k => cov.edu[k] >= 0.45, spawn: k => cov.edu[k] < 0.15 },
+  clinic: { t: 'Víc lékařů', ask: 'U doktora čekáme hodiny, ordinace jsou přeplněné.', ok: k => cov.health[k] >= 0.45, spawn: k => cov.health[k] < 0.15 },
   police: { t: 'Bezpečnější ulice', ask: 'V noci se bojíme vyjít ven.', ok: k => cov.police[k] >= 0.5 && crime[k] < 18, spawn: k => crime[k] > 22 },
-  fire: { t: 'Hasiči v dosahu', ask: 'Když začne hořet, hasiči nestihnou dojet.', ok: k => cov.fire[k] >= 0.5, spawn: k => cov.fire[k] < 0.15 && lvl[k] >= 2 },
+  fire: { t: 'Víc hasičů', ask: 'Hasičů je málo, při požáru nestíhají.', ok: k => cov.fire[k] >= 0.5, spawn: k => cov.fire[k] < 0.15 && lvl[k] >= 2 },
   transit: { t: 'Spoj MHD nebo vlak', ask: 'Do práce jezdíme autem, chceme autobus, tramvaj nebo vlak.', ok: k => cov.transit[k] >= 0.4, spawn: k => cov.transit[k] < 0.1 && T.pop > 4000 },
   clean: { t: 'Čistý vzduch', ask: 'Smog z okolních komínů nás dusí.', ok: k => poll[k] < 12, spawn: k => poll[k] > 28 },
   quiet: { t: 'Méně aut v ulicích', ask: 'Pod okny stojí kolony aut.', ok: k => nearTraffic(k) < 0.7, spawn: k => nearTraffic(k) > 1.05 },

@@ -56,10 +56,10 @@ const TECHS = {
   drones:    { name: 'Záchranářské drony', f: 'zachrana', t: 4, r: ['aerialfire', 'compsys'], fx: { fireEff: 0.2, police: 0.15 }, desc: 'Drony najdou ohniska i pohřešované lidi.' },
   // zdravotnictví
   hygiene:   { name: 'Hygiena a kanalizace', f: 'zdravi', t: 1, u: 'Čistírna odpadních vod', desc: 'Čistá voda brání nemocem.' },
-  ambulance: { name: 'Zdravotnická záchranná služba', f: 'zdravi', t: 2, r: ['hygiene'], fx: { healthRange: 0.25, health: 3 }, desc: 'Sanitky dojedou rychleji a dál.' },
+  ambulance: { name: 'Zdravotnická záchranná služba', f: 'zdravi', t: 2, r: ['hygiene'], fx: { healthRange: 0.25, health: 3 }, desc: 'Víc sanitek a posádek: zdravotnictví zvládne víc lidí.' },
   vaccines:  { name: 'Očkování', f: 'zdravi', t: 2, r: ['hygiene'], desc: 'Epidemie jsou vzácnější a slabší.' },
   diagnostics:{ name: 'Moderní diagnostika', f: 'zdravi', t: 3, r: ['ambulance'], fx: { health: 6 }, desc: 'Nemoci se odhalí včas.' },
-  telemed:   { name: 'Telemedicína', f: 'zdravi', t: 4, r: ['internet'], fx: { healthRange: 0.2 }, desc: 'Lékař na dálku i pro okrajové čtvrti a vesnice.' },
+  telemed:   { name: 'Telemedicína', f: 'zdravi', t: 4, r: ['internet'], fx: { healthRange: 0.2 }, desc: 'Lékař na dálku: ordinace zvládnou víc pacientů.' },
   biotech:   { name: 'Biotechnologie', f: 'zdravi', t: 4, r: ['vaccines', 'diagnostics'], fx: { epidemic: -0.4, health: 4 }, desc: 'Nové léky a rychlé vakcíny.' },
   precision: { name: 'Personalizovaná medicína', f: 'zdravi', t: 5, r: ['biotech', 'ai'], fx: { health: 8, happy: 2 }, desc: 'Léčba na míru každému pacientovi.' },
   // školství a věda
@@ -121,7 +121,7 @@ const FXN = {
   powerOut: ['Výkon elektráren', '%', 1], renewOut: ['Výkon větru, slunce a vody', '%', 1], powerDemand: ['Spotřeba elektřiny', '%', 0], waterDemand: ['Spotřeba vody', '%', 0],
   polInd: ['Znečištění z průmyslu', '%', 0], polPower: ['Znečištění z elektráren', '%', 0], polTraffic: ['Znečištění z dopravy', '%', 0], polAll: ['Veškeré znečištění', '%', 0],
   trafficCap: ['Kapacita silnic', '%', 1], crime: ['Kriminalita', '%', 0], police: ['Účinnost policie', '%', 1], fireRisk: ['Riziko požárů', '%', 0], fireEff: ['Účinnost hasičů', '%', 1],
-  fireRange: ['Dosah hasičů', '%', 1], health: ['Zdraví obyvatel', 'b', 1], healthRange: ['Dosah zdravotnictví', '%', 1], epidemic: ['Šíření epidemií', '%', 0], eduGain: ['Rychlost vzdělávání', '%', 1],
+  fireRange: ['Kapacita hasičů', '%', 1], health: ['Zdraví obyvatel', 'b', 1], healthRange: ['Kapacita zdravotnictví', '%', 1], epidemic: ['Šíření epidemií', '%', 0], eduGain: ['Rychlost vzdělávání', '%', 1],
   research: ['Rychlost výzkumu', '%', 1], officeDem: ['Poptávka po kancelářích', 'd', 1], comDem: ['Poptávka po obchodech', 'd', 1], prod: ['Výroba továren', '%', 1], officeTax: ['Daně z kanceláří', '%', 1],
   trade: ['Obchodní kapacita', '%', 1], upkeep: ['Provoz služeb', '%', 0], happy: ['Spokojenost', 'b', 1], approval: ['Důvěra ve vedení', 'b', 1], flood: ['Škody povodní', '%', 0], quake: ['Škody zemětřesení', '%', 0],
   storm: ['Škody vichřic', '%', 0], garbage: ['Množství odpadu', '%', 0], landValue: ['Cena pozemků', 'b', 1], army: ['Síla armády', '%', 1], armyLoy: ['Loajalita armády', 'b', 1], intel: ['Účinnost tajné služby', '%', 1],

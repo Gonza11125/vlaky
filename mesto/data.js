@@ -24,7 +24,8 @@ const TAXK = { R: 5, C: 8, I: 7, O: 11 };   // Kč na obyvatele či místo za ka
 const SPEC = ['Zboží', 'Potraviny', 'Technologie'];
 
 // ---------- služby a stavby ----------
-// cost = cena stavby, up = měsíční provoz, r = dosah v dlaždicích, size = strana čtverce
+// cost = cena stavby, up = měsíční provoz, r = dosah v dlaždicích (parky, MHD, nádraží), size = strana čtverce
+// serves = kolik lidí služba zvládne (policie, hasiči, zdravotnictví, školy slouží celému městu; když je lidí víc, služba je přetížená)
 const SERV = {
   townhall:  { name: 'Radnice', cat: 'gov', size: 2, cost: 800000, up: 15000, unique: true, desc: 'Sídlo vedení města. Bez radnice nejde vybírat daně. Je to i první cíl demonstrací.' },
   coal:      { name: 'Uhelná elektrárna', cat: 'power', size: 2, cost: 1200000, up: 45000, power: 1200, fuel: 0.06, poll: 40, desc: 'Levná a spolehlivá, ale silně znečišťuje a pálí palivo, které se musí dovážet.' },
@@ -39,19 +40,19 @@ const SERV = {
   dump:      { name: 'Skládka', cat: 'water', size: 2, cost: 300000, up: 15000, garbage: 20000, poll: 18, desc: 'Odpad od 20 000 lidí. Znečišťuje a snižuje cenu pozemků v okolí.' },
   incin:     { name: 'Spalovna', cat: 'water', size: 2, cost: 2000000, up: 50000, garbage: 40000, power: 160, poll: 10, req: 'incin', desc: 'Spálí odpad od 40 000 lidí a vyrobí z něj trochu elektřiny.' },
   recycle:   { name: 'Recyklační centrum', cat: 'water', size: 2, cost: 1500000, up: 36000, garbage: 25000, poll: 2, req: 'recycling', desc: 'Třídí odpad od 25 000 lidí. Skoro neznečišťuje a vydělává na druhotných surovinách.' },
-  police:    { name: 'Policejní služebna', cat: 'safety', size: 1, cost: 500000, up: 25000, r: 10, police: 30, desc: '30 policistů. Snižují kriminalitu v okolí a zasahují při demonstracích.' },
-  policehq:  { name: 'Policejní ředitelství', cat: 'safety', size: 2, cost: 2200000, up: 90000, r: 18, police: 120, desc: '120 policistů včetně pořádkové jednotky.' },
-  firevol:   { name: 'Hasičská zbrojnice', cat: 'rescue', size: 1, cost: 180000, up: 6000, r: 7, fireStr: 0.6, trucks: 1, desc: 'Sbor dobrovolných hasičů. Levná, menší dosah, ideální pro vesnice.' },
-  fire:      { name: 'Hasičská stanice', cat: 'rescue', size: 1, cost: 450000, up: 22000, r: 11, fireStr: 1, trucks: 2, desc: 'Profesionální hasiči hasí požáry v dosahu. Bez hasičů požár sežere celou čtvrť.' },
-  firehq:    { name: 'Centrální hasičská stanice', cat: 'rescue', size: 2, cost: 1800000, up: 70000, r: 17, fireStr: 1.3, trucks: 4, req: 'ems', desc: 'Velká stanice s výškovou technikou a dispečinkem záchranného systému.' },
-  fireair:   { name: 'Letecká hasičská základna', cat: 'rescue', size: 3, cost: 6000000, up: 150000, r: 45, fireStr: 0.75, trucks: 2, req: 'aerialfire', desc: 'Vrtulníky dolétnou k požáru kdekoli ve městě.' },
+  police:    { name: 'Policejní služebna', cat: 'safety', size: 1, cost: 500000, up: 25000, r: 10, police: 30, serves: 7500, desc: '30 policistů, stačí na 7 500 obyvatel. Snižují kriminalitu a zasahují při demonstracích.' },
+  policehq:  { name: 'Policejní ředitelství', cat: 'safety', size: 2, cost: 2200000, up: 90000, r: 18, police: 120, serves: 30000, desc: '120 policistů včetně pořádkové jednotky, stačí na 30 000 obyvatel.' },
+  firevol:   { name: 'Hasičská zbrojnice', cat: 'rescue', size: 1, cost: 180000, up: 6000, r: 7, fireStr: 0.6, trucks: 1, serves: 3000, desc: 'Sbor dobrovolných hasičů, stačí na 3 000 obyvatel. Levná, slabší zásah, ideální pro vesnice.' },
+  fire:      { name: 'Hasičská stanice', cat: 'rescue', size: 1, cost: 450000, up: 22000, r: 11, fireStr: 1, trucks: 2, serves: 12000, desc: 'Profesionální hasiči, stačí na 12 000 obyvatel. Bez hasičů požár sežere celou čtvrť.' },
+  firehq:    { name: 'Centrální hasičská stanice', cat: 'rescue', size: 2, cost: 1800000, up: 70000, r: 17, fireStr: 1.3, trucks: 4, serves: 40000, req: 'ems', desc: 'Velká stanice s výškovou technikou a dispečinkem záchranného systému.' },
+  fireair:   { name: 'Letecká hasičská základna', cat: 'rescue', size: 3, cost: 6000000, up: 150000, r: 45, fireStr: 0.75, trucks: 2, serves: 40000, req: 'aerialfire', desc: 'Vrtulníky dolétnou k požáru kdekoli ve městě.' },
   barracks:  { name: 'Vojenská základna', cat: 'safety', size: 3, cost: 4000000, up: 150000, army: 400, desc: '400 vojáků. Brání město ve válce. Když je armáda nespokojená, může se pokusit o převrat.' },
   intel:     { name: 'Tajná služba', cat: 'safety', size: 1, cost: 2500000, up: 120000, req: 'intel', desc: 'Odhaluje extremisty dřív, než udeří, a umožňuje tajné operace v sousedních městech.' },
-  clinic:    { name: 'Poliklinika', cat: 'health', size: 1, cost: 500000, up: 25000, r: 9, desc: 'Praktičtí lékaři pro okolí.' },
-  hospital:  { name: 'Nemocnice', cat: 'health', size: 2, cost: 3000000, up: 120000, r: 20, desc: 'Velký dosah, zvládá epidemie a katastrofy.' },
-  school:    { name: 'Základní škola', cat: 'edu', size: 1, cost: 600000, up: 30000, r: 10, edu: 0.5, rp: 1, desc: 'Základ vzdělání pro děti z okolí.' },
-  highschool:{ name: 'Střední škola', cat: 'edu', size: 2, cost: 1600000, up: 60000, r: 16, edu: 0.8, rp: 3, desc: 'Vzdělaní lidé chtějí pracovat v kancelářích.' },
-  university:{ name: 'Univerzita', cat: 'edu', size: 3, cost: 6000000, up: 200000, r: 40, edu: 1, rp: 20, desc: 'Vzdělání pro celé město a hodně výzkumu.' },
+  clinic:    { name: 'Poliklinika', cat: 'health', size: 1, cost: 500000, up: 25000, r: 9, serves: 5000, desc: 'Praktičtí lékaři, stačí na 5 000 obyvatel.' },
+  hospital:  { name: 'Nemocnice', cat: 'health', size: 2, cost: 3000000, up: 120000, r: 20, serves: 30000, desc: 'Stačí na 30 000 obyvatel, zvládá epidemie a katastrofy.' },
+  school:    { name: 'Základní škola', cat: 'edu', size: 1, cost: 600000, up: 30000, r: 10, edu: 0.5, rp: 1, serves: 5000, desc: 'Základní vzdělání, stačí na 5 000 obyvatel.' },
+  highschool:{ name: 'Střední škola', cat: 'edu', size: 2, cost: 1600000, up: 60000, r: 16, edu: 0.8, rp: 3, serves: 15000, desc: 'Stačí na 15 000 obyvatel. Vzdělaní lidé chtějí pracovat v kancelářích.' },
+  university:{ name: 'Univerzita', cat: 'edu', size: 3, cost: 6000000, up: 200000, r: 40, edu: 1, rp: 20, serves: 50000, desc: 'Nejvyšší vzdělání, stačí na 50 000 obyvatel. Hodně výzkumu.' },
   techpark:  { name: 'Technologický park', cat: 'edu', size: 2, cost: 5000000, up: 140000, rp: 40, req: 'techpark', desc: 'Startupy a laboratoře. Hodně výzkumu a práce pro vzdělané lidi.' },
   institute: { name: 'Výzkumný ústav', cat: 'edu', size: 2, cost: 3000000, up: 110000, rp: 25, needs: 'university', desc: 'Jen výzkum. Potřebuje ve městě univerzitu.' },
   park:      { name: 'Park', cat: 'fun', size: 1, cost: 80000, up: 2000, r: 5, park: 0.6, desc: 'Zeleň zvedá cenu pozemků a náladu lidí.' },

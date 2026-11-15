@@ -314,8 +314,9 @@ function bldH(k) { const t = BLD_H[zone[k]]; return t && lvl[k] ? t[dens[k] ? 1 
 function burningAt(k) { if (fire[k]) return true; if (bld[k]) { const b = blds.get(bld[k]); return b && b.fire > 0; } return false; }
 function dispatchFire(k) {
   if (vehicles.some(v => v.fk != null && Math.abs(v.fk % N - k % N) + Math.abs(((v.fk / N) | 0) - ((k / N) | 0)) <= 2)) return;
-  const tx = k % N, ty = (k / N) | 0, rk = 1 + tfx('fireRange'); let src = null, bd = 1e9;
-  for (const b of blds.values()) if (FIRE_ST.includes(b.type) && b.ok) { const d = Math.hypot(b.x - tx, b.y - ty); if (d <= SERV[b.type].r * rk + 2 && d < bd) { bd = d; src = b; } }
+  // vyjede nejbližší stanice, ať je požár kdekoli (vrtulník letí 4× rychleji než auto jede)
+  const tx = k % N, ty = (k / N) | 0; let src = null, bd = 1e9;
+  for (const b of blds.values()) if (FIRE_ST.includes(b.type) && b.ok) { const d = Math.hypot(b.x - tx, b.y - ty) / (b.type === 'fireair' ? 4 : 1); if (d < bd) { bd = d; src = b; } }
   if (!src) return;
   const D = SERV[src.type];
   if (src.type === 'fireair') {   // vrtulník letí přímo
@@ -515,7 +516,7 @@ function showGhost(type, x, y, ok) {
   const wx = tileX(x) + (s - 1) * TS / 2, wz = tileZ(y) + (s - 1) * TS / 2;
   ghost.position.set(wx, 0.05, wz); ghost.material.color.setHex(ok ? 0xffffff : 0xff6655);
   ghost.rotation.y = SERV[type].rail ? faceRail({ x, y, size: s }) : faceRoad(x, y, s);
-  const r = SERV[type].r; if (r && r < 30) { ghostRing = new THREE.Mesh(new THREE.RingGeometry(r * TS - 0.5, r * TS, 48), new THREE.MeshBasicMaterial({ color: ok ? 0xffffff : 0xff6655, transparent: true, opacity: 0.6, depthWrite: false })); ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.set(wx, 0.4, wz); ghostRing.layers.set(1); scene.add(ghostRing); }
+  const r = SERV[type].r; if (r && r < 30 && !svcKey(SERV[type])) { ghostRing = new THREE.Mesh(new THREE.RingGeometry(r * TS - 0.5, r * TS, 48), new THREE.MeshBasicMaterial({ color: ok ? 0xffffff : 0xff6655, transparent: true, opacity: 0.6, depthWrite: false })); ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.set(wx, 0.4, wz); ghostRing.layers.set(1); scene.add(ghostRing); }
 }
 function showCursor(x, y, s, col) {
   if (x < 0) { cursorMesh.visible = false; return; }

@@ -251,7 +251,9 @@ PANELS.info = {
       if (d.power) h += row('Výkon', fmt(b.out || 0) + ' MW');
       if (d.water && b.type === 'pump') h += row('Voda', fmt(d.water * (nearWater(b.x, b.y, 1, 2) ? 1.5 : 1)) + ' m³');
       if (d.rail) h += railBldInfo(b);
-      if (d.r && d.r < 30 || d.fireStr) h += row('Dosah', Math.round(d.r * (d.fireStr ? 1 + tfx('fireRange') : 1)) + ' políček');
+      const sk = svcKey(d);
+      if (sk && d.serves) { const v = T.svc && T.svc[sk]; h += row('Stačí na', fmt(svcCap(b)) + ' obyvatel') + (v ? row('Vytížení ve městě', pct(v.load * 100), v.load > 1 ? 'neg' : v.load > 0.85 ? '' : 'pos') + meter(Math.min(100, v.load * 100), v.load > 1 ? 'var(--bad)' : v.load > 0.85 ? 'var(--warn)' : 'var(--good)') : '') + '<p class="hint">Slouží celému městu. Když je lidí víc, než služby zvládnou, zhorší se všude. Na vzdálenosti záleží jen málo (dojezdová doba).</p>'; }
+      else if (d.r && d.r < 30) h += row('Dosah', Math.round(d.r * (b.type === 'bus' && S.techs.bus ? 1.3 : 1)) + ' políček');
       if (d.fireStr) h += row('Vozidla', b.type === 'fireair' ? '2 vrtulníky a ' + d.trucks + ' cisterny' : d.trucks + (d.trucks === 1 ? ' cisterna' : d.trucks < 5 ? ' vozy' : ' vozů')) + row('Síla zásahu', pct(d.fireStr * (1 + tfx('fireEff')) * budF('fire') * 100)) + row('Voda pro hasiče', pct((0.45 + 0.55 * (T.wRatio || 0)) * 100), T.wRatio < 0.9 ? 'neg' : '');
       if (d.police) h += row('Policistů', d.police); if (d.army) h += row('Vojáků', d.army); if (d.trade) h += row('Obchodní kapacita', fmt(d.trade) + ' t/měs.'); if (d.rp) h += row('Výzkum', d.rp + ' bodů/měs.');
       if (d.garbage) h += row('Odpad', 'pro ' + fmt(d.garbage) + ' lidí');
@@ -521,8 +523,8 @@ PANELS.policy = {
 PANELS.security = {
   title: () => 'Bezpečnost',
   html: () => {
-    const need = Math.ceil(T.pop / 450);
-    let h = '<h4>Policie</h4>' + row('Kriminalita', pct(S.crime), S.crime > 30 ? 'neg' : '') + meter(100 - S.crime) + row('Policistů', fmt(T.officers) + ' (doporučeno ' + fmt(need) + ')', T.officers < need * 0.8 ? 'neg' : '') + row('Rozpočet policie', S.bud.police + ' %');
+    const pv = T.svc && T.svc.police;
+    let h = '<h4>Policie</h4>' + row('Kriminalita', pct(S.crime), S.crime > 30 ? 'neg' : '') + meter(100 - S.crime) + row('Policistů', fmt(T.officers)) + (pv ? row('Vytížení policie', pv.cap ? pct(pv.load * 100) + ' · stačí na ' + fmt(pv.cap) : 'chybí', pv.load > 1 ? 'neg' : '') : '') + row('Rozpočet policie', S.bud.police + ' %');
     h += '<h4>Extremismus</h4>' + row('Radikalizace', pct(S.radical), S.radical > 35 ? 'neg' : '') + meter(100 - S.radical) + row('Tajná služba', T.intel ? 'pracuje' : 'není') + '<p>Radikály živí nezaměstnanost, nespokojenost a omezování svobod. Tajná služba odhalí část útoků předem.</p>';
     h += '<h4>Armáda</h4>';
     if (!T.army) h += '<p>Město nemá vojenskou základnu. Ve válce ho brání jen policie, převrat ale nehrozí.</p>';
@@ -550,6 +552,7 @@ PANELS.society = {
     h += '<h4>Lidé</h4>' + row('Obyvatelé', fmt(T.pop)) + row('Nezaměstnanost', pct(T.unemp * 100), T.unemp > 0.08 ? 'neg' : '') + row('Vzdělanost', pct(T.eduRate * 100)) + row('Zdraví', pct(S.health), S.health < 60 ? 'neg' : '') + row('Opuštěné budovy', fmt(T.abandoned));
     h += '<h4>Služby</h4>' + row('Elektřina', fmt(T.pDem) + ' / ' + fmt(T.pCap) + ' MW', T.pRatio < 1 ? 'neg' : '') + row('Voda', fmt(T.wDem) + ' / ' + fmt(T.wCap) + ' m³', T.wRatio < 1 ? 'neg' : '') + row('Odpad', fmt(T.gDem) + ' / ' + fmt(T.gCap), T.gCap < T.gDem ? 'neg' : '') + row('Doprava', T.traffic > 1 ? 'zácpy' : T.traffic > 0.6 ? 'hustá' : 'plynulá', T.traffic > 1 ? 'neg' : '');
     if (S.opts.elections) { const y = yearOf(S.day); let ey = y; while ((ey - 2026) % 4 !== 2 || (ey === y && monthOf(S.day) > 9)) ey++; h += row('Příští volby', 'říjen ' + ey); }
+    if (T.svc) { h += '<h4>Vytížení služeb</h4>'; for (const key of SVC_KEYS) { const v = T.svc[key]; h += row(SVC_NAME[key], v.cap ? pct(v.load * 100) + ' · stačí na ' + fmt(v.cap) : 'chybí', v.load > 1 ? 'neg' : '') + meter(v.cap ? Math.min(100, v.load * 100) : 100, v.load > 1 ? 'var(--bad)' : v.load > 0.85 ? 'var(--warn)' : 'var(--good)'); } }
     h += '<h4>Obyvatelé v čase</h4>' + spark(S.hist, 'pop', '#3f82dd') + '<h4>Spokojenost a důvěra</h4>' + spark(S.hist, 'happy', '#3aa556', 0, 100) + spark(S.hist, 'approval', '#ff7a45', 0, 100) + '<h4>Pokladna</h4>' + spark(S.hist, 'money', '#8a5bd6');
     return h;
   },
