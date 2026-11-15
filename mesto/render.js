@@ -3,7 +3,7 @@
 
 let renderer, scene, camera, sun, hemi, MATS, terrMat, skyMesh, envRT, terrain, waterMesh, waterTex, ovMesh, ovTex, ovData, prevB, ghost = null, ghostRing = null, cursorMesh;
 let VW = 1, VH = 1, DPR = 1, edgeOn = false, depthRT, depthMat, edgeMat, edgeScene, edgeCam;
-const cam = { x: 0, z: 0, dist: 150, yaw: 0.65, pitch: 0.95, shake: 0 };
+const cam = { x: 0, z: 0, dist: 150, yaw: 0.65, pitch: 0.95, shake: 0, ty: 0 };
 const RS = { overlay: null, coarse: false };
 const WHITE = new THREE.Color(1, 1, 1), _col2 = new THREE.Color(), _mtx = new THREE.Matrix4(), _qq = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0), _pp = new THREE.Vector3(), _ss = new THREE.Vector3();
 const HALF = N * TS / 2;
@@ -259,9 +259,9 @@ function updateCars(dt) {
   let spawn = 6;
   while (cars.length < want && spawn--) {
     const k = roadList[(Math.random() * roadList.length) | 0], n = nextRoad(k, -1); if (n === -1 || n === k || n == null) continue;
-    const bus = Math.random() < 0.06 && T.pop > 3000, kind = bus ? 'CARbus' : 'CAR';
-    const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4), fast: Math.random() < 0.4, bus };
-    c.h = batch(kind, () => mCar(bus ? 'bus' : 'car'), MATS, { shadow: true, cap: 64 }).add({}, carPos(c), bus ? WHITE : lin(CAR_COLS[(Math.random() * CAR_COLS.length) | 0]));
+    const bus = Math.random() < 0.06 && T.pop > 3000, ct = CAR_KINDS[(Math.random() * CAR_KINDS.length) | 0], kind = bus ? 'CARbus' : 'CAR' + ct;
+    const c = { k, n, prev: -1, t: Math.random(), sp: (bus ? 5 : 7 + Math.random() * 4), fast: Math.random() < 0.4, bus, ct };
+    c.h = batch(kind, () => mCar(bus ? 'bus' : ct), MATS, { shadow: true, cap: 64 }).add({}, carPos(c), bus ? WHITE : lin(REAL_COLS[(Math.random() * REAL_COLS.length) | 0]));
     cars.push(c);
   }
   if (cars.length > want + 4) killCar(cars[cars.length - 1]);
@@ -364,7 +364,6 @@ function updateVehicles(dt) {
 
 // ---------- davy, policie, armáda ----------
 const crowd = new Map();   // id incidentu -> postavy
-function person(kind) { return batch('P' + kind, () => mPerson(kind), MATS, { shadow: true, cap: 64 }); }
 function updateCrowds(dt, t, dayFrac) {
   const live = new Set();
   for (const i of S.inc) {
@@ -529,8 +528,8 @@ function updateCam() {
   cam.x = clamp(cam.x, -HALF, HALF); cam.z = clamp(cam.z, -HALF, HALF); cam.dist = clamp(cam.dist, 25, 420); cam.pitch = clamp(cam.pitch, 0.45, 1.35);
   const sh = cam.shake > 0 ? cam.shake : 0, ox = (Math.random() - 0.5) * sh, oz = (Math.random() - 0.5) * sh;
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-  camera.position.set(cam.x + Math.sin(cam.yaw) * cp * cam.dist + ox, sp * cam.dist, cam.z + Math.cos(cam.yaw) * cp * cam.dist + oz);
-  camera.lookAt(cam.x + ox, 0, cam.z + oz);
+  camera.position.set(cam.x + Math.sin(cam.yaw) * cp * cam.dist + ox, cam.ty + sp * cam.dist, cam.z + Math.cos(cam.yaw) * cp * cam.dist + oz);
+  camera.lookAt(cam.x + ox, cam.ty, cam.z + oz);
   sun.target.position.set(cam.x, 0, cam.z); sun.position.set(cam.x + RS.sunDir.x * 300, RS.sunDir.y * 300, cam.z + RS.sunDir.z * 300); skyMesh.position.copy(camera.position);
   const sc = sun.shadow.camera, ext = clamp(cam.dist * 0.9, 60, 230); if (Math.abs(sc.right - ext) > 8) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.updateProjectionMatrix(); }
 }

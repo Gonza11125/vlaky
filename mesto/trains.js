@@ -141,36 +141,6 @@ function mRailBld(t) {
 }
 
 // ---------- vozidla ----------
-function bogies(b) { b.use('plain'); for (const x of [-1.15, 1.15]) b.box(0.95, 0.24, 0.8, 0x2a2c30, x, 0, 0); }
-function carBody(b, col, band, win, roof, len, ox) { len = len || CAR_L; ox = ox || 0;
-  b.use('paint').box(len, 1.15, 1.08, col, ox, 0.24, 0); if (band) b.box(len + 0.02, 0.2, 1.1, band, ox, 0.36, 0);
-  b.use('glass').box(len - 0.4, 0.36, 1.1, win || 0x2b3642, ox, 0.86, 0); b.use('metal').box(len - 0.1, 0.12, 0.9, roof || 0x8a9097, ox, 1.39, 0); }
-function cab(b, col, x) { b.use('glass').add(new THREE.BoxGeometry(0.06, 0.5, 0.95), 0x22303c, x, 1.0, 0, 0, 0, x > 0 ? -0.35 : 0.35); b.use('plain').box(0.04, 0.08, 0.3, 0xfff4d8, x + Math.sign(x) * 0.02, 0.45, 0.32).box(0.04, 0.08, 0.3, 0xfff4d8, x + Math.sign(x) * 0.02, 0.45, -0.32); }
-function panto(b, x) { b.use('metal').box(0.6, 0.04, 0.5, 0x2a2c30, x, 1.62, 0).add(new THREE.BoxGeometry(0.04, 0.5, 0.04), 0x2a2c30, x, 1.75, 0, 0, 0, 0.6); }
-const WAG_COL = [0xa83a30, 0x2f5f9f, 0x3f7f4f, 0xc77a2e, 0x8a8f96];
-function mTrainCar(kind) {
-  const b = new GB(); bogies(b);
-  switch (kind) {
-    case 'emuC': carBody(b, 0xeceee9, 0xc8372d, 0x2b3642, 0x8a9097); cab(b, 0, CAR_L / 2); b.use('paint').box(0.35, 0.85, 1.11, 0xc8372d, -0.4, 0.3, 0); break;
-    case 'emuM': carBody(b, 0xeceee9, 0xc8372d); b.use('paint').box(0.35, 0.85, 1.11, 0xc8372d, 0, 0.3, 0); panto(b, 0.6); break;
-    case 'dmu': carBody(b, 0xb8251f, 0xefe2c4, 0x2b3642, 0x6f777f); cab(b, 0, CAR_L / 2); cab(b, 0, -CAR_L / 2); b.use('paint').box(CAR_L + 0.02, 0.1, 1.1, 0xefe2c4, 0, 0.7, 0); b.use('metal').box(0.4, 0.18, 0.3, 0x2a2c30, -0.8, 1.45, 0); break;
-    case 'locoE': b.use('paint').box(CAR_L - 0.2, 1.25, 1.08, 0x2f5f9f, 0, 0.24, 0).box(CAR_L - 0.18, 0.18, 1.1, PAL.white, 0, 0.6, 0); cab(b, 0, CAR_L / 2 - 0.1); cab(b, 0, -CAR_L / 2 + 0.1);
-      b.use('metal').box(CAR_L - 0.5, 0.12, 0.85, 0x8a9097, 0, 1.49, 0); panto(b, 0.9); panto(b, -0.9); break;
-    case 'locoF': b.use('paint').box(CAR_L - 0.2, 1.25, 1.08, 0xd0662a, 0, 0.24, 0).box(CAR_L - 0.18, 0.3, 1.1, 0x55595e, 0, 0.3, 0); cab(b, 0, CAR_L / 2 - 0.1); cab(b, 0, -CAR_L / 2 + 0.1);
-      b.use('metal').box(CAR_L - 0.5, 0.12, 0.85, 0x8a9097, 0, 1.49, 0); panto(b, 0.9); break;
-    case 'locoD': b.use('paint').box(CAR_L - 0.2, 0.25, 1.1, 0x3f5f4a, 0, 0.24, 0).box(2.2, 0.95, 0.8, 0x3f5f4a, -0.55, 0.49, 0).box(1.0, 1.25, 1.08, 0x3f5f4a, 1.05, 0.49, 0).box(CAR_L - 0.18, 0.1, 1.12, 0xd9a933, 0, 0.42, 0);
-      b.use('glass').box(1.02, 0.4, 1.1, 0x2b3642, 1.05, 1.15, 0); b.use('metal').box(0.4, 0.2, 0.35, 0x2a2c30, -1.0, 1.44, 0); break;
-    case 'coach': carBody(b, 0x2c4f8f, 0xf2f0ea, 0x22303c, 0x6f777f); break;
-    case 'hsC': carBody(b, 0xf2f2ee, 0x8f2a22, 0x22303c, 0xd8dade, CAR_L - 0.5, -0.25);
-      b.use('paint').sph(0.62, 0xf2f2ee, 1.25, 0.72, 0, 1.25, 0.82, 0.88).use('glass').sph(0.42, 0x22303c, 1.3, 1.0, 0, 1.0, 0.45, 0.85); break;
-    case 'hsM': carBody(b, 0xf2f2ee, 0x8f2a22, 0x22303c, 0xd8dade); panto(b, 0); break;
-    case 'wCont0': case 'wCont1': case 'wCont2': { const v = +kind[5]; b.use('plain').box(CAR_L, 0.2, 1.0, 0x3a3d42, 0, 0.24, 0); b.use('paint').box(1.65, 0.95, 1.0, WAG_COL[v], -0.85, 0.44, 0).box(1.65, 0.95, 1.0, WAG_COL[(v + 2) % 5], 0.85, 0.44, 0); break; }
-    case 'wTank0': case 'wTank1': { b.use('plain').box(CAR_L, 0.2, 1.0, 0x3a3d42, 0, 0.24, 0); b.use('paint').hcyl(0.55, 3.2, kind === 'wTank0' ? 0x2a2c30 : 0xd8d6d0, 0, 1.0, 0, Math.PI / 2, 14); b.use('metal').box(0.4, 0.12, 0.4, 0x6f777f, 0, 1.55, 0); break; }
-    case 'wHop': b.use('paint').box(CAR_L, 1.05, 1.08, 0x6a4a3a, 0, 0.24, 0).use('plain').box(CAR_L - 0.2, 0.08, 0.94, 0x1e1f22, 0, 1.26, 0).sph(0.5, 0x1e1f22, -0.8, 1.2, 0, 1.4, 0.35, 0.8).sph(0.5, 0x1e1f22, 0.8, 1.2, 0, 1.4, 0.35, 0.8); break;
-    case 'wBox': b.use('paint').box(CAR_L, 1.2, 1.08, 0x7a3a2a, 0, 0.24, 0).use('metal').add(new THREE.CylinderGeometry(0.6, 0.6, CAR_L, 10, 1, false, 0, Math.PI), 0x8a9097, 0, 1.44, 0, 0, 0, Math.PI / 2); b.use('paint').box(1.0, 0.9, 1.1, 0x6a3020, 0, 0.35, 0); break;
-  }
-  return b.geo();
-}
 
 // ---------- trasy vlaků ----------
 function railRoute(tiles, extS, extE) {

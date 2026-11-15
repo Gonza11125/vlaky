@@ -156,13 +156,6 @@ function riverSegments() {
   if (cur.length >= 7) segs.push(cur);
   return segs;
 }
-function mBoat(kind) {
-  const b = new GB();
-  if (kind === 'barge') { b.use('paint').box(5.2, 0.5, 1.3, 0x2f3438, 0, -0.2, 0).box(1.0, 0.8, 1.1, 0xe8e6e0, -2.0, 0.3, 0); b.use('glass').box(0.9, 0.25, 1.12, 0x2b3642, -2.0, 0.85, 0); b.use('paint'); for (let i = 0; i < 3; i++) b.box(1.1, 0.6, 1.05, [0xa83a30, 0x2f5f9f, 0x3f7f4f][i], -0.6 + i * 1.2, 0.3, 0); }
-  else if (kind === 'tour') { b.use('paint').box(4.0, 0.5, 1.4, 0xf2f2ee, 0, -0.2, 0).box(4.02, 0.12, 1.42, 0x2f5f9f, 0, 0.05, 0); b.use('glass').box(2.8, 0.55, 1.2, 0x2b3642, -0.2, 0.3, 0); b.use('plain').box(3.0, 0.08, 1.3, 0xf2f2ee, -0.2, 0.85, 0); }
-  else { b.use('paint').box(1.6, 0.35, 0.7, 0xe8e6e0, 0, -0.15, 0).box(0.5, 0.35, 0.6, 0xc8372d, -0.2, 0.2, 0); }
-  return b.geo();
-}
 function updateBoats(dt) {
   if (!G.playing) return;
   if (!BOATS.segs || RS.waterDirty) { BOATS.segs = riverSegments(); RS.waterDirty = false; for (const bt of BOATS.list) if (bt.h.b) bt.h.b.remove(bt.h); BOATS.list = []; }
@@ -179,16 +172,13 @@ function updateBoats(dt) {
     const dx = (c[0] - a[0]) * bt.dir, dz = (c[1] - a[1]) * bt.dir, ry = Math.atan2(-dz, dx);
     bt.x = x - dz / TS * bt.lane; bt.z = z + dx / TS * bt.lane;
     if (bt.h.b) bt.h.b.set(bt.h, mtx(bt.x, wy + 0.05 + Math.sin(performance.now() / 700 + bt.seg) * 0.03, bt.z, ry));
+    // brázda za lodí
+    const dl = Math.hypot(dx, dz) || 1, hx = dx / dl, hz = dz / dl, back = bt.kind === 'barge' ? 2.9 : bt.kind === 'tour' ? 2.3 : 1.0;
+    if (Math.random() < dt * (bt.kind === 'motor' ? 14 : 7)) puff(bt.x - hx * back + (Math.random() - 0.5) * 0.3, wy + 0.02, bt.z - hz * back + (Math.random() - 0.5) * 0.3, 0xeef4f6, bt.kind === 'motor' ? 0.22 : 0.32, 1.6, 0.02, -hx * 0.6 - 0.6, -hz * 0.6);
   }
 }
 
 // ---------- letadla: přelety vysoko a provoz na letišti ----------
-function mPlane() {
-  const b = new GB(); b.use('paint').hcyl(0.42, 5.2, 0xf2f2ee, 0, 0, 0, Math.PI / 2, 12).sph(0.42, 0xf2f2ee, 2.6, 0, 0, 1.2, 1, 1).box(1.4, 0.06, 6.2, 0xe8e6e0, 0.1, -0.1, 0).box(0.9, 0.05, 2.2, 0xe8e6e0, -2.3, 0.1, 0).box(0.9, 1.1, 0.06, 0x2f5f9f, -2.3, 0.1, 0);
-  b.use('metal'); for (const z of [-1.5, 1.5]) b.hcyl(0.22, 0.9, 0x8a9097, 0.4, -0.4, z, Math.PI / 2, 10);
-  b.use('glass').box(0.3, 0.15, 0.5, 0x22303c, 2.7, 0.18, 0); b.use('paint').box(5.0, 0.1, 0.86, 0x2f5f9f, 0, -0.05, 0);
-  return b.geo();
-}
 const PLANES = { list: [], next: 8 };
 function updatePlanes(dt) {
   if (!G.playing) return;
@@ -213,26 +203,40 @@ function updatePlanes(dt) {
     else if (p.kind === 'take') { const u = p.t < 0.35 ? (p.t / 0.35) * (p.t / 0.35) * 0.5 : 0.5 + (p.t - 0.35) * 6; x = p.a[0] + dx * u; z = p.a[1] + dz * u; y = 0.7 + Math.max(0, u - 0.8) * 14; }
     else { const u = p.t < 0.6 ? -4 + p.t / 0.6 * 4.6 : 0.6 + (1 - Math.pow(1 - (p.t - 0.6) / 0.4, 2)) * 0.4; x = p.a[0] + dx * u; z = p.a[1] + dz * u; y = 0.7 + Math.max(0, -u + 0.1) * 12; }
     p.x = x; p.z = z;
+    // kondenzační stopy vysoko letících letadel
+    if (p.kind === 'over' && Math.random() < dt * 9) { const dl = Math.hypot(dx, dz) || 1, hx = dx / dl, hz = dz / dl; for (const s of [-1, 1]) puff(x - hx * 1.2 - hz * s * 1.15, y - 0.4, z - hz * 1.2 + hx * s * 1.15, 0xf6f8fa, 0.5, 7, 0.05, -0.6, 0); }
     if (p.h.b) p.h.b.set(p.h, mtx(x, y, z, ry));
     if (p.kind !== 'over' && near(x, z) > 0.4 && rate('jet', 6)) sfx('jet', x, z);
   }
 }
 
 // ---------- světla aut, tramvají a vlaků v noci ----------
-let headB = null;
-function headGeo() {
+// světla sedí na čele a zádi každého typu vozidla (f = předek, bk = záď, y = výška, hz = polovina rozchodu světel)
+const HEADB = new Map();
+function headGeo(f, bk, y, hz, r) {
   const parts = [], add = (x, y, z, r, c) => { const g = new THREE.SphereGeometry(r, 6, 4); g.translate(x, y, z); const n = g.attributes.position.count, col = new Float32Array(n * 3); for (let i = 0; i < n; i++) col.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); parts.push(g.index ? g.toNonIndexed() : g); };
-  for (const z of [-0.27, 0.27]) { add(0.9, 0.33, z, 0.09, [3, 2.7, 2.1]); add(-0.9, 0.38, z, 0.07, [2.2, 0.1, 0.05]); }
+  for (const z of [-hz, hz]) { if (f != null) add(f, y, z, r, [3, 2.7, 2.1]); if (bk != null) add(bk, y + 0.03, z, r * 0.8, [2.2, 0.1, 0.05]); }
   let total = 0; for (const g of parts) total += g.attributes.position.count; const pos = new Float32Array(total * 3), col = new Float32Array(total * 3); let o = 0;
   for (const g of parts) { pos.set(g.attributes.position.array, o * 3); col.set(g.attributes.color.array, o * 3); o += g.attributes.position.count; }
   const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); return geo;
 }
+function headBatch(key) {
+  let hb = HEADB.get(key); if (hb) return hb;
+  const T0 = CAR_TYPES[key], g = key === 'bus' ? headGeo(1.89, -1.87, 0.4, 0.34, 0.08) : key === 'tram' ? headGeo(2.96, -2.96, 0.4, 0.3, 0.08)
+    : key === 'train' ? headGeo(1.79, null, 0.42, 0.34, 0.1) : key === 'trainT' ? headGeo(null, -1.79, 0.42, 0.34, 0.1)
+    : headGeo(T0.p[1][0] + 0.02, T0.p[0][0] - 0.02, key === 'suv' ? 0.45 : 0.36, T0.w / 2 - 0.12, 0.07);
+  hb = new Batch(g, new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), { cap: 512, shadow: false, layer: 1 }); HEADB.set(key, hb); return hb;
+}
 function updateHeadlights() {
-  if (!headB) headB = new Batch(headGeo(), new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), { cap: 512, shadow: false, layer: 1 });
-  headB.clear(); if (!G.playing || ATM.n < 0.35) return;
-  for (const c of cars) headB.add({}, carPos(c));
-  for (const tr of trams) headB.add({}, carPos(tr), _col2.setRGB(1, 1, 1));
-  for (const tr of trains) if (tr.pos && tr.pos[0]) { const p = tr.pos[0], hx = p[2], hz = p[3]; headB.add({}, mtx(p[0] + hx * 0.9, RAIL_Y + 0.1, p[1] + hz * 0.9, Math.atan2(-hz, hx), 1.4)); }
+  for (const hb of HEADB.values()) hb.clear();
+  if (!G.playing || ATM.n < 0.35) return;
+  for (const c of cars) headBatch(c.bus ? 'bus' : CAR_TYPES[c.ct] ? c.ct : 'sedan').add({}, carPos(c));
+  for (const tr of trams) headBatch('tram').add({}, carPos(tr));
+  for (const tr of trains) if (tr.pos && tr.pos[0]) {
+    const p = tr.pos[0], q = tr.pos[tr.pos.length - 1];
+    headBatch('train').add({}, mtx(p[0], RAIL_Y, p[1], Math.atan2(-p[3], p[2])));
+    headBatch('trainT').add({}, mtx(q[0], RAIL_Y, q[1], Math.atan2(-q[3], q[2])));
+  }
 }
 
 // ---------- sledovací kamera a fotorežim ----------
@@ -249,17 +253,23 @@ function followCandidates(kind) {
   if (kind === 'plane') return PLANES.list.map(p => ({ ref: p, pos: () => handlePos(p.h) }));
   return [];
 }
-function startFollow(kind) {
-  const c = followCandidates(kind); if (!c.length) { toast(FOLLOW_KINDS[kind] + ' teď nikde nejede.', 'bad'); return false; }
-  const pick = c[(Math.random() * c.length) | 0]; FOLLOW.kind = kind; FOLLOW.ref = pick.ref; FOLLOW.pos = pick.pos; if (cam.dist > 70) cam.dist = 45; drawFollowChip(); return true;
+const inMap = p => p && p[1] > -40 && Math.abs(p[0]) <= HALF + 30 && Math.abs(p[2]) <= HALF + 30;
+function startFollow(kind, auto) {
+  const all = followCandidates(kind); if (!all.length) { if (!auto) toast(FOLLOW_KINDS[kind] + ' teď nikde nejede.', 'bad'); return false; }
+  const c = all.filter(q => inMap(q.pos()));
+  // nic na mapě: vezmi to, co je k mapě nejblíž (letadlo nebo vlak právě přijíždí)
+  const pick = c.length ? c[(Math.random() * c.length) | 0] : all.map(q => [q, q.pos()]).filter(q => q[1]).sort((a, b) => Math.hypot(a[1][0], a[1][2]) - Math.hypot(b[1][0], b[1][2]))[0]?.[0];
+  if (!pick) return false;
+  FOLLOW.kind = kind; FOLLOW.ref = pick.ref; FOLLOW.pos = pick.pos; FOLLOW.wait = 0; if (cam.dist > 70) cam.dist = 45; drawFollowChip(); return true;
 }
 function stopFollow() { FOLLOW.kind = null; FOLLOW.ref = null; FOLLOW.pos = null; drawFollowChip(); }
 function updateFollow(dt) {
   if (FOLLOW.photo) cam.yaw += dt * 0.04;
-  if (!FOLLOW.kind) return;
+  if (!FOLLOW.kind) { cam.ty *= 1 - Math.min(1, dt * 3); return; }
   const p = FOLLOW.pos && FOLLOW.pos();
-  if (!p || p[1] < -40 || Math.abs(p[0]) > HALF + 40 || Math.abs(p[2]) > HALF + 40) { if (!startFollow(FOLLOW.kind)) stopFollow(); return; }
-  const k = Math.min(1, dt * 4); cam.x += (p[0] - cam.x) * k; cam.z += (p[2] - cam.z) * k;
+  if (!p || p[1] < -40) { if (!startFollow(FOLLOW.kind, true)) stopFollow(); return; }
+  if (!inMap(p) && (FOLLOW.wait += dt) > 1.5) { FOLLOW.wait = 0; const c = followCandidates(FOLLOW.kind).filter(q => q.ref !== FOLLOW.ref && inMap(q.pos())); if (c.length) { const q = c[(Math.random() * c.length) | 0]; FOLLOW.ref = q.ref; FOLLOW.pos = q.pos; } }
+  const k = Math.min(1, dt * 4); cam.x += (p[0] - cam.x) * k; cam.z += (p[2] - cam.z) * k; cam.ty += ((p[1] > 2 && inMap(p) ? p[1] : 0) - cam.ty) * k;   // letadlo ve výšce: kamera míří na něj
 }
 function drawFollowChip() {
   const el = $('follow'); if (!el) return;

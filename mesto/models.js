@@ -274,37 +274,6 @@ function mRoad(mask, bridge, rural) {   // N=1 E=2 S=4 W=8
 }
 // ---------- vozidla a lidé ----------
 // osobní auto z bočního profilu: kapota, čelní sklo, střecha, záď
-function sedan(b, col) {
-  const sh = new THREE.Shape(), P = [[-0.85, 0.14], [0.85, 0.14], [0.87, 0.33], [0.8, 0.43], [0.35, 0.48], [0.12, 0.72], [-0.42, 0.73], [-0.68, 0.5], [-0.86, 0.46]];
-  sh.moveTo(P[0][0], P[0][1]); for (const p of P.slice(1)) sh.lineTo(p[0], p[1]); sh.closePath();
-  const g = new THREE.ExtrudeGeometry(sh, { depth: 0.74, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.03, bevelSegments: 1 }); g.translate(0, 0, -0.37);
-  b.use('paint').add(g, col, 0, 0.04, 0);
-  const gs = new THREE.Shape(), Q = [[0.33, 0.49], [0.12, 0.7], [-0.41, 0.71], [-0.65, 0.5]]; gs.moveTo(Q[0][0], Q[0][1]); for (const q of Q.slice(1)) gs.lineTo(q[0], q[1]); gs.closePath();
-  const gg = new THREE.ExtrudeGeometry(gs, { depth: 0.84, bevelEnabled: false }); gg.translate(0, 0, -0.42);
-  b.use('glass').add(gg, 0x22303c, 0, 0.04, 0);
-  b.use('plain').box(0.04, 0.08, 0.16, 0xfff4d8, 0.88, 0.3, 0.26).box(0.04, 0.08, 0.16, 0xfff4d8, 0.88, 0.3, -0.26).box(0.04, 0.07, 0.16, 0xb8251f, -0.88, 0.36, 0.26).box(0.04, 0.07, 0.16, 0xb8251f, -0.88, 0.36, -0.26);
-}
-function mCar(kind) {
-  const b = new GB();
-  const body = (l, w, h, col, cabL, cabX) => { b.use('paint').box(l, h, w, col, 0, 0.18, 0).add(new THREE.BoxGeometry(cabL, h * 0.75, w * 0.86), col, cabX, 0.18 + h + h * 0.37, 0, 0, 0, 0); b.use('glass').box(cabL + 0.04, h * 0.5, w * 0.88, 0x2b3642, cabX, 0.18 + h + 0.05, 0); };
-  if (kind === 'bus') { b.use('paint').box(3.2, 1.0, 1.0, 0xe8e8e4, 0, 0.18, 0).use('glass').box(3.22, 0.36, 1.02, 0x2b3642, 0, 0.7, 0).use('paint').box(3.22, 0.12, 1.02, 0xb8251f, 0, 0.3, 0); }
-  else if (kind === 'fire') { b.use('paint').box(2.6, 0.9, 1.0, 0xb8251f, 0, 0.18, 0).use('plain').box(2.62, 0.07, 1.02, PAL.white, 0, 0.55, 0).use('glass').box(0.6, 0.4, 0.96, 0x2b3642, 1.0, 0.75, 0).use('metal').box(1.8, 0.08, 0.28, PAL.steel, -0.3, 1.1, 0).box(0.08, 0.3, 0.5, 0x3a6fe0, 0.9, 1.08, 0); }
-  else if (kind === 'heli') { heli(b, 0, 0, 0); return b.geo(); }
-  else if (kind === 'tram') return mTram();
-  else if (kind === 'police') { sedan(b, 0xf2f2f0); b.use('paint').box(1.74, 0.1, 0.8, 0x2c4f8f, 0, 0.36, 0).use('plain').box(0.25, 0.08, 0.5, 0x3a6fe0, -0.15, 0.77, 0); }
-  else if (kind === 'army') { b.use('paint').box(2.4, 0.9, 1.0, 0x4f5a34, 0, 0.25, 0).use('plain').box(1.4, 0.7, 1.02, 0x5d6a40, -0.4, 1.15, 0); }
-  else if (kind === 'tank' || kind === 'etank') { const c = kind === 'tank' ? 0x4f5a34 : 0x6e4a3a; b.use('paint').box(2.4, 0.6, 1.4, c, 0, 0.2, 0).box(1.1, 0.45, 0.9, c, -0.1, 0.8, 0).hcyl(0.08, 1.6, 0x2f2f2a, 1.2, 1.0, 0, Math.PI / 2, 8); }
-  else sedan(b, 0xffffff);
-  b.use('plain'); for (const x of [-0.55, 0.55]) for (const z of [-0.42, 0.42]) b.hcyl(0.19, 0.12, 0x1e1f22, x * (kind === 'bus' ? 2 : 1), 0.19, z, 0, 10);
-  return b.geo();
-}
-function mPerson(kind) {
-  const b = new GB(), body = kind === 'police' ? 0x1f2f55 : kind === 'army' ? 0x4f5a34 : kind === 'enemy' ? 0x6a3a30 : 0xffffff;
-  b.use('plain').cyl(0.17, 0.2, 0.85, body, 0, 0, 0, 8).sph(0.15, kind === 'police' || kind === 'army' || kind === 'enemy' ? 0x24262b : 0xd9ad88, 0, 1.0, 0, 1, 1.1, 1, 1);
-  if (kind === 'police') b.use('glass').box(0.06, 0.7, 0.48, 0x9fb7c9, 0.26, 0.15, 0);
-  if (kind === 'protest') b.use('plain').cyl(0.02, 0.02, 1.0, PAL.wood, 0.26, 0.4, 0, 4).box(0.04, 0.38, 0.58, PAL.white, 0.26, 1.25, 0);
-  return b.geo();
-}
 
 // ---------- ráz zástavby: vesnice, předměstí, historické město ----------
 const VWALL = [0xf1ede4, 0xe9d9a8, 0xd9e2e6, 0xf0e6cf, 0xe6d0c0], VROOF = [0x9a4a35, 0x4a4f57, 0x7a4a36, 0x8f3f2e, 0x6a4a3a];
@@ -480,9 +449,6 @@ function mRoadPed(mask) {
 
 // ---------- hasiči ----------
 function hoseTower(b, x, z, h, col) { const pm = b.m; b.use('brick').box(0.9, h, 0.9, col || PAL.brick, x, 0, z).use('tile').pyr(1.15, 0.9, 0x7a4a36, x, h, z).use('plain').box(0.5, 0.6, 0.06, 0x2a2c30, x, h - 1.0, z + 0.46); b.m = pm; }
-function truck(b, x, z, ry, ladder) { const pm = b.m, c = Math.cos(ry), s = Math.sin(ry), P = (dx, dz) => [x + dx * c + dz * s, z - dx * s + dz * c];
-  let p = P(0, 0); b.use('paint').box(1.0, 0.85, 2.4, 0xb8251f, p[0], 0.18, p[1], ry); p = P(0, 0.85); b.use('glass').box(0.96, 0.38, 0.5, 0x2b3642, p[0], 0.62, p[1], ry);
-  p = P(0, -0.3); b.use('metal').box(0.3, 0.1, ladder ? 2.4 : 1.4, PAL.steel, p[0], 1.04, p[1], ry); b.use('plain').box(1.02, 0.08, 2.42, PAL.white, x, 0.55, z, ry); b.m = pm; }
 function mFireVol(b, W) {
   lot(b, W, 0xb9b3a6, 'pave');
   b.facade('res', 1, 2.3, 2.6, 2.4, 0xece3cf, -0.3, 0, -0.6).use('tile').gable(2.8, 1.2, 2.6, 0x8f3f2e, -0.3, 2.3, -0.6, Math.PI / 2);
@@ -503,11 +469,6 @@ function mFireHQ(b, W) {
   truck(b, -2.0, 2.6, 0); truck(b, -0.5, 2.6, 0, true); truck(b, 2.6, 2.4, Math.PI / 2);
   b.use('paint').box(0.8, 0.7, 1.7, PAL.white, 1.1, 0.06, 2.8).box(0.82, 0.14, 1.72, 0xc8372d, 1.1, 0.4, 2.8);
 }
-function heli(b, x, z, ry) { const pm = b.m, c = Math.cos(ry), s = Math.sin(ry);
-  b.use('paint').sph(0.65, 0xc8372d, x, 0.75, z, 1.7, 0.85, 0.9).box(2.0, 0.22, 0.18, 0xc8372d, x - 1.5 * c, 0.85, z + 1.5 * s, ry).box(0.1, 0.6, 0.5, 0xc8372d, x - 2.4 * c, 0.85, z + 2.4 * s, ry);
-  b.use('glass').sph(0.45, 0x2b3642, x + 0.55 * c, 0.85, z - 0.55 * s, 1, 0.8, 0.9);
-  b.use('metal').box(3.4, 0.03, 0.14, 0x2a2c30, x, 1.5, z, ry + 0.7).box(3.4, 0.03, 0.14, 0x2a2c30, x, 1.5, z, ry - 0.9).cyl(0.06, 0.06, 0.25, 0x2a2c30, x, 1.25, z, 6)
-    .box(1.6, 0.05, 0.06, PAL.steel, x - 0.4 * s, 0.06, z - 0.4 * c, ry).box(1.6, 0.05, 0.06, PAL.steel, x + 0.4 * s, 0.06, z + 0.4 * c, ry); b.m = pm; }
 function mFireAir(b, W) {
   lot(b, W, 0x9da08f);
   b.use('asphalt').box(5.2, 0.07, 5.2, 0x4a4d52, -2.6, 0.06, 2.6);
@@ -517,13 +478,6 @@ function mFireAir(b, W) {
   b.facade('office', 2, 1.4, 2.6, 2.0, 0xe2e4e2, -3.4, 0, -3.6).parapet(2.6, 2.0, 2.8, 0xb8251f, -3.4, -3.6).use('glass').box(1.2, 0.9, 1.2, 0x8fb0c4, -3.4, 2.8, -3.6).use('plain').box(1.4, 0.1, 1.4, PAL.white, -3.4, 3.7, -3.6);
   b.use('metal').cyl(1.1, 1.1, 3.2, 0xd8dde2, 3.6, 0, 3.4, 18).cyl(0.25, 0.25, 0.3, PAL.steel, 3.6, 3.2, 3.4, 8);
   truck(b, 1.2, 2.6, Math.PI / 2);
-}
-function mTram() {
-  const b = new GB();
-  b.use('paint').box(5.2, 0.95, 0.95, 0xc8372d, 0, 0.22, 0).box(5.22, 0.35, 0.97, 0xf0e8d8, 0, 0.22, 0).use('glass').box(5.24, 0.42, 0.98, 0x2b3642, 0, 0.66, 0)
-    .use('plain').box(4.8, 0.14, 0.7, 0xd8d6d0, 0, 1.17, 0).use('metal').box(0.6, 0.04, 0.05, 0x2a2c30, 0.2, 1.62, 0).box(0.04, 0.34, 0.04, 0x2a2c30, 0.2, 1.3, 0);
-  b.use('plain'); for (const x of [-1.9, 0, 1.9]) b.box(0.6, 0.2, 0.8, 0x2a2c30, x, 0.04, 0);
-  return b.geo();
 }
 
 // ---------- památky ----------
