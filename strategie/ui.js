@@ -559,7 +559,7 @@ function boot() {
   initScene(view);
   newGame(1);
   showSaveOffer();
-  $('b-host').onclick = netHost; $('b-join').onclick = netJoin; $('p-host').onclick = p2pHost; $('p-guest').onclick = p2pGuest; $('p-go').onclick = p2pGo; $('p-copy').onclick = p2pCopy; netBoot();
+  $('b-host').onclick = netHost; $('b-join').onclick = netJoin; $('p2p').hidden = !window.RTCPeerConnection; $('p-host').onclick = p2pHost; $('p-guest').onclick = p2pGuest; $('p-go').onclick = p2pGo; $('p-copy').onclick = p2pCopy; netBoot();
   cam.x = ME().tcx; cam.z = ME().tcz + 4; if (view.clientWidth < 760) cam.dist = 84;
   document.addEventListener('gesturestart', e => e.preventDefault());
   resize(); applySnow(0); snowShown = 0;

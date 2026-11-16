@@ -17,6 +17,10 @@ async function netBoot() {
       }
     }
   } catch (e) { }
+  try {
+    const u = window.claude && window.claude.use ? await window.claude.use('user') : null;
+    if (u) { const me = await u.me(); NET.who = me && me.isOwner ? 'owner' : me && me.id ? 'member' : 'anon'; } else NET.who = window.claude ? 'anon' : null;
+  } catch (e) { }
   if (!NET.room && 'BroadcastChannel' in window) { try { NET.bc = new BroadcastChannel('vek-pokroku-net'); NET.bc.onmessage = e => netIn(e.data); } catch (e) { } }
   NET.ready = true; netStatus(); netConnInfo(); netRestore();
 }
@@ -28,7 +32,10 @@ function netConnInfo() {
   if (!c) { c = document.createElement('p'); c.className = 'hint'; c.id = 'net-conn'; s.after(c); }
   if (!NET.ready) { c.textContent = ''; return; }
   let t, bad = true;
-  if (!NET.room) t = NET.bc ? '⚠ Tahle stránka není připojená k síti Claude, takže hra přes internet nepůjde. Bývá to tím, že je otevřená přes veřejný odkaz, bez přihlášení na claude.ai nebo bez práva přispívat. Použij přímé spojení přes zprávu níže.' : '⚠ Hra po síti tady není dostupná.';
+  if (!NET.room) t = !window.claude ? (window.RTCPeerConnection ? 'Hra tu běží mimo claude.ai: se soupeřem se spoj napřímo přes zprávu níže.' : '⚠ Hra po síti tady není dostupná.')
+    : NET.who === 'anon' ? '⚠ Tahle stránka není připojená k síti Claude: Claude tě tu nepoznává. Nejsi přihlášený na claude.ai, nebo jsi přihlášený jiným účtem, než na který přišla pozvánka. Přihlas se správným účtem a stránku načti znovu.'
+    : NET.who === 'member' ? '⚠ Jsi přihlášený a pozvaný, ale síť Claude pro hry tě sem nepustila. Hosty zvenku účtu nejspíš nepouští, to nastavuje claude.ai.'
+    : '⚠ Tahle stránka není připojená k síti Claude, takže hra přes internet nepůjde.';
   else if (NET.roomErr) t = '⚠ Síť Claude hlásí chybu (' + NET.roomErr + '). ' + (NET.roomErr === 'not_granted' || NET.roomErr === 'revoked' ? 'Tahle stránka není připojená: otevři hru přihlášený na claude.ai přes pozvánku s právem přispívat.' : 'Zkus stránku načíst znovu.');
   else if (!NET.conn) t = 'Připojuji se k síti Claude…';
   else { const n = NET.others || 0; bad = false; t = '✓ Připojeno k síti Claude. ' + (n ? 'Na stránce ' + plural(n, 'je', 'jsou', 'je') + ' ještě ' + n + ' ' + plural(n, 'další hráč', 'další hráči', 'dalších hráčů') + '.' : 'Na stránce jsi zatím sám – soupeř ji nemá otevřenou, nebo není připojený.'); }
@@ -37,7 +44,7 @@ function netConnInfo() {
 function netStatus(text) {
   const s = el('net-status'); if (!s) return;
   if (text) { s.textContent = text; return; }
-  s.textContent = 'Jeden z vás klikne na Založit hru a druhému pošle kód. Oba musíte být přihlášení na claude.ai a soupeř musí mít hru nasdílenou s právem přispívat – veřejný odkaz nestačí.';
+  s.textContent = !window.claude ? 'Hra běží mimo claude.ai. Na různých zařízeních se spojíte přímým spojením přes zprávu níže; Založit hru tu spojí jen dvě okna jednoho prohlížeče.' : 'Jeden z vás klikne na Založit hru a druhému pošle kód. Oba musíte být přihlášení na claude.ai a soupeř musí mít hru nasdílenou s právem přispívat – veřejný odkaz nestačí.';
   el('b-host').disabled = el('b-join').disabled = !(NET.room || NET.bc);
 }
 // lobby přežije znovunačtení stránky (na telefonu se při přepnutí do jiné aplikace stránka často načte znovu)
