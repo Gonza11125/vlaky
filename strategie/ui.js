@@ -389,7 +389,7 @@ $('b-tech-close').onclick = () => { $('techs').hidden = true; };
 const OPT = { diff: 1, aggr: 2, real: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
 function applyOpts() { G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; }
-$('b-start').onclick = () => { netReset(); netRemember(false); applyOpts(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
+$('b-start').onclick = () => { netReset(); netRemember(false); p2pClose(); applyOpts(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
 $('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = false; G.paused = true; };
 
 // ---------- uložení: účet na Claude (pro přihlášené, na všech zařízeních), prohlížeč a soubor ----------
@@ -559,7 +559,7 @@ function boot() {
   initScene(view);
   newGame(1);
   showSaveOffer();
-  $('b-host').onclick = netHost; $('b-join').onclick = netJoin; netBoot();
+  $('b-host').onclick = netHost; $('b-join').onclick = netJoin; $('p-host').onclick = p2pHost; $('p-guest').onclick = p2pGuest; $('p-go').onclick = p2pGo; $('p-copy').onclick = p2pCopy; netBoot();
   cam.x = ME().tcx; cam.z = ME().tcz + 4; if (view.clientWidth < 760) cam.dist = 84;
   document.addEventListener('gesturestart', e => e.preventDefault());
   resize(); applySnow(0); snowShown = 0;

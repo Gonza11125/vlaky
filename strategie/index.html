@@ -93,6 +93,9 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color: var(--brass); font-family: var(--display); font-size: 17px; letter-spacing: .04em; padding: 4px 0; }
 #net-code { width: 5.5em; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 600 15px var(--body); letter-spacing: .2em; text-transform: uppercase; -webkit-user-select: text; user-select: text; }
 .pick:disabled { opacity: .45; cursor: default; }
+#p2p { margin: 12px 0 0; max-width: 62ch; } #p2p summary { cursor: pointer; color: var(--brass); font-size: 14px; font-weight: 600; padding: 4px 0; }
+#p-text { display: block; width: 100%; box-sizing: border-box; min-height: 70px; margin-top: 8px; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
+#p-status.ok { color: var(--good); } #p-status.bad { color: var(--bad); }
 .hint { color: var(--dim); font-size: 12.5px; margin: 6px 0 0; max-width: 62ch; }
 .go.alt { background: var(--panel-2); color: var(--brass); border: 1px solid var(--brass); }
 #touchbar { display: none; position: absolute; left: var(--gl); bottom: calc(100% + 6px); flex-direction: column; gap: 6px; }
@@ -218,6 +221,14 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <button class="pick" id="b-join" disabled>Připojit se</button>
       </div>
       <p class="hint" id="net-status">Zjišťuji, jestli je síť dostupná…</p>
+      <details id="p2p">
+        <summary>Nejde to přes Claude? Spojit se napřímo přes zprávu</summary>
+        <p class="hint">Funguje i přes veřejný odkaz a bez přihlášení, nejlíp když jste na stejné Wi-Fi. 1) Jeden klikne na <b>Vytvořit pozvánku</b> a pošle text druhému (WhatsApp, SMS). 2) Druhý klikne na <b>Mám pozvánku</b>, vloží ji, klikne na <b>Odpovědět</b> a pošle svůj text zpátky. 3) První ho vloží a klikne na <b>Spojit</b>.</p>
+        <div class="row"><button class="pick" id="p-host">Vytvořit pozvánku</button><button class="pick" id="p-guest">Mám pozvánku</button></div>
+        <textarea id="p-text" hidden spellcheck="false" autocomplete="off" placeholder="Sem vlož text od soupeře"></textarea>
+        <div class="row" id="p-btns" hidden><button class="pick" id="p-copy">Kopírovat / poslat</button><button class="pick on" id="p-go">Spojit</button></div>
+        <p class="hint" id="p-status"></p>
+      </details>
       <div class="row" style="align-items:center"><button class="go" id="b-start">Začít novou hru</button><button class="go alt" id="b-continue" hidden>Pokračovat v uložené hře</button><button class="go alt" id="b-import">Nahrát hru ze souboru</button></div>
       <p class="hint"><a href="https://claude.ai/artifact/TcDtKN79igJbRfaMwddkCi" target="_blank" rel="noopener" style="color:var(--brass)">Budovatelská hra Starosta ↗</a> – moderní město, ekonomika a krize bez spěchu.</p>
       <p class="lead" id="s-savenote" style="margin:10px 0 0;font-size:12.5px">Hledám uloženou hru…</p>

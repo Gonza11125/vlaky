@@ -28,7 +28,7 @@ function netConnInfo() {
   if (!c) { c = document.createElement('p'); c.className = 'hint'; c.id = 'net-conn'; s.after(c); }
   if (!NET.ready) { c.textContent = ''; return; }
   let t, bad = true;
-  if (!NET.room) t = NET.bc ? '⚠ Tahle stránka není připojená k síti Claude, takže hra přes internet nepůjde. Bývá to tím, že je otevřená přes veřejný odkaz, bez přihlášení na claude.ai nebo bez práva přispívat. Teď jde hrát jen ve dvou oknech tohoto prohlížeče.' : '⚠ Hra po síti tady není dostupná.';
+  if (!NET.room) t = NET.bc ? '⚠ Tahle stránka není připojená k síti Claude, takže hra přes internet nepůjde. Bývá to tím, že je otevřená přes veřejný odkaz, bez přihlášení na claude.ai nebo bez práva přispívat. Použij přímé spojení přes zprávu níže.' : '⚠ Hra po síti tady není dostupná.';
   else if (NET.roomErr) t = '⚠ Síť Claude hlásí chybu (' + NET.roomErr + '). ' + (NET.roomErr === 'not_granted' || NET.roomErr === 'revoked' ? 'Tahle stránka není připojená: otevři hru přihlášený na claude.ai přes pozvánku s právem přispívat.' : 'Zkus stránku načíst znovu.');
   else if (!NET.conn) t = 'Připojuji se k síti Claude…';
   else { const n = NET.others || 0; bad = false; t = '✓ Připojeno k síti Claude. ' + (n ? 'Na stránce ' + plural(n, 'je', 'jsou', 'je') + ' ještě ' + n + ' ' + plural(n, 'další hráč', 'další hráči', 'dalších hráčů') + '.' : 'Na stránce jsi zatím sám – soupeř ji nemá otevřenou, nebo není připojený.'); }
@@ -50,10 +50,94 @@ function netRestore() {
 }
 function netSend(d) {
   d.c = NET.code;
+  if (NET.rtc && NET.rtc.readyState === 'open') { if (NET.rtc.bufferedAmount < 1e6) try { NET.rtc.send(JSON.stringify(d)); } catch (e) { } return; }
   if (NET.room) NET.room.emit(NET.role === 'host' ? 'h' : 'g', d).catch(e => { if (NET.err) return; NET.err = (e && e.code) || 'chyba'; const t = NET.err === 'not_permitted' ? 'Nemáš právo posílat do hry. Vlastník ti musí stránku nasdílet s právem přispívat.' : 'Síť hlásí chybu (' + NET.err + ').'; netStatus(t); msg(t, 'bad'); });
   else if (NET.bc) NET.bc.postMessage(d);
 }
 function netReset() { Object.assign(NET, { role: null, code: '', started: false, out: [], shots: [], log: [], pend: [], seq: 0, ack: 0, parts: null, logN: 0, ug: null, bg: null, lost: false, err: null }); }
+
+// ---------- přímé spojení (WebRTC) bez sítě Claude ----------
+// Pozvánka a odpověď jsou zabalené popisy spojení; hráči si je pošlou zprávou. Pak už hry mluví napřímo.
+const P2P = { mode: null }, ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+const b64u = u8 => { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64u = t => { const s = atob(t.replace(/-/g, '+').replace(/_/g, '/')); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; };
+async function zipStream(u8, Ctor) { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new Ctor('deflate-raw'))).arrayBuffer()); }
+async function packSdp(type, sdp) {
+  let bytes = new TextEncoder().encode(sdp), z = '0';
+  if (window.CompressionStream) try { bytes = await zipStream(bytes, CompressionStream); z = '1'; } catch (e) { bytes = new TextEncoder().encode(sdp); }
+  return 'VEK' + type + z + b64u(bytes);
+}
+async function unpackSdp(text) {
+  const m = /VEK([oa])([01])([A-Za-z0-9_-]{20,})/.exec((text || '').replace(/\s+/g, '')); if (!m) return null;
+  try { let bytes = unb64u(m[3]); if (m[2] === '1') bytes = await zipStream(bytes, DecompressionStream); return { type: m[1] === 'o' ? 'offer' : 'answer', sdp: new TextDecoder().decode(bytes) }; } catch (e) { return null; }
+}
+function iceDone(pc) {
+  return new Promise(res => { if (pc.iceGatheringState === 'complete') return res(); const t = setTimeout(res, 4000);
+    pc.addEventListener('icegatheringstatechange', () => { if (pc.iceGatheringState === 'complete') { clearTimeout(t); res(); } }); });
+}
+function p2pUi(status, cls, text, go, showText) {
+  const st = el('p-status'); st.textContent = status || ''; st.className = 'hint' + (cls ? ' ' + cls : '');
+  if (text != null) el('p-text').value = text;
+  el('p-text').hidden = !showText; el('p-btns').hidden = !showText; el('p-copy').hidden = !el('p-text').readOnly;
+  if (go) el('p-go').textContent = go; el('p-go').hidden = !go;
+}
+function p2pClose() { if (NET.pc) { try { NET.pc.close(); } catch (e) { } } NET.pc = null; if (NET.rtc) { try { NET.rtc.close(); } catch (e) { } } NET.rtc = null; }
+function p2pWire(ch, role) {
+  ch.onopen = () => {
+    if (NET.rtc && NET.rtc !== ch) return;
+    NET.rtc = ch; netReset(); netRemember(false); NET.role = role; NET.code = 'VEK1'; P2P.mode = 'open';
+    if (role === 'guest') { NET.helloT = 0; NET.joinAt = performance.now(); NET.hinted = true; }
+    p2pUi('Spojeno! ' + (role === 'host' ? 'Hra začíná…' : 'Načítám hru…'), 'ok', null, null, false);
+    netStatus('Spojeno napřímo se soupeřem.');
+  };
+  ch.onmessage = e => { let d = null; try { d = JSON.parse(e.data); } catch (x) { return; } netIn(d); };
+  ch.onclose = () => { if (NET.rtc !== ch) return; NET.rtc = null; if (NET.started) msg('Přímé spojení se soupeřem se přerušilo.', 'bad'); else p2pUi('Spojení se přerušilo. Zkuste to znovu od začátku.', 'bad', null, null, false); };
+}
+function p2pWatch(pc) {
+  pc.onconnectionstatechange = () => { if (pc !== NET.pc) return; if (pc.connectionState === 'failed') p2pUi('Napřímo se spojit nepodařilo. Zkuste být oba na stejné Wi-Fi a začněte znovu novou pozvánkou.', 'bad', null, null, false); };
+}
+async function p2pHost() {
+  if (!window.RTCPeerConnection) { p2pUi('Tenhle prohlížeč přímé spojení neumí.', 'bad', null, null, false); return; }
+  p2pClose(); netReset(); P2P.mode = 'host'; p2pUi('Připravuji pozvánku…', '', '', null, false);
+  try {
+    const pc = NET.pc = new RTCPeerConnection({ iceServers: ICE }); p2pWatch(pc); p2pWire(pc.createDataChannel('vek'), 'host');
+    await pc.setLocalDescription(await pc.createOffer()); await iceDone(pc); if (pc !== NET.pc) return;
+    el('p-text').readOnly = true;
+    p2pUi('1) Pošli tenhle text soupeři. 2) Až ti pošle odpověď, klikni na Vložit odpověď, vlož ji a klikni na Spojit.', '', await packSdp('o', pc.localDescription.sdp), 'Vložit odpověď', true);
+    P2P.mode = 'hostOffer';
+  } catch (e) { p2pUi('Pozvánku se nepodařilo vytvořit (' + (e && e.name || 'chyba') + ').', 'bad', null, null, false); }
+}
+function p2pGuest() {
+  if (!window.RTCPeerConnection) { p2pUi('Tenhle prohlížeč přímé spojení neumí.', 'bad', null, null, false); return; }
+  p2pClose(); netReset(); P2P.mode = 'guest'; el('p-text').readOnly = false;
+  p2pUi('Vlož sem pozvánku od soupeře a klikni na Odpovědět.', '', '', 'Odpovědět', true); el('p-text').focus();
+}
+async function p2pGo() {
+  if (P2P.mode === 'hostOffer') { el('p-text').readOnly = false; P2P.mode = 'hostAnswer'; p2pUi('Vlož sem odpověď od soupeře a klikni na Spojit.', '', '', 'Spojit', true); el('p-text').focus(); return; }
+  const got = await unpackSdp(el('p-text').value);
+  if (P2P.mode === 'guest') {
+    if (!got || got.type !== 'offer') { p2pUi(got ? 'Tohle je odpověď, ne pozvánka. Pozvánku vytváří ten, kdo klikl na Vytvořit pozvánku.' : 'Tohle nevypadá jako pozvánka. Zkopíruj celý text, který ti soupeř poslal.', 'bad', null, 'Odpovědět', true); return; }
+    try {
+      p2pClose(); const pc = NET.pc = new RTCPeerConnection({ iceServers: ICE }); p2pWatch(pc); pc.ondatachannel = e => p2pWire(e.channel, 'guest');
+      p2pUi('Připravuji odpověď…', '', null, null, false);
+      await pc.setRemoteDescription({ type: 'offer', sdp: got.sdp }); await pc.setLocalDescription(await pc.createAnswer()); await iceDone(pc); if (pc !== NET.pc) return;
+      el('p-text').readOnly = true; P2P.mode = 'guestAnswer';
+      p2pUi('Pošli tenhle text zpátky soupeři. Hra začne, jakmile ho vloží.', '', await packSdp('a', pc.localDescription.sdp), null, true);
+    } catch (e) { p2pUi('Pozvánku se nepodařilo použít (' + (e && e.name || 'chyba') + '). Ať soupeř vytvoří novou.', 'bad', null, null, false); }
+    return;
+  }
+  if (P2P.mode === 'hostAnswer') {
+    if (!got || got.type !== 'answer') { p2pUi(got ? 'Tohle je tvoje vlastní pozvánka. Vlož odpověď, kterou ti poslal soupeř.' : 'Tohle nevypadá jako odpověď. Zkopíruj celý text, který ti soupeř poslal.', 'bad', null, 'Spojit', true); return; }
+    try { await NET.pc.setRemoteDescription({ type: 'answer', sdp: got.sdp }); p2pUi('Spojuji…', '', null, null, false); }
+    catch (e) { p2pUi('Odpověď nesedí k téhle pozvánce. Začněte znovu: Vytvořit pozvánku.', 'bad', null, null, false); }
+  }
+}
+async function p2pCopy() {
+  const t = el('p-text').value; if (!t) return;
+  if (navigator.share) { try { await navigator.share({ text: t }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(t); el('p-status').textContent = 'Zkopírováno. Teď to vlož do zprávy soupeři. ' + el('p-status').textContent.replace(/^Zkopírováno\. Teď to vlož do zprávy soupeři\. /, ''); return; } catch (e) { }
+  const ta = el('p-text'); ta.focus(); ta.select(); try { document.execCommand('copy'); el('p-status').textContent = 'Zkopírováno. Teď to vlož do zprávy soupeři.'; } catch (e) { el('p-status').textContent = 'Text je označený, zkopíruj ho ručně.'; }
+}
 
 // ---------- lobby ----------
 function netHost() {
