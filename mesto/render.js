@@ -516,7 +516,6 @@ function showGhost(type, x, y, ok) {
   const wx = tileX(x) + (s - 1) * TS / 2, wz = tileZ(y) + (s - 1) * TS / 2;
   ghost.position.set(wx, 0.05, wz); ghost.material.color.setHex(ok ? 0xffffff : 0xff6655);
   ghost.rotation.y = SERV[type].rail ? faceRail({ x, y, size: s }) : faceRoad(x, y, s);
-  const r = SERV[type].r; if (r && r < 30 && !svcKey(SERV[type])) { ghostRing = new THREE.Mesh(new THREE.RingGeometry(r * TS - 0.5, r * TS, 48), new THREE.MeshBasicMaterial({ color: ok ? 0xffffff : 0xff6655, transparent: true, opacity: 0.6, depthWrite: false })); ghostRing.rotation.x = -Math.PI / 2; ghostRing.position.set(wx, 0.4, wz); ghostRing.layers.set(1); scene.add(ghostRing); }
 }
 function showCursor(x, y, s, col) {
   if (x < 0) { cursorMesh.visible = false; return; }

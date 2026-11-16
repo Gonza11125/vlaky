@@ -73,34 +73,23 @@ function serviceF(nTrains) { return 1 - Math.exp(-nTrains / 2.5); }
 // příspěvek železnice k pokrytí MHD (volá computeCoverage)
 function railCoverage() {
   const sv = railService(); T.railSv = sv;
-  const rk = (1 + tfx('railRange')) * Math.sqrt(budF('rail'));
   for (const b of blds.values()) {
     const d = SERV[b.type]; if (d.rail !== 'pass' || !b.ok) continue;
     const c = railComps[b.rc], sf = c && (c.edge || c.pass.length >= 2) ? Math.min(1, serviceF(sv.eff.reg) + (d.main ? (sv.eff.ic * 0.08 + sv.eff.hs * 0.12) : 0)) : 0;
     b.sf = sf;
-    if (sf <= 0.01) continue;
-    const r = d.r * rk, str = Math.min(1.2, d.pax * 0.75 * sf * (0.6 + 0.4 * fareF()) * (1 + tfx('railRide') * 0.5));
-    const cx = b.x + b.size / 2 - 0.5, cy = b.y + b.size / 2 - 0.5, RR = Math.ceil(r + b.size);
-    for (let y = Math.max(0, Math.floor(cy - RR)); y <= Math.min(N - 1, Math.ceil(cy + RR)); y++) for (let x = Math.max(0, Math.floor(cx - RR)); x <= Math.min(N - 1, Math.ceil(cx + RR)); x++) {
-      const dd = Math.max(0, Math.hypot(x - cx, y - cy) - b.size / 2); if (dd > r) continue;
-      const v = str * Math.pow(1 - dd / r, 0.6), k = idx(x, y); if (v > cov.transit[k]) cov.transit[k] = v;
-    }
   }
 }
-
-// rozbor každých 5 dní: cestující, dojížďka, náklad, vliv na poptávku, hluk a znečištění
 function railAnalysis() {
   const sv = T.railSv || railService(); T.railSv = sv;
   const rr = 1 + tfx('railRide'), ff = fareF(), winter = monthOf(S.day) === 11 || monthOf(S.day) <= 1;
   let pax = 0, ext = 0; const st = [];
+  let capR = 0; for (const b of blds.values()) if (SERV[b.type].rail === 'pass' && b.ok && b.sf) capR += svcCap(b);
+  const demR = (T.pop || 0) + 0.5 * (T.jobs || 0), railUse = capR ? Math.min(1, demR / capR) : 0, popShare = demR ? (T.pop || 0) / demR : 1;
   for (const b of blds.values()) {
     const d = SERV[b.type]; if (d.rail !== 'pass') continue;
     if (!b.ok || !b.sf) { b.pax = 0; st.push(b); continue; }
-    const r = d.r * (1 + tfx('railRange')), cx = b.x + b.size / 2 - 0.5, cy = b.y + b.size / 2 - 0.5; let res = 0, job = 0;
-    for (let y = Math.max(0, Math.floor(cy - r)); y <= Math.min(N - 1, Math.ceil(cy + r)); y++) for (let x = Math.max(0, Math.floor(cx - r)); x <= Math.min(N - 1, Math.ceil(cx + r)); x++) {
-      const k = idx(x, y); if (!lvl[k] || aband[k]) continue; const dd = Math.hypot(x - cx, y - cy); if (dd > r) continue; const w = 1 - dd / r;
-      if (zone[k] === 1) res += occ[k] * w; else job += occ[k] * w;
-    }
+    // nádraží obsluhuje lidi z celého města podle své kapacity; když je stanic víc, než je potřeba, dělí se o ně
+    const used = svcCap(b) * railUse * 0.4, res = used * popShare, job = used * (1 - popShare) * 2;
     const c = railComps[b.rc], toWorld = c && c.edge;
     b.catch = Math.round(res);
     b.pax = Math.round((res + job * 0.5) * 0.06 * d.pax * b.sf * ff * rr * (winter ? 0.9 : 1) * 30);

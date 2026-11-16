@@ -23,7 +23,7 @@ const TECHS = {
   geothermal:{ name: 'Geotermální energie', f: 'energie', t: 4, r: ['nuclear'], u: 'Geotermální elektrárna', desc: 'Teplo z hlubin Země, výkon bez paliva.' },
   supercond: { name: 'Supravodivé vedení', f: 'energie', t: 5, r: ['smartgrid', 'storage'], fx: { powerOut: 0.15, powerDemand: -0.05 }, desc: 'Elektřina se přenáší téměř bez ztrát.' },
   // doprava
-  bus:       { name: 'Jízdní řády', f: 'doprava', t: 1, desc: 'Autobusy jezdí častěji, dosah dep +30 %.' },
+  bus:       { name: 'Jízdní řády', f: 'doprava', t: 1, desc: 'Autobusy jezdí častěji, kapacita dep +30 %.' },
   signals:   { name: 'Řízené křižovatky', f: 'doprava', t: 1, fx: { trafficCap: 0.15 }, desc: 'Semafory a zelené vlny.' },
   pedestrian:{ name: 'Pěší zóny', f: 'doprava', t: 2, u: 'Pěší zóna', desc: 'Centrum bez aut: dlažba, lavičky, stromy.' },
   avenues:   { name: 'Městské třídy', f: 'doprava', t: 2, r: ['signals'], u: 'Třída', desc: 'Čtyřproudé třídy se stromořadím.' },
@@ -126,7 +126,7 @@ const FXN = {
   trade: ['Obchodní kapacita', '%', 1], upkeep: ['Provoz služeb', '%', 0], happy: ['Spokojenost', 'b', 1], approval: ['Důvěra ve vedení', 'b', 1], flood: ['Škody povodní', '%', 0], quake: ['Škody zemětřesení', '%', 0],
   storm: ['Škody vichřic', '%', 0], garbage: ['Množství odpadu', '%', 0], landValue: ['Cena pozemků', 'b', 1], army: ['Síla armády', '%', 1], armyLoy: ['Loajalita armády', 'b', 1], intel: ['Účinnost tajné služby', '%', 1],
   growth: ['Rychlost výstavby', '%', 1], protest: ['Četnost demonstrací', '%', 0], scandal: ['Četnost afér', '%', 0], parkEff: ['Účinek parků', '%', 1], transitEff: ['Účinek MHD', '%', 1],
-  railRide: ['Cestující vlakem', '%', 1], railSafe: ['Železniční nehody', '%', 0], crossSafe: ['Nehody na přejezdech', '%', 0], railCost: ['Provoz vlaků', '%', 0], railRange: ['Spádová oblast stanic', '%', 1],
+  railRide: ['Cestující vlakem', '%', 1], railSafe: ['Železniční nehody', '%', 0], crossSafe: ['Nehody na přejezdech', '%', 0], railCost: ['Provoz vlaků', '%', 0], railRange: ['Kapacita stanic', '%', 1],
 };
 function fxText(fx) {
   return Object.keys(fx).map(k => { const n = FXN[k]; if (!n) return ''; const v = fx[k], s = v > 0 ? '+' : '−', a = Math.abs(v);

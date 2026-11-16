@@ -143,21 +143,30 @@ function blur(src, dst, r, passes) {
 }
 const BUD_OF = { police: 'police', policehq: 'police', intel: 'police', fire: 'fire', firevol: 'fire', firehq: 'fire', fireair: 'fire', techpark: 'edu', clinic: 'health', hospital: 'health', school: 'edu', highschool: 'edu', university: 'edu', institute: 'edu', bus: 'transit', metro: 'transit', railhalt: 'rail', railst: 'rail', mainst: 'rail', station: 'rail', container: 'rail', depot: 'rail', barracks: 'army', castle: 'parks', cathedral: 'parks', museum: 'edu', zoo: 'parks', aquapark: 'parks', lookout: 'parks', tvtower: 'parks', park: 'parks', bigpark: 'parks', plaza: 'parks', stadium: 'parks' };
 const budF = cat => cat ? 0.35 + 0.65 * S.bud[cat] / 100 : 1;
-// ---------- policie, hasiči, zdravotnictví, školy: kapacita a vytížení místo dosahu ----------
+// ---------- všechny služby: kapacita a vytížení místo dosahu ----------
 // Služby slouží celému městu. Každá budova zvládne určitý počet lidí (serves); když je lidí víc,
-// služba je přetížená a horší všude. Vzdálenost přidá jen dojezdovou dobu (nanejvýš -15 %).
-const SVC_KEYS = ['police', 'fire', 'health', 'edu'], SVC_NAME = { police: 'Policie', fire: 'Hasiči', health: 'Zdravotnictví', edu: 'Školy' };
+// služba je přetížená a horší všude. U policie, hasičů a záchranky přidá vzdálenost jen dojezdovou dobu (nanejvýš -15 %).
+const SVC_KEYS = ['police', 'fire', 'health', 'edu', 'park', 'transit'];
+const SVC_NAME = { police: 'Policie', fire: 'Hasiči', health: 'Zdravotnictví', edu: 'Školy', park: 'Parky a zeleň', transit: 'MHD a vlaky' };
+const SVC_OVER = { police: 'Policie je přetížená', fire: 'Hasiči jsou přetížení', health: 'Zdravotnictví je přetížené', edu: 'Školy jsou přetížené', park: 'Parky jsou přeplněné', transit: 'MHD a vlaky jsou přeplněné' };
 const SVC_FAR = 0.15, svcDist = {}, svcSt = {};
-const SVC_FIX = { police: 'Postav další služebnu nebo zvyš rozpočet policie.', fire: 'Postav další hasičskou stanici nebo zvyš rozpočet hasičů.', health: 'Postav polikliniku nebo nemocnici, případně zvyš rozpočet zdravotnictví.', edu: 'Postav další školu nebo zvyš rozpočet školství.' };
+const SVC_FIX = { police: 'Postav další služebnu nebo zvyš rozpočet policie.', fire: 'Postav další hasičskou stanici nebo zvyš rozpočet hasičů.', health: 'Postav polikliniku nebo nemocnici, případně zvyš rozpočet zdravotnictví.', edu: 'Postav další školu nebo zvyš rozpočet školství.',
+  park: 'Postav další park, náměstí nebo zvyš rozpočet parků.', transit: 'Postav autobusové depo, metro, tramvajovou třídu nebo nádraží s vlaky.' };
+const TRAM_SERVES = 400;   // jedno políčko tramvajové třídy
 for (const k of SVC_KEYS) { svcDist[k] = new Float32Array(NN); svcSt[k] = []; }
-function svcKey(d) { return d.police ? 'police' : d.fireStr ? 'fire' : d.cat === 'health' ? 'health' : d.edu ? 'edu' : null; }
-function svcCap(b) { const d = SERV[b.type], key = svcKey(d); return (d.serves || 0) * budF(BUD_OF[b.type]) * (key === 'fire' ? 1 + tfx('fireRange') : key === 'health' ? 1 + tfx('healthRange') : 1); }
-function svcStr(d) { return d.fireStr || d.edu || 1; }
+function svcKey(d) { return d.police ? 'police' : d.fireStr ? 'fire' : d.cat === 'health' ? 'health' : d.edu ? 'edu' : d.park ? 'park' : d.transit ? 'transit' : null; }
+function svcCap(b) {
+  const d = SERV[b.type], key = svcKey(d);
+  if (d.rail === 'pass') return (d.serves || 0) * (1 + tfx('railRange')) * Math.sqrt(budF('rail'));
+  return (d.serves || 0) * budF(BUD_OF[b.type]) * (key === 'fire' ? 1 + tfx('fireRange') : key === 'health' ? 1 + tfx('healthRange') : b.type === 'bus' && S.techs.bus ? 1.3 : 1);
+}
+function svcStr(d) { return d.fireStr || d.edu || (d.park ? d.park * (1 + tfx('parkEff')) : d.transit ? d.transit * (1 + tfx('transitEff')) : 1); }
+function railStr(b) { const d = SERV[b.type]; return Math.min(1.2, d.pax * 0.75 * (b.sf || 0) * (0.6 + 0.4 * fareF()) * (1 + tfx('railRide') * 0.5)); }
 function svcDistances() {
   for (const key of SVC_KEYS) {
     const st = svcSt[key], df = svcDist[key];
+    if (key === 'edu' || key === 'park' || key === 'transit') { df.fill(1); continue; }   // vzdálenost nehraje roli
     if (!st.length) { df.fill(0); continue; }
-    if (key === 'edu') { df.fill(1); continue; }   // do školy se dojíždí, na vzdálenosti nezáleží
     const P = st.map(b => [b.x + b.size / 2 - 0.5, b.y + b.size / 2 - 0.5, b.size / 2, b.type === 'fireair' ? 4 : 1]);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
       let dm = 1e9; for (const [cx, cy, hs, sp] of P) { const dd = Math.max(0, Math.hypot(x - cx, y - cy) - hs) / sp; if (dd < dm) dm = dd; }
@@ -167,12 +176,18 @@ function svcDistances() {
 }
 // poptávka podle obyvatel (policie a hasiči i podle pracujících), nejdřív slouží nejlepší budovy
 function computeSvc() {
-  const dem = { police: T.pop + 0.5 * T.jobs, fire: T.pop + 0.5 * T.jobs, health: T.pop, edu: T.pop };
+  const dem = { police: T.pop + 0.5 * T.jobs, fire: T.pop + 0.5 * T.jobs, health: T.pop, edu: T.pop, park: T.pop, transit: T.pop };
   T.svc = {};
   for (const key of SVC_KEYS) {
-    const tiers = svcSt[key].filter(b => b.ok && !b.flooded).map(b => [svcStr(SERV[b.type]), svcCap(b)]).sort((a, b) => b[0] - a[0]);
+    const tiers = svcSt[key].filter(b => b.ok && !b.flooded).map(b => [svcStr(SERV[b.type]), svcCap(b)]);
+    if (key === 'transit') {
+      for (const b of blds.values()) if (SERV[b.type].rail === 'pass' && b.ok && b.sf > 0.01) tiers.push([railStr(b), svcCap(b)]);
+      let tram = 0; for (let k = 0; k < NN; k++) if (road[k] === 4 && conn[k]) tram++;
+      if (tram) tiers.push([0.7 * (1 + tfx('transitEff')), tram * TRAM_SERVES * budF('transit')]);
+    }
+    tiers.sort((a, b) => b[0] - a[0]);
     let cap = 0, rem = dem[key], val = 0, sMax = 0;
-    for (const [st, c] of tiers) { cap += c; sMax = Math.max(sMax, st); const u = Math.min(c, rem); val += st * u; rem -= u; }
+    for (const [st, c] of tiers) { if (c <= 0) continue; cap += c; sMax = Math.max(sMax, st); const u = Math.min(c, rem); val += st * u; rem -= u; }
     const q = dem[key] > 1 ? val / dem[key] : sMax;
     T.svc[key] = { cap, dem: dem[key], load: cap > 0 ? dem[key] / cap : dem[key] > 1 ? 9 : 0, q, n: tiers.length };
     const m = cov[key], df = svcDist[key]; for (let k = 0; k < NN; k++) m[k] = df[k] * q;
@@ -183,24 +198,12 @@ function computeCoverage() {
   for (const k of SVC_KEYS) svcSt[k] = [];
   for (const b of blds.values()) {
     const d = SERV[b.type]; b.ok = b.built >= 1 && hasRoadAccess(b) && !(b.off > 0) && railBuildingOk(b);
-    if (!b.ok || !d.r) continue;
-    const key = svcKey(d) || (d.park ? 'park' : d.transit ? 'transit' : null);
-    if (!key) continue;
-    if (svcSt[key]) { if (d.serves) svcSt[key].push(b); continue; }
-    const r = d.r * (b.type === 'bus' && S.techs.bus ? 1.3 : 1) * (key === 'fire' ? 1 + tfx('fireRange') : key === 'health' ? 1 + tfx('healthRange') : 1), str = (d.fireStr || d.edu || d.park * (1 + tfx('parkEff')) || d.transit * (1 + tfx('transitEff')) || 1) * budF(BUD_OF[b.type]);
-    const cx = b.x + b.size / 2 - 0.5, cy = b.y + b.size / 2 - 0.5, R = Math.ceil(r + b.size);
-    for (let y = Math.max(0, Math.floor(cy - R)); y <= Math.min(N - 1, Math.ceil(cy + R)); y++) for (let x = Math.max(0, Math.floor(cx - R)); x <= Math.min(N - 1, Math.ceil(cx + R)); x++) {
-      const dd = Math.max(0, Math.hypot(x - cx, y - cy) - b.size / 2); if (dd > r) continue;
-      const v = str * Math.pow(1 - dd / r, 0.55), k = idx(x, y), m = cov[key];
-      m[k] = key === 'park' ? Math.min(1.5, m[k] + v) : Math.max(m[k], v);
-    }
+    if (!b.ok) continue;
+    const key = svcKey(d); if (key && d.serves) svcSt[key].push(b);
   }
+  railCoverage();   // spočítá, jak často na nádraží jezdí vlaky (b.sf)
   svcDistances();
   if (T.svc) computeSvc();
-  railCoverage();
-  // tramvajové tratě vozí lidi z okolí
-  const tb = budF('transit') * (1 + tfx('transitEff'));
-  for (let k = 0; k < NN; k++) if (road[k] === 4 && conn[k]) { const x = k % N, y = (k / N) | 0; for (let j = y - 3; j <= y + 3; j++) for (let i = x - 3; i <= x + 3; i++) if (inb(i, j)) { const t = idx(i, j), v = 0.7 * tb * (1 - Math.hypot(i - x, j - y) / 4.5); if (v > cov.transit[t]) cov.transit[t] = v; } }
 }
 function analysis() {
   if (connDirty) { computeConn(); connDirty = false; covDirty = true; }
@@ -1020,7 +1023,7 @@ function advisor() {
   if (T.unemp > 0.12) tip('unemp', 'Hodně lidí je bez práce. Vyznač průmysl, obchody nebo kanceláře.');
   if (T.dem[1] > 0.5 && T.pop > 100) tip('housing', 'Lidé chtějí bydlet ve tvém městě. Vyznač další zóny bydlení.');
   if (S.crime > 35) tip('crime', 'Kriminalita roste. Postav služebny nebo zvyš rozpočet policie.');
-  if (T.svc && T.pop > 400) for (const key of SVC_KEYS) { const v = T.svc[key]; if (v.load > 1.1) tip('over' + key, SVC_NAME[key] + (key === 'edu' ? ' jsou přetížené' : key === 'fire' ? ' jsou přetížení' : key === 'police' ? ' je přetížená' : ' je přetížené') + ' (' + Math.round(v.load * 100) + ' %). ' + SVC_FIX[key], 90); }
+  if (T.svc && T.pop > 400) for (const key of SVC_KEYS) { const v = T.svc[key]; if (v.cap > 0 && v.load > 1.1) tip('over' + key, SVC_OVER[key] + ' (' + Math.round(v.load * 100) + ' %). ' + SVC_FIX[key], 90); }
   if (T.traffic > 1.1) tip('traffic', 'Silnice jsou ucpané. Pomůže MHD, metro nebo víc souběžných ulic.');
   if (S.radical > 40) tip('radical', 'Radikálů přibývá. Pomáhá práce, vzdělání, integrační programy a tajná služba.');
   if (S.money < 0) tip('money', 'Pokladna je v mínusu. Zvyš daně, uber výdaje nebo si vezmi úvěr.', 60);

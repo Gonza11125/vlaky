@@ -24,8 +24,8 @@ const TAXK = { R: 5, C: 8, I: 7, O: 11 };   // Kč na obyvatele či místo za ka
 const SPEC = ['Zboží', 'Potraviny', 'Technologie'];
 
 // ---------- služby a stavby ----------
-// cost = cena stavby, up = měsíční provoz, r = dosah v dlaždicích (parky, MHD, nádraží), size = strana čtverce
-// serves = kolik lidí služba zvládne (policie, hasiči, zdravotnictví, školy slouží celému městu; když je lidí víc, služba je přetížená)
+// cost = cena stavby, up = měsíční provoz, r = jen pro grafiku a cenu pozemků u nádraží, size = strana čtverce
+// serves = kolik lidí služba zvládne (všechny služby slouží celému městu; když je lidí víc, služba je přetížená)
 const SERV = {
   townhall:  { name: 'Radnice', cat: 'gov', size: 2, cost: 800000, up: 15000, unique: true, desc: 'Sídlo vedení města. Bez radnice nejde vybírat daně. Je to i první cíl demonstrací.' },
   coal:      { name: 'Uhelná elektrárna', cat: 'power', size: 2, cost: 1200000, up: 45000, power: 1200, fuel: 0.06, poll: 40, desc: 'Levná a spolehlivá, ale silně znečišťuje a pálí palivo, které se musí dovážet.' },
@@ -55,25 +55,25 @@ const SERV = {
   university:{ name: 'Univerzita', cat: 'edu', size: 3, cost: 6000000, up: 200000, r: 40, edu: 1, rp: 20, serves: 50000, desc: 'Nejvyšší vzdělání, stačí na 50 000 obyvatel. Hodně výzkumu.' },
   techpark:  { name: 'Technologický park', cat: 'edu', size: 2, cost: 5000000, up: 140000, rp: 40, req: 'techpark', desc: 'Startupy a laboratoře. Hodně výzkumu a práce pro vzdělané lidi.' },
   institute: { name: 'Výzkumný ústav', cat: 'edu', size: 2, cost: 3000000, up: 110000, rp: 25, needs: 'university', desc: 'Jen výzkum. Potřebuje ve městě univerzitu.' },
-  park:      { name: 'Park', cat: 'fun', size: 1, cost: 80000, up: 2000, r: 5, park: 0.6, desc: 'Zeleň zvedá cenu pozemků a náladu lidí.' },
-  bigpark:   { name: 'Městský park', cat: 'fun', size: 2, cost: 320000, up: 8000, r: 8, park: 1, desc: 'Velký park s jezírkem.' },
-  church:    { name: 'Kostel', cat: 'fun', size: 2, cost: 1500000, up: 6000, r: 7, park: 0.5, desc: 'Dominanta obce. Zvedá cenu pozemků a náladu v okolí.' },
-  plaza:     { name: 'Náměstí', cat: 'fun', size: 1, cost: 150000, up: 3000, r: 4, park: 0.4, shop: 1, desc: 'Místo pro trhy a setkávání. Pomáhá obchodům kolem.' },
-  stadium:   { name: 'Stadion', cat: 'fun', size: 3, cost: 5000000, up: 80000, r: 40, park: 0.3, happy: 4, desc: 'Celé město je o něco spokojenější. Fanoušci ale umí i demonstrovat.' },
-  bus:       { name: 'Autobusové depo', cat: 'trans', size: 1, cost: 400000, up: 15000, r: 9, transit: 0.5, desc: 'Městská doprava ulehčí silnicím.' },
-  metro:     { name: 'Stanice metra', cat: 'trans', size: 1, cost: 2500000, up: 40000, r: 12, transit: 1, req: 'metro', desc: 'Rychlá podzemní doprava. Výrazně ubere aut.' },
+  park:      { name: 'Park', cat: 'fun', size: 1, cost: 80000, up: 2000, r: 5, park: 0.6, serves: 4000, desc: 'Zeleň zvedá cenu pozemků a náladu lidí. Stačí na 4 000 obyvatel.' },
+  bigpark:   { name: 'Městský park', cat: 'fun', size: 2, cost: 320000, up: 8000, r: 8, park: 1, serves: 12000, desc: 'Velký park s jezírkem. Stačí na 12 000 obyvatel.' },
+  church:    { name: 'Kostel', cat: 'fun', size: 2, cost: 1500000, up: 6000, r: 7, park: 0.5, serves: 6000, desc: 'Dominanta obce. Zvedá cenu pozemků a náladu lidí, stačí na 6 000 obyvatel.' },
+  plaza:     { name: 'Náměstí', cat: 'fun', size: 1, cost: 150000, up: 3000, r: 4, park: 0.4, shop: 1, serves: 3000, desc: 'Místo pro trhy a setkávání. Stačí na 3 000 obyvatel.' },
+  stadium:   { name: 'Stadion', cat: 'fun', size: 3, cost: 5000000, up: 80000, r: 40, park: 0.3, happy: 4, serves: 30000, desc: 'Celé město je o něco spokojenější. Fanoušci ale umí i demonstrovat.' },
+  bus:       { name: 'Autobusové depo', cat: 'trans', size: 1, cost: 400000, up: 15000, r: 9, transit: 0.5, serves: 8000, desc: 'Autobusy ulehčí silnicím. Stačí na 8 000 obyvatel.' },
+  metro:     { name: 'Stanice metra', cat: 'trans', size: 1, cost: 2500000, up: 40000, r: 12, transit: 1, serves: 30000, req: 'metro', desc: 'Rychlá podzemní doprava. Výrazně ubere aut, stačí na 30 000 obyvatel.' },
   // památky: land = body cestovního ruchu, unique = jen jedna ve městě
-  castle:    { name: 'Zámek', cat: 'landmark', size: 3, cost: 9000000, up: 60000, r: 10, park: 0.8, land: 6, unique: true, desc: 'Barokní zámek s francouzskou zahradou. Turisté, svatby, koncerty a prestiž.' },
-  cathedral: { name: 'Katedrála', cat: 'landmark', size: 3, cost: 7000000, up: 30000, r: 9, park: 0.6, land: 5, unique: true, desc: 'Gotická katedrála se dvěma věžemi. Láká poutníky a turisty, lidem zvedá náladu.' },
-  museum:    { name: 'Národní muzeum', cat: 'landmark', size: 2, cost: 5000000, up: 70000, r: 8, park: 0.4, land: 4, rp: 6, unique: true, desc: 'Sbírky, výstavy a školní exkurze. Přidá i trochu výzkumu.' },
-  zoo:       { name: 'Zoologická zahrada', cat: 'landmark', size: 3, cost: 6000000, up: 90000, r: 10, park: 1, land: 5, unique: true, desc: 'Sloni, žirafy a pavilon tropů. V létě sem jezdí rodiny z celého kraje.' },
-  aquapark:  { name: 'Aquapark', cat: 'landmark', size: 3, cost: 5500000, up: 110000, r: 9, park: 0.8, land: 4, unique: true, req: 'tourism', desc: 'Tobogány, vlnobití a sauny. V létě plno, v zimě klid.' },
-  lookout:   { name: 'Rozhledna', cat: 'landmark', size: 1, cost: 600000, up: 4000, r: 6, park: 0.4, land: 1, desc: 'Vyhlídka do okolí pro výletníky. Hodí se na kopec nebo k lesu.' },
-  tvtower:   { name: 'Televizní věž', cat: 'landmark', size: 2, cost: 8000000, up: 50000, r: 8, park: 0.3, land: 4, unique: true, req: 'internet', desc: 'Vysílač s vyhlídkovou restaurací. Symbol moderního města viditelný z dálky.' },
+  castle:    { name: 'Zámek', cat: 'landmark', size: 3, cost: 9000000, up: 60000, r: 10, park: 0.8, serves: 25000, land: 6, unique: true, desc: 'Barokní zámek s francouzskou zahradou. Turisté, svatby, koncerty a prestiž.' },
+  cathedral: { name: 'Katedrála', cat: 'landmark', size: 3, cost: 7000000, up: 30000, r: 9, park: 0.6, serves: 15000, land: 5, unique: true, desc: 'Gotická katedrála se dvěma věžemi. Láká poutníky a turisty, lidem zvedá náladu.' },
+  museum:    { name: 'Národní muzeum', cat: 'landmark', size: 2, cost: 5000000, up: 70000, r: 8, park: 0.4, serves: 12000, land: 4, rp: 6, unique: true, desc: 'Sbírky, výstavy a školní exkurze. Přidá i trochu výzkumu.' },
+  zoo:       { name: 'Zoologická zahrada', cat: 'landmark', size: 3, cost: 6000000, up: 90000, r: 10, park: 1, serves: 30000, land: 5, unique: true, desc: 'Sloni, žirafy a pavilon tropů. V létě sem jezdí rodiny z celého kraje.' },
+  aquapark:  { name: 'Aquapark', cat: 'landmark', size: 3, cost: 5500000, up: 110000, r: 9, park: 0.8, serves: 18000, land: 4, unique: true, req: 'tourism', desc: 'Tobogány, vlnobití a sauny. V létě plno, v zimě klid.' },
+  lookout:   { name: 'Rozhledna', cat: 'landmark', size: 1, cost: 600000, up: 4000, r: 6, park: 0.4, serves: 5000, land: 1, desc: 'Vyhlídka do okolí pro výletníky. Hodí se na kopec nebo k lesu.' },
+  tvtower:   { name: 'Televizní věž', cat: 'landmark', size: 2, cost: 8000000, up: 50000, r: 8, park: 0.3, serves: 12000, land: 4, unique: true, req: 'internet', desc: 'Vysílač s vyhlídkovou restaurací. Symbol moderního města viditelný z dálky.' },
   // železnice: rail = druh stanice, pax = síla osobní dopravy, freight = kapacita nákladu (t/měs.)
-  railhalt:  { name: 'Železniční zastávka', cat: 'rail', size: 1, cost: 300000, up: 7000, r: 9, rail: 'pass', pax: 0.55, desc: 'Nástupiště s přístřeškem. Osobní vlaky tu zastaví a vezmou lidi z okolí.' },
-  railst:    { name: 'Nádraží', cat: 'rail', size: 2, cost: 1500000, up: 30000, r: 12, rail: 'pass', pax: 1, desc: 'Nádražní budova s pokladnou a krytým nástupištěm. Lidé jezdí vlakem do práce i za nákupy.' },
-  mainst:    { name: 'Hlavní nádraží', cat: 'rail', size: 3, cost: 6000000, up: 110000, r: 18, rail: 'pass', pax: 1.6, main: true, req: 'intercity', desc: 'Velká hala nad nástupišti. Zastavují tu rychlíky a rychlovlaky, přijíždějí turisté a firmy.' },
+  railhalt:  { name: 'Železniční zastávka', cat: 'rail', size: 1, cost: 300000, up: 7000, r: 9, rail: 'pass', pax: 0.55, serves: 4000, desc: 'Nástupiště s přístřeškem. Osobní vlaky tu zastaví, stačí na 4 000 obyvatel.' },
+  railst:    { name: 'Nádraží', cat: 'rail', size: 2, cost: 1500000, up: 30000, r: 12, rail: 'pass', pax: 1, serves: 12000, desc: 'Nádražní budova s pokladnou a krytým nástupištěm. Lidé jezdí vlakem do práce i za nákupy.' },
+  mainst:    { name: 'Hlavní nádraží', cat: 'rail', size: 3, cost: 6000000, up: 110000, r: 18, rail: 'pass', pax: 1.6, main: true, serves: 35000, req: 'intercity', desc: 'Velká hala nad nástupišti. Zastavují tu rychlíky a rychlovlaky, přijíždějí turisté a firmy.' },
   station:   { name: 'Nákladové nádraží', cat: 'rail', size: 2, cost: 2500000, up: 40000, r: 10, rail: 'freight', freight: 4000, desc: 'Sklady a vlečky. Nákladní vlaky odvezou až 4 000 t zboží měsíčně a průmysl v okolí vyrábí víc.' },
   container: { name: 'Kontejnerový terminál', cat: 'rail', size: 3, cost: 7000000, up: 110000, r: 14, rail: 'freight', freight: 12000, req: 'containers', desc: 'Portálové jeřáby a stovky kontejnerů. Až 12 000 t zboží měsíčně.' },
   depot:     { name: 'Železniční depo', cat: 'rail', size: 2, cost: 1800000, up: 35000, rail: 'depot', trains: 8, desc: 'Remíza a dílny. Každé depo udrží v provozu dalších 8 vlaků.' },
@@ -94,7 +94,7 @@ const ROADS = {
   1: { key: 'street', name: 'Ulice', cost: 3000, up: 50, cap: 1, lv: 0, desc: 'Dvouproudá ulice s chodníky a lampami. Základ města.' },
   2: { key: 'rural', name: 'Venkovská silnice', cost: 2000, up: 35, cap: 0.9, lv: -2, desc: 'Venkovská silnice bez chodníků. Levná, hodí se do vesnic a mezi obce.' },
   3: { key: 'avenue', name: 'Třída', cost: 9000, up: 110, cap: 2.2, lv: 5, req: 'avenues', desc: 'Čtyřproudá třída se stromořadím uprostřed. Víc než dvojnásobná kapacita.' },
-  4: { key: 'tram', name: 'Tramvajová třída', cost: 18000, up: 220, cap: 2, lv: 8, transit: 0.7, req: 'tram', desc: 'Třída s tramvajovou tratí. Tramvaj odveze lidi z okolí a ubere aut.' },
+  4: { key: 'tram', name: 'Tramvajová třída', cost: 18000, up: 220, cap: 2, lv: 8, transit: 0.7, req: 'tram', desc: 'Třída s tramvajovou tratí. Tramvaj ubere aut, každé políčko trati stačí na 400 obyvatel.' },
   5: { key: 'highway', name: 'Rychlostní silnice', cost: 22000, up: 260, cap: 4, lv: -10, poll: 4, noAccess: true, req: 'highways', desc: 'Čtyři pruhy se svodidly. Obrovská kapacita, ale hluk a smog. Domy a firmy z ní nemají sjezd.' },
   6: { key: 'ped', name: 'Pěší zóna', cost: 6000, up: 60, cap: 0.3, lv: 12, noCars: true, req: 'pedestrian', desc: 'Dlažba, lavičky a stromy bez aut. Cena pozemků a obchody v okolí rostou.' },
 };

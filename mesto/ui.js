@@ -252,8 +252,7 @@ PANELS.info = {
       if (d.water && b.type === 'pump') h += row('Voda', fmt(d.water * (nearWater(b.x, b.y, 1, 2) ? 1.5 : 1)) + ' m³');
       if (d.rail) h += railBldInfo(b);
       const sk = svcKey(d);
-      if (sk && d.serves) { const v = T.svc && T.svc[sk]; h += row('Stačí na', fmt(svcCap(b)) + ' obyvatel') + (v ? row('Vytížení ve městě', pct(v.load * 100), v.load > 1 ? 'neg' : v.load > 0.85 ? '' : 'pos') + meter(Math.min(100, v.load * 100), v.load > 1 ? 'var(--bad)' : v.load > 0.85 ? 'var(--warn)' : 'var(--good)') : '') + '<p class="hint">Slouží celému městu. Když je lidí víc, než služby zvládnou, zhorší se všude. Na vzdálenosti záleží jen málo (dojezdová doba).</p>'; }
-      else if (d.r && d.r < 30) h += row('Dosah', Math.round(d.r * (b.type === 'bus' && S.techs.bus ? 1.3 : 1)) + ' políček');
+      if (sk && d.serves) { const v = T.svc && T.svc[sk]; h += row('Stačí na', fmt(svcCap(b)) + ' obyvatel') + (v ? row('Vytížení ve městě', pct(v.load * 100), v.load > 1 ? 'neg' : v.load > 0.85 ? '' : 'pos') + meter(Math.min(100, v.load * 100), v.load > 1 ? 'var(--bad)' : v.load > 0.85 ? 'var(--warn)' : 'var(--good)') : '') + '<p class="hint">Slouží celému městu. Když je lidí víc, než služby zvládnou, zhorší se všude. ' + (sk === 'police' || sk === 'fire' || sk === 'health' ? 'Na vzdálenosti záleží jen málo (dojezdová doba).' : 'Na vzdálenosti nezáleží.') + '</p>'; }
       if (d.fireStr) h += row('Vozidla', b.type === 'fireair' ? '2 vrtulníky a ' + d.trucks + ' cisterny' : d.trucks + (d.trucks === 1 ? ' cisterna' : d.trucks < 5 ? ' vozy' : ' vozů')) + row('Síla zásahu', pct(d.fireStr * (1 + tfx('fireEff')) * budF('fire') * 100)) + row('Voda pro hasiče', pct((0.45 + 0.55 * (T.wRatio || 0)) * 100), T.wRatio < 0.9 ? 'neg' : '');
       if (d.police) h += row('Policistů', d.police); if (d.army) h += row('Vojáků', d.army); if (d.trade) h += row('Obchodní kapacita', fmt(d.trade) + ' t/měs.'); if (d.rp) h += row('Výzkum', d.rp + ' bodů/měs.');
       if (d.garbage) h += row('Odpad', 'pro ' + fmt(d.garbage) + ' lidí');
@@ -356,7 +355,7 @@ function railInfo(k) {
 }
 function railBldInfo(b) {
   const d = SERV[b.type], c = b.rc >= 0 ? railComps[b.rc] : null; let h = row('Trať', c ? (c.edge ? 'napojeno na celostátní síť' : c.pass.length >= 2 ? 'místní trať' : 'trať nikam nevede') : 'chybí trať', c && (c.edge || c.pass.length >= 2) ? '' : 'neg');
-  if (d.rail === 'pass') { h += row('Cestujících měsíčně', fmt(b.pax || 0)) + row('Obyvatel v dosahu', fmt(b.catch || 0)) + row('Četnost spojů', pct((b.sf || 0) * 100)); if (!b.sf) h += '<p class="hint">Nejezdí sem žádné vlaky. Nastav osobní vlaky v záložce Železnice.</p>'; }
+  if (d.rail === 'pass') { h += row('Cestujících měsíčně', fmt(b.pax || 0)) + row('Stačí na', fmt(svcCap(b)) + ' obyvatel') + row('Vlakem odsud jezdí', fmt(b.catch || 0) + ' obyvatel') + row('Četnost spojů', pct((b.sf || 0) * 100)); if (!b.sf) h += '<p class="hint">Nejezdí sem žádné vlaky. Nastav osobní vlaky v záložce Železnice.</p>'; }
   if (d.rail === 'freight') h += row('Kapacita', fmt(d.freight) + ' t/měs.') + row('Nákladních vlaků', (T.railSv ? T.railSv.eff.fr : 0));
   if (d.rail === 'depot') h += row('Udrží v provozu', d.trains + ' vlaků');
   return h;
