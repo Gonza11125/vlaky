@@ -10,17 +10,43 @@ async function netBoot() {
   try {
     if (window.claude && window.claude.use) {
       const r = await window.claude.use('room');
-      if (r) { NET.room = r; r.on('h', m => { if (!m.sameTab) netIn(m.data); }); r.on('g', m => { if (!m.sameTab) netIn(m.data); }); }
+      if (r) {
+        NET.room = r; r.on('h', m => { if (!m.sameTab) netIn(m.data); }, netRoomErr); r.on('g', m => { if (!m.sameTab) netIn(m.data); }, netRoomErr);
+        r.onConnection(c => { NET.conn = c; netConnInfo(); }, netRoomErr);
+        r.onPeers(ch => { NET.others = ch.peers.filter(p => p.kind === 'viewer' && !p.sameTab).length; netConnInfo(); }, netRoomErr);
+      }
     }
   } catch (e) { }
   if (!NET.room && 'BroadcastChannel' in window) { try { NET.bc = new BroadcastChannel('vek-pokroku-net'); NET.bc.onmessage = e => netIn(e.data); } catch (e) { } }
-  NET.ready = true; netStatus();
+  NET.ready = true; netStatus(); netConnInfo(); netRestore();
+}
+function netRoomErr(e) { if (NET.roomErr) return; NET.roomErr = (e && e.code) || 'chyba'; netConnInfo(); }
+const plural = (n, a, b, c) => n === 1 ? a : n >= 2 && n <= 4 ? b : c;
+// stav připojení zvlášť pod pokyny: hned je vidět, jestli jsou oba hráči na stránce
+function netConnInfo() {
+  let c = el('net-conn'); const s = el('net-status'); if (!s) return;
+  if (!c) { c = document.createElement('p'); c.className = 'hint'; c.id = 'net-conn'; s.after(c); }
+  if (!NET.ready) { c.textContent = ''; return; }
+  let t, bad = true;
+  if (!NET.room) t = NET.bc ? '⚠ Tahle stránka není připojená k síti Claude, takže hra přes internet nepůjde. Bývá to tím, že je otevřená přes veřejný odkaz, bez přihlášení na claude.ai nebo bez práva přispívat. Teď jde hrát jen ve dvou oknech tohoto prohlížeče.' : '⚠ Hra po síti tady není dostupná.';
+  else if (NET.roomErr) t = '⚠ Síť Claude hlásí chybu (' + NET.roomErr + '). ' + (NET.roomErr === 'not_granted' || NET.roomErr === 'revoked' ? 'Tahle stránka není připojená: otevři hru přihlášený na claude.ai přes pozvánku s právem přispívat.' : 'Zkus stránku načíst znovu.');
+  else if (!NET.conn) t = 'Připojuji se k síti Claude…';
+  else { const n = NET.others || 0; bad = false; t = '✓ Připojeno k síti Claude. ' + (n ? 'Na stránce ' + plural(n, 'je', 'jsou', 'je') + ' ještě ' + n + ' ' + plural(n, 'další hráč', 'další hráči', 'dalších hráčů') + '.' : 'Na stránce jsi zatím sám – soupeř ji nemá otevřenou, nebo není připojený.'); }
+  c.textContent = t; c.style.color = bad ? '#e8a07a' : '';
 }
 function netStatus(text) {
   const s = el('net-status'); if (!s) return;
   if (text) { s.textContent = text; return; }
-  s.textContent = NET.room ? 'Soupeř musí mít tuhle stránku otevřenou a nasdílenou s právem přispívat.' : NET.bc ? 'Síť Claude tu není k dispozici. Funguje jen hra mezi dvěma okny téhož prohlížeče.' : 'Hra po síti tady není dostupná.';
+  s.textContent = 'Jeden z vás klikne na Založit hru a druhému pošle kód. Oba musíte být přihlášení na claude.ai a soupeř musí mít hru nasdílenou s právem přispívat – veřejný odkaz nestačí.';
   el('b-host').disabled = el('b-join').disabled = !(NET.room || NET.bc);
+}
+// lobby přežije znovunačtení stránky (na telefonu se při přepnutí do jiné aplikace stránka často načte znovu)
+function netRemember(on) { try { if (on) localStorage.setItem('vek-net', JSON.stringify({ role: NET.role, code: NET.code, t: Date.now() })); else localStorage.removeItem('vek-net'); } catch (e) { } }
+function netRestore() {
+  let v = null; try { v = JSON.parse(localStorage.getItem('vek-net') || 'null'); } catch (e) { }
+  if (!v || !v.code || Date.now() - v.t > 20 * 60000 || NET.role || el('start').hidden || !(NET.room || NET.bc)) return;
+  if (v.role === 'host') { netReset(); NET.role = 'host'; NET.code = v.code; netStatus('Kód hry: ' + NET.code + '. Pošli ho soupeři. Hra začne, jakmile se připojí. Nastavení režimu výše platí pro oba.'); }
+  else if (v.role === 'guest') { el('net-code').value = v.code; netJoin(); }
 }
 function netSend(d) {
   d.c = NET.code;
@@ -34,17 +60,18 @@ function netHost() {
   if (!NET.ready) return;
   netReset(); NET.role = 'host'; NET.code = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPRSTUVXYZ'[Math.floor(Math.random() * 22)]).join('');
   netStatus('Kód hry: ' + NET.code + '. Pošli ho soupeři. Hra začne, jakmile se připojí. Nastavení režimu výše platí pro oba.');
+  netRemember(true);
 }
 function netJoin() {
   if (!NET.ready) return;
   const code = (el('net-code').value || '').trim().toUpperCase();
   if (code.length !== 4) { netStatus('Zadej čtyřpísmenný kód, který ti poslal soupeř.'); return; }
-  netReset(); NET.role = 'guest'; NET.code = code; NET.helloT = 0;
-  netStatus('Hledám hru ' + code + '…');
+  netReset(); NET.role = 'guest'; NET.code = code; NET.helloT = 0; NET.joinAt = performance.now(); NET.hinted = false;
+  netStatus('Hledám hru ' + code + '…'); netRemember(true);
 }
 function hostStart() {
   applyOpts(); G.mode = 'host'; MY = 0; G.speed = 1; el('b-speed').textContent = '1×';
-  startFresh(); NET.started = true; NET.log = []; NET.out = []; NET.shots = []; NET.ack = 0;
+  startFresh(); NET.started = true; NET.log = []; NET.out = []; NET.shots = []; NET.ack = 0; netRemember(false);
   el('start').hidden = true; G.paused = false;
   msg('Soupeř se připojil. Hraješ za modré, on za červené.', 'good');
 }
@@ -58,7 +85,7 @@ function guestStart(sv) {
   G.mode = 'guest'; MY = 1; resetView();
   newGame(0, sv);
   G.speed = 1; el('b-speed').textContent = '1×';
-  NET.logN = sv.logN || 0; NET.started = true; NET.parts = null; NET.ug = null; NET.bg = null;
+  NET.logN = sv.logN || 0; NET.started = true; NET.parts = null; NET.ug = null; NET.bg = null; netRemember(false);
   cam.x = teams[1].tcx; cam.z = teams[1].tcz + 4; cam.yaw = 0;
   el('start').hidden = true; G.paused = false;
   msg('Připojeno. Hraješ za červené, soupeř za modré.', 'good');
@@ -158,6 +185,10 @@ function hostTick() {
 function netFrame(now, dt) {
   if (!NET.role) return;
   if (NET.role === 'guest' && (!NET.started || NET.resync) && now - NET.helloT > 1500) { NET.helloT = now; netSend({ t: 'hello' }); }
+  if (NET.role === 'guest' && !NET.started && !NET.hinted && NET.joinAt && now - NET.joinAt > 12000) {   // dlouho bez odpovědi: poradit, co zkontrolovat
+    NET.hinted = true;
+    netStatus('Hra ' + NET.code + ' se pořád nehlásí. ' + (NET.room && NET.conn && !NET.others ? 'Na stránce teď nikoho dalšího nevidím: soupeř ji nemá otevřenou, nebo jeho stránka není připojená k síti Claude. ' : '') + 'Zkontroluj, že kód je správně, soupeř klikl na Založit hru a má hru otevřenou na obrazovce, a že u vás obou dole svítí „Připojeno k síti Claude“. Hledám dál…');
+  }
   if (!NET.started) return;
   if (NET.role === 'host') { if (now - NET.lastTick >= 100) { NET.lastTick = now; hostTick(); } }
   else {
