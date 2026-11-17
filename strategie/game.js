@@ -22,10 +22,11 @@ const season = () => Math.floor(G.time / SEASON_LEN) % 4;
 const year = () => Math.floor(G.time / (SEASON_LEN * 4)) + 1;
 
 function mkTeam(id) {
-  return { id, color: TEAM_COLORS[id], res: { food: 200 * G.match.stocks, wood: 200 * G.match.stocks, stone: 100 * G.match.stocks, ore: 0, metal: 0, gold: 0, know: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0, produced: {} } };
+  return { id, color: TEAM_COLORS[id], res: { food: 200 * G.match.stocks, wood: 200 * G.match.stocks, stone: 100 * G.match.stocks, ore: 0, metal: 0, gold: 0, know: 0, grain: 0, flour: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0, regrown: 0, tradeGold: 0, produced: {} } };
 }
 function gainResource(T, key, amount) { T.res[key] += amount; const p = T.stats.produced || (T.stats.produced = {}); p[key] = (p[key] || 0) + amount; }
 const peaceActive = () => G.time < G.match.peace;
+const isSoldier = u => u.type !== 'vil' && u.def.atk > 0;
 const afford = (T, cost) => !cost || Object.keys(cost).every(k => T.res[k] >= cost[k]);
 function pay(T, cost) { for (const k in cost) T.res[k] -= cost[k]; }
 function refund(T, cost, f) { for (const k in cost) T.res[k] += cost[k] * (f || 1); }
@@ -113,7 +114,7 @@ function reveal(cx, cy, r) {
     for (let dx = -r; dx <= r; dx++) { const x = cx + dx; if (x < 0 || x >= N || dx * dx + dy * dy > r2) continue; const i = y * N + x; vis[i] = 1;
       if (!explored[i]) { explored[i] = 1; const id = nodeAt[i]; if (id >= 0) showNode(nodes[id]); } } }
 }
-const SIGHT = { vil: 6, inf: 7, arch: 7, cav: 8, siege: 7 };
+const SIGHT = { vil: 6, inf: 7, arch: 7, cav: 8, siege: 7, trade: 6 };
 function updateFog() {
   if (G.reveal) { for (let i = 0; i < N * N; i++) { vis[i] = 1; if (!explored[i]) { explored[i] = 1; const id = nodeAt[i]; if (id >= 0) showNode(nodes[id]); } } }
   else {
@@ -226,7 +227,7 @@ function canPlace(type, cx, cy) {
 function placeBuilding(team, type, cx, cy, instant) {
   const def = BUILDINGS[type], s = def.size, T = teams[team];
   const maxHp = Math.round(def.hp * (T.tech.masonry ? 1.25 : 1));
-  const b = { id: nextId++, isB: true, team, type, def, cx, cy, size: s, x: (cx + s / 2) * CS, z: (cy + s / 2) * CS, hp: instant ? maxHp : maxHp * 0.1, maxHp, done: !!instant, prog: instant ? 1 : 0, queue: [], rally: null, cd: 0, worker: null, dead: false };
+  const b = { id: nextId++, isB: true, team, type, def, cx, cy, size: s, x: (cx + s / 2) * CS, z: (cy + s / 2) * CS, hp: instant ? maxHp : maxHp * 0.1, maxHp, done: !!instant, prog: instant ? 1 : 0, queue: [], rally: null, cd: 0, worker: null, dead: false, crop: 'food', enabled: true, workT: 0 };
   b.y = flatten(cx, cy, s);
   for (let j = cy; j < cy + s; j++) for (let i = cx; i < cx + s; i++) { const k = cidx(i, j); resv[k] = 1; bAt[k] = b.id; if (type !== 'farm') occ[k] = 1; walk[k] = 1; if (def.gate) gateT[k] = team + 1; }
   b.mesh = new THREE.Mesh(geoFor('b', type, team), type === 'farm' ? farmMat : bldMat);
@@ -306,7 +307,7 @@ function faceTo(u, t) { u.face = Math.atan2(t.x - u.x, t.z - u.z); }
 // ---------- rozkazy ----------
 function orderStop(u) { u.order = null; u.path = null; }
 function orderMove(u, x, z, amove) { u.order = { type: amove ? 'amove' : 'move', x, z }; pathTo(u, x, z); }
-function orderAttack(u, t, auto, resume) { if (peaceActive() && t.team !== u.team) return; u.order = { type: 'attack', target: t, auto: !!auto, resume: resume || null, ox: u.x, oz: u.z, rt: 0 }; u.path = null; }
+function orderAttack(u, t, auto, resume) { if (u.def && u.def.cls === 'trade' || peaceActive() && t.team !== u.team) return; u.order = { type: 'attack', target: t, auto: !!auto, resume: resume || null, ox: u.x, oz: u.z, rt: 0 }; u.path = null; }
 function orderGather(u, n) { if (u.type !== 'vil') return orderMove(u, n.x, n.z); if (u.ctype !== n.def.res) u.carry = 0; u.ctype = n.def.res; u.order = { type: 'gather', node: n, phase: 'go', drop: null }; pathTo(u, n.x, n.z); }
 function orderBuild(u, b) { if (u.type !== 'vil') return orderMove(u, b.x, b.z); u.order = { type: 'build', b }; pathToB(u, b); }
 function orderFarm(u, b) { if (u.type !== 'vil') return; u.order = { type: 'farm', b }; b.worker = u; pathTo(u, b.x + (Math.random() - 0.5) * 2, b.z + (Math.random() - 0.5) * 2); }
@@ -337,7 +338,7 @@ function hurt(t, src, base, cls, pierce, bonus) {
   T.hit = { x: t.x, z: t.z, time: G.time, by: src };
   sayAlert(t);
   if (t.hp <= 0) { killEnt(t, src); return; }
-  if (t.isU && src && src.isU && !src.dead && t.type !== 'vil' && (!t.order || (t.order.type === 'attack' && t.order.auto && t.order.target.isB)))
+  if (t.isU && src && src.isU && !src.dead && isSoldier(t) && (!t.order || (t.order.type === 'attack' && t.order.auto && t.order.target.isB)))
     orderAttack(t, src, true, t.order && t.order.resume);
 }
 function findEnemy(e, range, wantB) {
@@ -400,7 +401,7 @@ function gatherRate(u, n) {
   if (u.team === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff];
   return r;
 }
-function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.mill) r *= 1.15; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff]; return r; }
+function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff]; return r; }
 function toDrop(u, o) { o.drop = nearestDrop(u); if (!o.drop) { u.order = null; return; } o.phase = 'drop'; pathToB(u, o.drop); }
 function nextNode(u, o) {
   const n = nearestNode(o.node.type, o.node.x, o.node.z, 30);
@@ -414,8 +415,9 @@ function updateUnit(u, dt) {
   u.cd -= dt; u.moving = false; u.working = false;
   const T = teams[u.team], o = u.order;
   if (!T.hungry && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + 0.2 * dt);
+  if (o && o.type === 'trade') { updateCaravan(u, dt); return; }
   if (!o) {
-    if (u.type !== 'vil') { u.scan -= dt; if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, u.def.range ? u.def.range + 3 : 10, u.def.cls === 'siege' ? 'prefer' : true); if (e) orderAttack(u, e, true); } }
+    if (isSoldier(u)) { u.scan -= dt; if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, u.def.range ? u.def.range + 3 : 10, u.def.cls === 'siege' ? 'prefer' : true); if (e) orderAttack(u, e, true); } }
     return;
   }
   switch (o.type) {
@@ -504,7 +506,7 @@ function updateUnit(u, dt) {
       if (b.worker !== u) { if (farmFree(b)) b.worker = u; else { u.order = null; break; } }
       if (u.path) { follow(u, dt); break; }
       const r = farmRate(T);
-      if (r > 0 && !(G.flood > 0.2 && b.y < G.flood - 0.1)) { gainResource(T, 'food', r * dt); u.working = true; o.w = (o.w || 0) - dt; if (o.w <= 0) { o.w = 4 + Math.random() * 4; pathTo(u, b.x + (Math.random() - 0.5) * 3.6, b.z + (Math.random() - 0.5) * 3.6); } }
+      if (r > 0 && !(G.flood > 0.2 && b.y < G.flood - 0.1)) { gainResource(T, b.crop === 'grain' ? 'grain' : 'food', r * dt * (b.crop === 'grain' ? 1.25 : 1)); u.working = true; o.w = (o.w || 0) - dt; if (o.w <= 0) { o.w = 4 + Math.random() * 4; pathTo(u, b.x + (Math.random() - 0.5) * 3.6, b.z + (Math.random() - 0.5) * 3.6); } }
       break;
     }
   }
@@ -548,7 +550,65 @@ function spawnFrom(b, type) {
   if (!best) { const f = nearestFree(b.cx, b.cy, 20); if (!f) return null; best = { x: cellC(f.cx), z: cellC(f.cy) }; }
   const u = addUnit(b.team, type, best.x + (Math.random() - 0.5) * 0.6, best.z + (Math.random() - 0.5) * 0.6);
   if (b.rally) { if (b.rally.node && b.rally.node.amt > 0 && type === 'vil') orderGather(u, b.rally.node); else orderMove(u, b.rally.x + (Math.random() - 0.5) * 2, b.rally.z + (Math.random() - 0.5) * 2); }
+  if (type === 'caravan') { u.homeMarket = b.id; autoTradeRoute(u); }
   return u;
+}
+
+// ---------- obnovitelné lesy, výroba a obchodní cesty ----------
+function depletedTrees(b) {
+  return nodes.filter(n => n.type === 'tree' && n.amt <= 0 && Math.hypot(n.x - b.x, n.z - b.z) <= 22 && !resv[cidx(n.cx, n.cy)] && nodeAt[cidx(n.cx, n.cy)] < 0);
+}
+function regrowTree(n, amount) {
+  n.amt = amount; nodeAt[cidx(n.cx, n.cy)] = n.id;
+  if (explored[cidx(n.cx, n.cy)]) showNode(n);
+}
+function productionTick(b, dt) {
+  if (!b.enabled || b.fire > 0 || G.flood > 0.2 && b.y < G.flood - 0.1) return;
+  const T = teams[b.team];
+  if (b.type === 'forester') {
+    b.workT = Math.min(30, b.workT + dt);
+    if (b.workT < 30) return;
+    const n = depletedTrees(b)[0]; if (!n) return;
+    const amount = Math.round(NODE_DEF.tree.amt * G.match.resources);
+    regrowTree(n, amount); b.workT = 0; T.stats.regrown++;
+    if (G.mode === 'host') NET.log.push([2, n.id, amount]);
+  } else if (b.type === 'mill') {
+    const amount = Math.min(0.4 * dt, T.res.grain);
+    T.res.grain -= amount; gainResource(T, 'flour', amount);
+  } else if (b.type === 'bakery') {
+    const amount = Math.min(0.35 * dt, T.res.flour, T.res.wood / 0.2);
+    T.res.flour -= amount; T.res.wood -= amount * 0.2; gainResource(T, 'food', amount * 2);
+  }
+}
+function tradeRoute(u, from, to) {
+  if (!from || !to || from === to || !from.done || !to.done || from.dead || to.dead || from.team !== u.team || to.team !== u.team || from.type !== 'market' || to.type !== 'market') return false;
+  if (Math.hypot(from.x - to.x, from.z - to.z) < 24) return false;
+  PT = u.team;
+  const start = nearestFree(from.cx - 1, from.cy, from.size + 2);
+  if (!start || !findPath(start.cx, start.cy, to.cx, to.cy, to.cx + to.size - 1, to.cy + to.size - 1, 1).ok) return false;
+  u.homeMarket = from.id; u.carry = 0; u.ctype = 'gold';
+  // Always visit the origin before loading goods; starting far away is not a free trip.
+  u.order = { type: 'trade', from, to, returning: true, loaded: false }; pathToB(u, from); return true;
+}
+function autoTradeRoute(u) {
+  const markets = blds.filter(b => b.team === u.team && b.type === 'market' && b.done && !b.dead);
+  const from = markets.find(b => b.id === u.homeMarket) || markets.sort((a, b) => distEnt(u, a) - distEnt(u, b))[0];
+  for (const to of markets) if (tradeRoute(u, from, to)) return true;
+  return false;
+}
+function updateCaravan(u, dt) {
+  const o = u.order;
+  if (!o.from || !o.to || o.from.dead || o.to.dead) { orderStop(u); u.carry = 0; say(u.team, 'Obchodní cesta zanikla. Karavaně vyber novou trasu.', 'bad'); return; }
+  const target = o.returning ? o.from : o.to;
+  if (o.wait > 0) { o.wait -= dt; return; }
+  if (!u.path) pathToB(u, target);
+  const ended = follow(u, dt);
+  if (distEnt(u, target) > 3.2) { if (ended) { u.path = null; o.wait = 1; o.retry = (o.retry || 0) + 1; if (o.retry > 15) { orderStop(u); u.carry = 0; say(u.team, 'Karavana nemůže projet. Zkontroluj cestu a obnov trasu.', 'bad'); } } return; }
+  if (o.returning) {
+    if (o.loaded) { gainResource(teams[u.team], 'gold', u.carry); teams[u.team].stats.tradeGold += u.carry; u.carry = 0; }
+    o.loaded = false; o.returning = false;
+  } else { u.carry = Math.max(1, Math.floor(Math.hypot(o.from.x - o.to.x, o.from.z - o.to.z) * 0.22)); o.loaded = true; o.returning = true; }
+  o.retry = 0; pathToB(u, o.returning ? o.from : o.to);
 }
 function completeTech(T, id) {
   const d = TECHS[id]; T.tech[id] = true; delete T.busy[id];
@@ -560,6 +620,7 @@ let popWarn = 0;
 function updateBuilding(b, dt) {
   if (!b.done) return;
   const T = teams[b.team], def = b.def;
+  if (b.type === 'forester' || b.type === 'mill' || b.type === 'bakery') productionTick(b, dt);
   if (def.atk) { b.cd -= dt; if (b.cd <= 0) { const t = findEnemy(b, def.range + b.size, false); if (t) { b.cd = def.cd; shoot(b, t, 'arrow', def.atk + T.era, 'bld', 0, null); } else b.cd = 0.4; } }
   const q = b.queue[0];
   if (q) {
@@ -664,7 +725,7 @@ function execCmd(team, c) {
   const U = l => (l || []).map(i => byId.get(i)).filter(u => u && u.isU && u.team === team && !u.dead);
   const B = id => { const b = byId.get(id); return b && b.isB && b.team === team && !b.dead ? b : null; };
   switch (c[0]) {
-    case 'move': formation(U(c[1]), +c[2], +c[3], (u, x, z) => orderMove(u, x, z, c[4] && u.type !== 'vil')); break;
+    case 'move': formation(U(c[1]), +c[2], +c[3], (u, x, z) => orderMove(u, x, z, c[4] && isSoldier(u))); break;
     case 'atk': { if (peaceActive()) { say(team, 'Ještě platí ochrana před útoky.', 'bad'); break; } const t = byId.get(c[2]); if (t && t.team !== team && !t.dead) U(c[1]).forEach(u => orderAttack(u, t)); break; }
     case 'gather': { const n = nodes[c[2]]; if (!n || n.amt <= 0 || (n.def.req && !T.tech[n.def.req])) break; U(c[1]).forEach(u => u.type === 'vil' ? orderGather(u, n) : orderMove(u, n.x, n.z)); break; }
     case 'hunt': { const a = animals.find(a => a.id === c[2]); if (a) U(c[1]).forEach(u => orderHunt(u, a)); break; }
@@ -678,6 +739,15 @@ function execCmd(team, c) {
       break;
     }
     case 'stop': U(c[1]).forEach(orderStop); break;
+    case 'crop': { const b = B(c[1]); if (b && b.done && b.type === 'farm' && ['food', 'grain'].includes(c[2])) b.crop = c[2]; break; }
+    case 'production': { const b = B(c[1]); if (b && b.done && ['forester', 'mill', 'bakery'].includes(b.type)) b.enabled = !b.enabled; break; }
+    case 'route': {
+      for (const u of U(c[1]).filter(u => u.type === 'caravan')) {
+        const to = B(c[2]), from = byId.get(u.homeMarket) || blds.find(b => b.team === team && b.type === 'market' && b.done && b !== to);
+        if (!(to ? tradeRoute(u, from, to) : autoTradeRoute(u))) say(team, 'Pro trasu potřebuješ dvě vlastní dokončená a cestou propojená Tržiště alespoň 24 metrů od sebe.', 'bad');
+      }
+      break;
+    }
     case 'place': {
       const def = BUILDINGS[c[1]]; if (!def || !def.cost || !hasReq(T, def) || (def.real && !G.real)) break;
       let first = null;
@@ -696,7 +766,7 @@ function act(c) { if (G.mode === 'guest') netCmd(c); else execCmd(MY, c); }
 
 // ---------- protivník ----------
 const AI = { acc: 0, attackAt: 0, wave: 0, launch: -999 };
-const AI_TECH = ['agri', 'husbandry', 'era1', 'pottery', 'herbs', 'writing', 'bronze', 'wheel', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'plow', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
+const AI_TECH = ['agri', 'husbandry', 'era1', 'pottery', 'herbs', 'writing', 'bronze', 'wheel', 'currency', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'plow', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
 function findSpot(type, ax, ay, margin) {
   const s = BUILDINGS[type].size;
   for (let r = 3; r < 22; r++) {
@@ -719,7 +789,7 @@ function aiBuild(type, ax, ay) {
 }
 function aiTick() {
   const T = teams[1], tc = blds.find(b => b.team === 1 && b.type === 'tc' && !b.dead); if (!tc) return;
-  const mine = units.filter(u => u.team === 1), vils = mine.filter(u => u.type === 'vil'), army = mine.filter(u => u.type !== 'vil');
+  const mine = units.filter(u => u.team === 1), vils = mine.filter(u => u.type === 'vil'), army = mine.filter(isSoldier);
   const my = blds.filter(b => b.team === 1 && !b.dead), cnt = t => my.reduce((a, b) => a + (b.type === t ? 1 : 0), 0);
   const winter = season() === 3, D = G.diff;
   const vilTarget = Math.min([16, 22, 28][D], 9 + T.era * 5 + Math.floor(G.time / 90));
@@ -762,11 +832,26 @@ function aiTick() {
   // stavby
   if (!my.some(b => !b.done && b.type !== 'house')) {
     const farmT = Math.min(10, Math.ceil(nV * 0.4));
-    const wish = [['barracks', 1, G.time > 100], ['farm', farmT, T.tech.agri && !winter], ['range', 1, G.time > 240], ['pasture', 2, T.tech.husbandry], ['library', 1, T.tech.writing], ['smelter', 1, T.tech.bronze], ['smithy', 1, T.tech.bronze],
+    const wish = [['barracks', 1, G.time > 100], ['farm', Math.min(3, farmT), T.tech.agri && !winter], ['mill', 1, T.tech.agri && cnt('farm') >= 3], ['bakery', 1, T.tech.pottery && cnt('mill') >= 1],
+      ['forester', 1, T.tech.agri && nodes.some(n => n.type === 'tree' && n.amt <= 0 && Math.hypot(n.x - tc.x, n.z - tc.z) < 40)], ['market', 1, T.tech.currency], ['farm', farmT, T.tech.agri && !winter], ['range', 1, G.time > 240], ['pasture', 2, T.tech.husbandry], ['library', 1, T.tech.writing], ['smelter', 1, T.tech.bronze], ['smithy', 1, T.tech.bronze],
       ['library', 3, T.tech.writing && T.era >= 2], ['stable', 1, T.tech.horses && T.era >= 2], ['tower', 2, T.tech.masonry], ['smelter', 2, T.res.ore > 80], ['workshop', 1, T.tech.mechanics], ['barracks', 2, T.era >= 3], ['well', 1 + (T.pop > 25 ? 1 : 0), G.real], ['granary', 1, G.real && T.tech.agri && T.res.food > 250], ['healer', 1, G.real && T.tech.herbs]];
     for (const b of my) if (b.fire > 0 && vils.filter(v => v.order && v.order.type === 'build' && v.order.b === b).length < 2) { const v = vils.find(v => !v.order || v.order.type === 'gather'); if (v) orderBuild(v, b); }
-    for (const [type, n, cond] of wish) { if (!cond || cnt(type) >= n) continue; aiBuild(type, tc.cx + 1, tc.cy + 1); break; }
+    for (const [type, n, cond] of wish) {
+      if (!cond || cnt(type) >= n) continue;
+      const cut = type === 'forester' ? nodes.find(n => n.type === 'tree' && n.amt <= 0 && Math.hypot(n.x - tc.x, n.z - tc.z) < 40) : null;
+      aiBuild(type, cut ? cut.cx : tc.cx + 1, cut ? cut.cy : tc.cy + 1); break;
+    }
   }
+  // Keep direct food production; turn at most two fields into a complete bread chain.
+  const farms = my.filter(b => b.type === 'farm' && b.done);
+  farms.forEach((b, i) => { b.crop = my.some(b => b.type === 'mill' && b.done) && my.some(b => b.type === 'bakery' && b.done) && i < Math.min(2, Math.floor(farms.length / 3)) ? 'grain' : 'food'; });
+  const markets = my.filter(b => b.type === 'market' && b.done);
+  if (!pending && markets.length === 1 && T.era >= 2) {
+    const first = markets[0], sp = findSpot('market', first.cx + (first.cx < N / 2 ? 18 : -18), first.cy, 1);
+    if (sp && Math.hypot((sp.cx - first.cx) * CS, (sp.cy - first.cy) * CS) >= 24 && afford(T, BUILDINGS.market.cost)) { pay(T, BUILDINGS.market.cost); placeBuilding(1, 'market', sp.cx, sp.cy, false); }
+  }
+  if (markets.length >= 2 && mine.filter(u => u.type === 'caravan').length < 2 && !markets.some(b => b.queue.some(q => q.id === 'caravan')) && T.res.food > 120 && afford(T, UNITS.caravan.cost)) enqueue(markets[0], 'u', 'caravan');
+  for (const u of mine) if (u.type === 'caravan' && !u.order) autoTradeRoute(u);
   // výzkum
   const saving = T.saving; T.saving = null;
   const canSpend = cost => afford(T, cost) && (!saving || Object.keys(saving).every(k => k === 'know' || T.res[k] - (cost[k] || 0) >= saving[k]));
@@ -877,6 +962,7 @@ function packOrder(o) {
   const p = { type: o.type };
   if (o.type === 'move' || o.type === 'amove') { p.x = r1(o.x); p.z = r1(o.z); }
   else if (o.type === 'attack') { p.t = o.target.id; p.auto = o.auto; p.resume = packOrder(o.resume); }
+  else if (o.type === 'trade') { p.from = o.from.id; p.to = o.to.id; p.returning = o.returning; p.loaded = o.loaded; }
   else if (o.type === 'gather') { p.n = o.node.id; p.phase = o.phase; p.d = o.drop ? o.drop.id : 0; }
   else if (o.type === 'build' || o.type === 'farm') p.b = o.b.id;
   else if (o.type === 'hunt') p.a = o.animal.id;
@@ -885,7 +971,8 @@ function packOrder(o) {
 function unpackOrder(u, p, anim) {
   if (!p) return null;
   const o = { type: p.type };
-  if (p.type === 'move' || p.type === 'amove') { o.x = p.x; o.z = p.z; }
+  if (p.type === 'trade') { o.from = byId.get(p.from); o.to = byId.get(p.to); o.returning = !!p.returning; o.loaded = !!p.loaded; if (!o.from || !o.to || o.from.team !== u.team || o.to.team !== u.team) return null; }
+  else if (p.type === 'move' || p.type === 'amove') { o.x = p.x; o.z = p.z; }
   else if (p.type === 'attack') { o.target = byId.get(p.t); o.resume = unpackOrder(u, p.resume, anim); if (!o.target) return o.resume; o.auto = p.auto; o.ox = u.x; o.oz = u.z; o.rt = 0; }
   else if (p.type === 'gather') { o.node = nodes[p.n]; if (!o.node) return null; o.phase = p.phase; o.drop = byId.get(p.d) || null; }
   else if (p.type === 'build' || p.type === 'farm') { o.b = byId.get(p.b); if (!o.b) return null; }
@@ -902,8 +989,8 @@ function saveState() {
     teams: teams.map(T => ({ res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
     amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),
     meat: nodes.slice(G.baseNodes).map(n => [n.cx, n.cy, r1(n.x), r1(n.z), Math.round(n.amt), r1(n.v)]),
-    blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, fire: b.fire || 0, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
-    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, face: r1(u.face), sick: u.sick || 0, imm: u.imm || 0, o: packOrder(u.order) })),
+    blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, fire: b.fire || 0, crop: b.crop, enabled: b.enabled, workT: b.workT, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
+    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, face: r1(u.face), sick: u.sick || 0, imm: u.imm || 0, homeMarket: u.homeMarket, o: packOrder(u.order) })),
     animals: animals.filter(a => !a.dead).map(a => [a.id, r1(a.x), r1(a.z), r1(a.hx), r1(a.hz), a.hp]),
   };
 }
@@ -916,18 +1003,19 @@ function loadState(sv) {
   for (const m of sv.meat) { const n = { id: nodes.length, isNode: true, type: 'meat', def: NODE_DEF.meat, cx: m[0], cy: m[1], x: m[2], z: m[3], amt: m[4], inst: -1, v: m[5] }; nodes.push(n); if (n.amt > 0) { nodeAt[cidx(n.cx, n.cy)] = n.id; addMeat(n); } }
   for (const s of sv.blds) {
     nextId = s.id; const b = placeBuilding(s.team, s.type, s.cx, s.cy, s.done);
-    b.hp = s.hp; b.maxHp = s.maxHp; b.prog = s.prog; b.queue = s.queue; b.seen = s.seen; b.fire = s.fire || 0; b.mesh.scale.y = s.done ? 1 : 0.12 + 0.88 * Math.min(1, s.prog);
+    b.hp = s.hp; b.maxHp = s.maxHp; b.prog = s.prog; b.queue = s.queue; b.seen = s.seen; b.fire = s.fire || 0; b.crop = s.crop || 'food'; b.enabled = s.enabled !== false; b.workT = s.workT || 0; b.mesh.scale.y = s.done ? 1 : 0.12 + 0.88 * Math.min(1, s.prog);
     if (s.rally) b.rally = { x: s.rally.x, z: s.rally.z, node: s.rally.n >= 0 ? nodes[s.rally.n] : null };
   }
   const anim = new Map();
   for (const a of sv.animals) { nextId = a[0]; const an = addAnimal(a[1], a[2]); an.hx = a[3]; an.hz = a[4]; an.hp = a[5]; anim.set(an.id, an); }
   const pend = [];
-  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype; u.face = s.face; u.sick = s.sick || 0; u.imm = s.imm || 0; pend.push([u, s.o]); }
+  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype; u.face = s.face; u.sick = s.sick || 0; u.imm = s.imm || 0; u.homeMarket = s.homeMarket; pend.push([u, s.o]); }
   for (const [u, p] of pend) {
     const o = u.order = unpackOrder(u, p, anim); if (!o) continue;
     if (o.type === 'move') pathTo(u, o.x, o.z);
     else if (o.type === 'gather') { if (o.phase === 'drop' && o.drop) pathToB(u, o.drop); else if (o.phase !== 'work') { o.phase = 'go'; pathTo(u, o.node.x, o.node.z); } }
     else if (o.type === 'farm') o.b.worker = u;
+    else if (o.type === 'trade') pathToB(u, o.returning ? o.from : o.to);
   }
   nextId = sv.nextId;
   for (let i = 0; i < N * N; i++) if (explored[i] && nodeAt[i] >= 0) showNode(nodes[nodeAt[i]]);

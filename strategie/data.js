@@ -1,8 +1,8 @@
 'use strict';
 // Herní data: suroviny, epochy, jednotky, budovy, technologie.
 
-const RES = ['food', 'wood', 'stone', 'ore', 'metal', 'gold', 'know'];
-const RES_NAME = { food: 'Jídlo', wood: 'Dřevo', stone: 'Kámen', ore: 'Ruda', metal: 'Kov', gold: 'Zlato', know: 'Vědění' };
+const RES = ['food', 'wood', 'stone', 'ore', 'metal', 'gold', 'know', 'grain', 'flour'];
+const RES_NAME = { food: 'Jídlo', wood: 'Dřevo', stone: 'Kámen', ore: 'Ruda', metal: 'Kov', gold: 'Zlato', know: 'Vědění', grain: 'Obilí', flour: 'Mouka' };
 const ERAS = ['Doba kamenná', 'Doba bronzová', 'Doba železná', 'Středověk', 'Novověk'];
 const SEASONS = ['Jaro', 'Léto', 'Podzim', 'Zima'];
 const SEASON_LEN = 60;            // sekund na roční období
@@ -24,6 +24,8 @@ function goalDescription(match) {
 }
 
 const UNITS = {
+  caravan:  { name: 'Karavana', cls: 'trade', at: 'market', req: ['currency'], cost: { food: 60, wood: 50, gold: 20 }, time: 24, hp: 80, atk: 0, cd: 1, speed: 3.6, armor: 0, upkeep: 2,
+              desc: 'Vozí zboží mezi dvěma vlastními Tržišti vzdálenými alespoň 24 metrů. Zlato přiveze až po celé cestě tam a zpět. Vyber ji a ukaž na cílové Tržiště; neumí bojovat.' },
   vil:      { name: 'Vesničan', cls: 'vil', at: 'tc', cost: { food: 50 }, time: 14, hp: 40, atk: 2, cd: 1.5, speed: 3.4, armor: 0, upkeep: 2,
               desc: 'Sbírá suroviny, staví a opravuje budovy, obdělává pole.' },
   spear:    { name: 'Kopiník', cls: 'inf', at: 'barracks', cost: { food: 40, wood: 20 }, time: 14, hp: 65, atk: 6, cd: 1.4, speed: 3.3, armor: 0, upkeep: 3, bonus: { cav: 2.2 },
@@ -47,6 +49,10 @@ const UNITS = {
 };
 
 const BUILDINGS = {
+  forester: { name: 'Lesovna', size: 2, hp: 500, time: 25, req: ['agri'], cost: { wood: 80, food: 40 },
+              desc: 'Každých 30 sekund obnoví jeden vytěžený strom do vzdálenosti 22 metrů. Strom nesmí překrývat stavbu. Dřevo pak musí pokácet a donést vesničané.' },
+  bakery:   { name: 'Pekárna', size: 2, hp: 600, time: 28, req: ['agri', 'pottery'], cost: { wood: 80, stone: 40 },
+              desc: 'Z 1 mouky a 0,2 dřeva upeče 2 jídla. Navazuje na obilné pole a Mlýn; peče i v zimě, dokud jsou zásoby.' },
   tc:       { name: 'Sídlo', size: 3, hp: 2400, pop: 6, drop: true, atk: 6, range: 11, cd: 1.6, cost: null,
               desc: 'Srdce osady. Cvičí vesničany, přijímá suroviny a posouvá osadu do další epochy. Když padne, prohráváš.' },
   house:    { name: 'Dům', size: 2, hp: 500, time: 18, pop: 5, cost: { wood: 30 },
@@ -54,7 +60,7 @@ const BUILDINGS = {
   store:    { name: 'Sklad', size: 2, hp: 600, time: 20, drop: true, cost: { wood: 50 },
               desc: 'Vesničané sem odnášejí suroviny. Postav ho blízko lesa nebo lomu, ať nechodí daleko.' },
   farm:     { name: 'Pole', size: 3, hp: 200, time: 14, req: ['agri'], cost: { wood: 30 },
-              desc: 'Jeden rolník, úroda od jara do podzimu. V zimě pole nerodí.' },
+              desc: 'Jeden rolník, úroda od jara do podzimu. Zelenina dává přímo jídlo; po přepnutí na obilí zásobuje Mlýn a Pekárnu. V zimě pole nerodí.' },
   pasture:  { name: 'Pastvina', size: 3, hp: 300, time: 22, req: ['husbandry'], cost: { wood: 60 },
               desc: 'Dobytek dává trochu jídla celý rok, i v zimě. Nepotřebuje pracovníka.' },
   library:  { name: 'Knihovna', size: 2, hp: 600, time: 30, req: ['writing'], cost: { wood: 80, stone: 40 },
@@ -72,7 +78,7 @@ const BUILDINGS = {
   workshop: { name: 'Dílna', size: 3, hp: 1000, time: 34, req: ['mechanics'], cost: { wood: 140, metal: 30 },
               desc: 'Staví obléhací stroje.' },
   mill:     { name: 'Mlýn', size: 2, hp: 500, time: 22, req: ['agri'], cost: { wood: 60 },
-              desc: 'Mele obilí na mouku. Dokud stojí aspoň jeden, dávají všechna pole o 15 % víc jídla.' },
+              desc: 'Každou sekundu semele až 0,4 obilí na 0,4 mouky. Mouku potřebuje Pekárna. Vyžaduje pole přepnuté na obilí a funguje i v zimě.' },
   market:   { name: 'Tržiště', size: 3, hp: 800, time: 30, req: ['currency'], cost: { wood: 120, stone: 40 },
               desc: 'Tady prodáš přebytky za zlato a nakoupíš, co chybí. Ceny se hýbou podle toho, co prodáváš a kupuješ. Samo vynáší trochu zlata z obchodu.' },
   palisade: { name: 'Palisáda', size: 1, hp: 350, time: 5, wall: true, line: true, cost: { wood: 6 },
@@ -90,7 +96,7 @@ const BUILDINGS = {
   tower:    { name: 'Věž', size: 1, hp: 900, time: 26, req: ['masonry'], atk: 8, range: 12, cd: 1.5, cost: { wood: 20, stone: 90 },
               desc: 'Kamenná strážní věž. Sama střílí na nepřátele v dosahu.' },
 };
-const BUILD_ORDER = ['house', 'store', 'farm', 'mill', 'pasture', 'barracks', 'range', 'palisade', 'gate', 'library', 'smelter', 'smithy', 'market', 'stable', 'workshop', 'wall', 'tower', 'granary', 'well', 'healer'];
+const BUILD_ORDER = ['house', 'store', 'farm', 'mill', 'bakery', 'forester', 'pasture', 'barracks', 'range', 'palisade', 'gate', 'library', 'smelter', 'smithy', 'market', 'stable', 'workshop', 'wall', 'tower', 'granary', 'well', 'healer'];
 
 // era = nejnižší epocha, ve které jde technologii zkoumat; setsEra = postup do epochy
 const TECHS = {

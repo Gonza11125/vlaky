@@ -142,7 +142,7 @@ def main():
                 assert not page.evaluate('GAME.G.paused')
                 page.locator('#b-version').click()
                 page.locator('#switch-version').focus()
-                page.keyboard.press('ArrowUp')
+                page.keyboard.press('Home')
                 assert page.locator('#switch-version').input_value() == next_version
                 page.get_by_role('button', name='Přepnout verzi', exact=True).click()
                 ready(next_version)

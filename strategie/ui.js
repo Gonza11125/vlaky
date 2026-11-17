@@ -24,7 +24,7 @@ function showEnd(win) {
   const s = ME().stats, m = Math.floor(G.time / 60);
   $('end-text').textContent = G.endReason + ' Hra trvala ' + m + ' min (rok ' + year() + '), dosáhl jsi epochy ' + ERAS[ME().era] + '.';
   $('end-goal').textContent = goalDescription(G.match);
-  $('end-stats').textContent = 'Porážení nepřátelé: ' + s.kills + ' · Zbořené budovy: ' + s.razed + ' · Vlastní ztráty: ' + s.lost + '. Vyrobeno a doneseno: ' + RES.map(r => RES_NAME[r] + ' ' + Math.floor((s.produced || {})[r] || 0)).join(', ') + '.';
+  $('end-stats').textContent = 'Porážení nepřátelé: ' + s.kills + ' · Zbořené budovy: ' + s.razed + ' · Vlastní ztráty: ' + s.lost + ' · Obnovené stromy: ' + (s.regrown || 0) + ' · Zlato z karavan: ' + (s.tradeGold || 0) + '. Vyrobeno a doneseno: ' + RES.map(r => RES_NAME[r] + ' ' + Math.floor((s.produced || {})[r] || 0)).join(', ') + '.';
   $('end').hidden = false; G.reveal = true; if (G.mode === 'ai') clearSave(); showSaveOffer();
 }
 function costHTML(cost) { return Object.keys(cost || {}).map(k => '<i class="dot ' + k + '"></i>' + cost[k]).join(''); }
@@ -89,6 +89,10 @@ function command(p, forceA) {
     return;
   }
   const vils = own.filter(u => u.type === 'vil');
+  const caravans = own.filter(u => u.type === 'caravan');
+  if (caravans.length && p.bld && p.bld.team === MY && p.bld.type === 'market' && p.bld.done) {
+    act(['route', ids(caravans), p.bld.id]); if (caravans.length === own.length) return;
+  }
   const enemy = (p.unit && p.unit.team !== MY) ? p.unit : (p.bld && p.bld.team !== MY ? p.bld : null);
   if (enemy) { act(['atk', ids(own), enemy.id]); marker(enemy.x, enemy.z, 0xff6a50); return; }
   if (p.animal && vils.length) { act(['hunt', ids(vils), p.animal.id]); marker(p.animal.x, p.animal.z, 0xff6a50); return; }
@@ -157,7 +161,7 @@ const groups = {};
 let boxMode = false;
 function setBoxMode(on) { boxMode = on; $('t-box').classList.toggle('on', on); }
 $('t-box').onclick = () => { setBoxMode(!boxMode); if (boxMode) msg('Táhni prstem přes jednotky, které chceš vybrat.'); };
-$('t-army').onclick = () => { const l = units.filter(u => u.team === MY && u.type !== 'vil'); if (l.length) setSel(l); else msg('Zatím nemáš žádné vojáky.'); };
+$('t-army').onclick = () => { const l = units.filter(u => u.team === MY && isSoldier(u)); if (l.length) setSel(l); else msg('Zatím nemáš žádné vojáky.'); };
 $('t-none').onclick = () => { if (placing) cancelPlacing(); setSel([]); setBoxMode(false); };
 const ptrs = new Map(); let drag = null, pinch = null, lastClick = { t: 0, id: 0 };
 view.addEventListener('contextmenu', e => e.preventDefault());
@@ -217,8 +221,8 @@ function click(x, y, d) {
   if (d.touch) {
     const own = ownUnits();
     if (own.length) {
-      const b = p.bld, hasVil = own.some(u => u.type === 'vil');
-      const selectIt = (p.unit && p.unit.team === MY) || (!p.unit && b && b.team === MY && !(hasVil && (!b.done || b.hp < b.maxHp || b.type === 'farm')));
+      const b = p.bld, hasVil = own.some(u => u.type === 'vil'), hasCaravan = own.some(u => u.type === 'caravan');
+      const selectIt = (p.unit && p.unit.team === MY) || (!p.unit && b && b.team === MY && !(hasVil && (!b.done || b.hp < b.maxHp || b.type === 'farm')) && !(hasCaravan && b.type === 'market'));
       if (!selectIt) { command(p, false); return; }
     } else if (!target) { setSel([]); return; }
   }
@@ -292,16 +296,19 @@ function addBtn(o) {
 function tryQueue(b, kind, id) { act(['queue', b.id, kind, id]); }
 function buildCmd() {
   const T = ME(), own = ownUnits(), b = sel[0];
-  const sig = sel.map(e => e.id).join(',') + '|' + Object.keys(T.tech).length + '|' + Object.keys(T.busy).length + '|' + T.era + '|' + (placing ? placing.type : '') + amoveMode + razeArm + (b && b.type === 'market' ? Object.values(PRICE).map(Math.round).join() : '') + (b && b.isB ? b.done : '');
+  const sig = sel.map(e => e.id).join(',') + '|' + Object.keys(T.tech).length + '|' + Object.keys(T.busy).length + '|' + T.era + '|' + (placing ? placing.type : '') + amoveMode + razeArm + (b && b.type === 'market' ? Object.values(PRICE).map(Math.round).join() : '') + (b && b.isB ? [b.done,b.crop,b.enabled].join() : '');
   if (sig === cmdSig) return; cmdSig = sig;
   $('cmd').innerHTML = ''; cmdBtns = [];
   if (own.length) {
     if (own.some(u => u.type === 'vil')) for (const type of BUILD_ORDER) { const d = BUILDINGS[type]; if (!hasReq(T, d)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc, cls: placing && placing.type === type ? 'on' : '', fn: () => startPlacing(type) }); }
-    if (own.some(u => u.type !== 'vil')) addBtn({ label: 'Útočný přesun', cls: amoveMode ? 'on' : '', desc: 'Jednotky dojdou na místo a cestou napadnou každého nepřítele. Pak ukaž cíl na mapě. (S myší také Ctrl + pravé tlačítko.)', fn: () => { amoveMode = !amoveMode; } });
+    if (own.some(isSoldier)) addBtn({ label: 'Útočný přesun', cls: amoveMode ? 'on' : '', desc: 'Jednotky dojdou na místo a cestou napadnou každého nepřítele. Pak ukaž cíl na mapě. (S myší také Ctrl + pravé tlačítko.)', fn: () => { amoveMode = !amoveMode; } });
+    if (own.some(u => u.type === 'caravan')) addBtn({ label: 'Obnovit obchodní trasu', desc: UNITS.caravan.desc, fn: () => act(['route', ids(own.filter(u => u.type === 'caravan')), -1]) });
     addBtn({ label: 'Stát', fn: () => act(['stop', ids(own)]) });
     addBtn({ label: 'Zrušit výběr', fn: () => setSel([]) });
   } else if (b && b.isB && b.team === MY) {
     if (b.done) {
+      if (b.type === 'farm') addBtn({ label: b.crop === 'grain' ? 'Pěstovat zeleninu' : 'Pěstovat obilí', desc: 'Zelenina dává přímo jídlo. Obilí potřebuje Mlýn a Pekárnu, které vyrobí více jídla za cenu dřeva a dalších staveb.', fn: () => act(['crop', b.id, b.crop === 'grain' ? 'food' : 'grain']) });
+      if (['mill', 'bakery', 'forester'].includes(b.type)) addBtn({ label: b.enabled ? 'Pozastavit výrobu' : 'Obnovit výrobu', fn: () => act(['production', b.id]) });
       for (const id in UNITS) { const d = UNITS[id]; if (d.at !== b.type || !hasReq(T, d)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc + ' Životy ' + d.hp + ', útok ' + d.atk + (d.range ? ', dostřel ' + d.range : '') + ', zbroj ' + d.armor + '. Sní ' + d.upkeep + ' jídla za minutu.', fn: () => tryQueue(b, 'u', id) }); }
       for (const id in TECHS) { const d = TECHS[id]; if (d.at !== b.type || !techAvail(T, id)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc, cls: 'tech', fn: () => tryQueue(b, 't', id) }); }
       if (b.type === 'market') for (const r in PRICE) {
@@ -314,7 +321,7 @@ function buildCmd() {
     addBtn({ label: 'Zrušit výběr', fn: () => setSel([]) });
   }
 }
-const TASK = { move: 'jde', amove: 'táhne do útoku', attack: 'bojuje', build: 'staví', farm: 'pracuje na poli' };
+const TASK = { move: 'jde', amove: 'táhne do útoku', attack: 'bojuje', build: 'staví', farm: 'pracuje na poli', trade: 'jede po obchodní trase' };
 function refreshUI() {
   const T = ME();
   for (const r of RES) $('r-' + r).textContent = Math.floor(T.res[r]);
@@ -360,7 +367,8 @@ function refreshUI() {
       if (e.team === MY) {
         if (!e.done) h += '<p>Pošli sem vesničany, ať stavbu dokončí.</p>';
         else if (e.queue.length) { const q = e.queue[0], d = (q.kind === 'u' ? UNITS : TECHS)[q.id]; h += '<div class="bar q"><i style="width:' + clamp(q.t / q.total * 100, 0, 100) + '%"></i></div><div class="qrow">' + e.queue.map((x, i) => '<span class="qitem">' + (i ? '' : (q.t >= q.total ? 'čeká na dům: ' : '')) + (x.kind === 'u' ? UNITS : TECHS)[x.id].name + '</span>').join('') + '</div>'; }
-        else if (e.type === 'farm') h += '<p>' + (farmFree(e) ? 'Pole leží ladem. Pošli sem vesničana.' : season() === 3 ? 'Zima: pole odpočívá.' : 'Úroda ' + (farmRate(T) * 60).toFixed(0) + ' jídla za minutu.') + '</p>';
+        else if (e.type === 'farm') h += '<p>' + (e.crop === 'grain' ? 'Obilné pole. ' : 'Zeleninové pole. ') + (farmFree(e) ? 'Pole leží ladem. Pošli sem vesničana.' : season() === 3 ? 'Zima: pole odpočívá.' : 'Úroda ' + (farmRate(T) * 60 * (e.crop === 'grain' ? 1.25 : 1)).toFixed(0) + (e.crop === 'grain' ? ' obilí' : ' jídla') + ' za minutu.') + '</p>';
+        else if (['forester', 'mill', 'bakery'].includes(e.type)) h += '<p>' + (!e.enabled ? 'Výroba pozastavena. ' : e.type === 'forester' ? 'V okolí lze obnovit ' + depletedTrees(e).length + ' stromů. ' : e.type === 'mill' && T.res.grain < 0.01 ? 'Čeká na obilí. ' : e.type === 'bakery' && (T.res.flour < 0.01 || T.res.wood < 0.01) ? 'Čeká na mouku nebo dřevo. ' : 'Výroba běží. ') + e.def.desc + '</p>';
         else h += '<p>' + e.def.desc + '</p>';
       }
     }
@@ -371,7 +379,7 @@ function refreshUI() {
   if (e0 && e0.isB && G.flood > 0.2 && e0.y < G.flood - 0.1) h += '<p class="warnp">Stavba je pod vodou a chátrá.</p>';
   if (info._h !== h) { info.innerHTML = h; info._h = h; }
 }
-function farmIncome(T) { let s = 0; for (const b of blds) if (b.team === T.id && b.done) { if (b.type === 'pasture') s += season() === 3 ? 0.16 : 0.24; else if (b.type === 'farm' && !farmFree(b)) s += farmRate(T); } return s; }
+function farmIncome(T) { let s = 0; for (const b of blds) if (b.team === T.id && b.done) { if (b.type === 'pasture') s += season() === 3 ? 0.16 : 0.24; else if (b.type === 'farm' && b.crop !== 'grain' && !farmFree(b)) s += farmRate(T); else if (b.type === 'bakery' && b.enabled && T.res.flour > 0 && T.res.wood > 0 && !(b.fire > 0)) s += 0.7; } return s; }
 function idleVil() { const l = units.filter(u => u.team === MY && u.type === 'vil' && !u.order); if (!l.length) return; idleVil.i = ((idleVil.i || 0) + 1) % l.length; const u = l[idleVil.i]; setSel([u]); cam.x = u.x; cam.z = u.z; }
 function togglePause() { if (G.over || !$('start').hidden) return; if (G.mode !== 'ai') { msg('Hru po síti nejde pozastavit.'); return; } G.paused = !G.paused; $('b-pause').textContent = G.paused ? 'Pokračovat' : 'Pauza'; $('b-pause').classList.toggle('warn', G.paused); }
 $('b-idle').onclick = idleVil;

@@ -36,6 +36,7 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 .res small { color: var(--dim); font-size: 11px; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; transform: translateY(-1px) rotate(45deg); }
 .dot.food { background: var(--food); } .dot.wood { background: var(--wood); } .dot.stone { background: var(--stone); } .dot.ore { background: var(--ore); } .dot.metal { background: var(--metal); } .dot.gold { background: var(--gold); } .dot.know { background: var(--know); }
+.dot.grain { background: #d4bd6c; } .dot.flour { background: #e9dfc4; }
 #status { display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline; margin-left: auto; }
 #status .era { font-family: var(--display); color: var(--brass); letter-spacing: .03em; }
 #tools { display: flex; gap: 6px; }
@@ -119,7 +120,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 @media (max-width: 760px) {
   body { font-size: 13px; }
   #top { gap: 2px 10px; padding-top: 4px; padding-bottom: 4px; }
-  #resbar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0 2px; width: 100%; }
+  #resbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px 2px; width: 100%; }
   #resbar .res { flex-direction: column; align-items: center; gap: 0; line-height: 1.15; } #resbar .dot { display: none; } #resbar .res b { font-size: 10px; letter-spacing: .02em; }
   .res em { min-width: 0; } .res small { display: none; }
   #tools { width: 100%; gap: 5px; } #tools .tbtn { flex: 1 1 auto; padding: 3px 4px; white-space: nowrap; }
@@ -201,6 +202,9 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Technologie navazují.</b> Bez písma není knihovna, bez matematiky katapult, bez oceli rytíř.</li>
         <li><b>Mapu neznáš.</b> Vidíš jen okolí svých lidí a budov. Nepřítele, zlato i zvěř musíš najít, osadu si ohradíš palisádou a branou.</li>
         <li><b>Zlato a trh.</b> Zlato se těží, nebo ho získáš prodejem přebytků na Tržišti. Platí se jím pokročilé jednotky a pozdější epochy.</li>
+        <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
+        <li><b>Obnova lesa.</b> Lesovna obnovuje vytěžené stromy ve svém okolí. Dřevo dál potřebuje dřevorubce a cestu do skladu.</li>
+        <li><b>Obchodní cesty.</b> Postav dvě Tržiště alespoň 24 metrů od sebe a vycvič Karavanu. Trasu najde sama, nebo ji vyber a ukaž na cílové Tržiště. Zlato získáš až po návratu; cestu musíš chránit.</li>
         <li><b>Cíl:</b> zbořit nepřátelské Sídlo dřív, než on zboří tvoje.</li>
       </ul>
       <h2>Ovládání</h2>

@@ -4,12 +4,15 @@ from pathlib import Path
 import shutil
 import tempfile
 import unittest
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('release', ROOT / 'tools' / 'release.py')
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
+sys.path.insert(0, str(ROOT / 'tools'))
+from build_site import build
 
 
 class ReleaseTests(unittest.TestCase):
@@ -69,6 +72,23 @@ class ReleaseTests(unittest.TestCase):
         before = self.snapshot()
         with self.assertRaises(ValueError):
             release.publish(self.root, '2.0.0')
+        self.assertEqual(self.snapshot(), before)
+
+    def test_web_build_contains_every_release_and_no_development_files(self):
+        for name in ('index.html', 'version-picker.js', 'version-picker.css'):
+            shutil.copyfile(ROOT / name, self.root / name)
+        output = self.root / 'site'
+        ids = build(self.root, output)
+        for version in ids:
+            for name in ('index.html', *release.GAME_FILES):
+                self.assertEqual((output / 'versions' / version / name).read_bytes(),
+                                 (self.root / 'versions' / version / name).read_bytes())
+        self.assertTrue((output / 'release-info.json').is_file())
+        self.assertFalse((output / 'play.html').exists())
+        self.assertFalse((output / 'tests').exists())
+        before = self.snapshot()
+        with self.assertRaises(ValueError):
+            build(self.root, output)
         self.assertEqual(self.snapshot(), before)
 
 

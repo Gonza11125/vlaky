@@ -2,7 +2,7 @@
 // Hra dvou hráčů po síti. Hostitel počítá celou hru a posílá stav, host posílá jen rozkazy.
 // Zprávy se mohou ztratit, proto se posílá vždy celý stav a rozkazy se opakují do potvrzení.
 
-const UT = Object.keys(UNITS), BT = Object.keys(BUILDINGS), OT = ['', 'move', 'amove', 'attack', 'gather', 'build', 'farm', 'hunt'], PK = ['arrow', 'shot', 'rock', 'ball'];
+const UT = Object.keys(UNITS), BT = Object.keys(BUILDINGS), OT = ['', 'move', 'amove', 'attack', 'gather', 'build', 'farm', 'hunt', 'trade'], PK = ['arrow', 'shot', 'rock', 'ball'];
 Object.assign(NET, { room: null, bc: null, ready: false, started: false, peerAt: 0, lost: false, tick: 0, lastTick: 0, gen: 0, seq: 0, pend: [], ack: 0, lastResend: 0, initId: 0, parts: null, logN: 0, lastInit: 0, ug: null, bg: null, helloT: 0 });
 const el = id => document.getElementById(id);
 
@@ -219,7 +219,8 @@ function applyUnits(d) {
     if (!u.isU) continue;
     u.tx = x; u.tz = z; u.hp = e[4]; u.gen = d.g; const f = e[5];
     u.moving = !!(f & 1); u.working = !!(f & 2); u.sick = f & 4 ? 1 : 0; u.face = e[6] / 10;
-    const ot = (f >> 3) & 7; u.order = ot ? { type: OT[ot], node: { def: { res: RES[(f >> 6) & 7] } } } : null;
+    const ot = (f >> 3) & 15; u.order = ot ? { type: OT[ot], node: { def: { res: RES[(f >> 7) & 15] } } } : null;
+    u.carry = (e[7] || 0) / 10; u.ctype = RES[e[8]] || null; u.homeMarket = e[9];
   }
   if (chunkDone('ug', d)) for (let i = units.length - 1; i >= 0; i--) if (units[i].gen !== d.g) { teams[units[i].team].pop--; dropEnt(units[i]); units.splice(i, 1); }
   for (const s of d.sh || []) { const a = byId.get(s[0]), t = byId.get(s[1]); if (a && t && PK[s[2]]) { shoot(a, t, PK[s[2]], 0); projs[projs.length - 1].fx = true; } }
@@ -229,7 +230,7 @@ function applyBlds(d) {
     let b = byId.get(e[0]); const team = e[1] >= 100 ? 1 : 0, type = BT[e[1] % 100], done = !!(e[6] & 1);
     if (!b) { if (!type) continue; const keep = nextId; nextId = e[0]; b = placeBuilding(team, type, e[2], e[3], done); nextId = Math.max(keep, e[0] + 1); }
     if (!b.isB) continue;
-    b.hp = e[4]; b.maxHp = e[5]; b.gen = d.g; b.fire = e[6] & 2 ? 1 : 0; b.prog = e[7] / 100;
+    b.hp = e[4]; b.maxHp = e[5]; b.gen = d.g; b.fire = e[6] & 2 ? 1 : 0; b.prog = e[7] / 100; b.crop = e[8] ? 'grain' : 'food'; b.enabled = e[9] !== 0;
     if (done && !b.done) { b.done = true; b.mesh.scale.y = 1; cmdSig = ''; } else if (!done) b.mesh.scale.y = 0.12 + 0.88 * Math.min(1, b.prog);
   }
   if (chunkDone('bg', d)) for (let i = blds.length - 1; i >= 0; i--) if (blds[i].gen !== d.g) { dropEnt(blds[i]); blds.splice(i, 1); }
@@ -250,6 +251,7 @@ function applyWorld(d) {
   for (let i = NET.logN - d.li; i < d.log.length; i++) {
     const e = d.log[i]; NET.logN++;
     if (e[0] === 0) { const n = nodes[e[1]]; if (n && n.amt > 0) depleteNode(n); }
+    else if (e[0] === 2) { const n = nodes[e[1]]; if (n && n.type === 'tree') regrowTree(n, e[2]); }
     else { const n = { id: nodes.length, isNode: true, type: 'meat', def: NODE_DEF.meat, cx: e[1], cy: e[2], x: e[3], z: e[4], amt: NODE_DEF.meat.amt, inst: -1, v: 0.5 }; nodes.push(n); nodeAt[cidx(n.cx, n.cy)] = n.id; addMeat(n); n.mesh.rotation.y = e[5]; }
   }
   const seen = new Set();
@@ -259,8 +261,8 @@ function applyWorld(d) {
 
 // ---------- odesílání ----------
 function netCmd(c) { NET.pend.push([++NET.seq, c]); netSend({ t: 'c', l: NET.pend.slice(0, 12) }); NET.lastResend = performance.now(); }
-const encU = u => { const o = u.order, ot = o ? Math.max(0, OT.indexOf(o.type)) : 0, ri = o && o.type === 'gather' ? RES.indexOf(o.node.def.res) : 0; return [u.id, u.team * 100 + UT.indexOf(u.type), Math.round(u.x * 10), Math.round(u.z * 10), Math.ceil(u.hp), (u.moving ? 1 : 0) | (u.working ? 2 : 0) | (u.sick > 0 ? 4 : 0) | (ot << 3) | (ri << 6), Math.round(u.face * 10)]; };
-const encB = b => [b.id, b.team * 100 + BT.indexOf(b.type), b.cx, b.cy, Math.ceil(b.hp), b.maxHp, (b.done ? 1 : 0) | (b.fire > 0 ? 2 : 0), Math.round(b.prog * 100)];
+const encU = u => { const o = u.order, ot = o ? Math.max(0, OT.indexOf(o.type)) : 0, ri = o && o.type === 'gather' ? RES.indexOf(o.node.def.res) : 0; return [u.id, u.team * 100 + UT.indexOf(u.type), Math.round(u.x * 10), Math.round(u.z * 10), Math.ceil(u.hp), (u.moving ? 1 : 0) | (u.working ? 2 : 0) | (u.sick > 0 ? 4 : 0) | (ot << 3) | (ri << 7), Math.round(u.face * 10), Math.round(u.carry * 10), RES.indexOf(u.ctype), u.homeMarket]; };
+const encB = b => [b.id, b.team * 100 + BT.indexOf(b.type), b.cx, b.cy, Math.ceil(b.hp), b.maxHp, (b.done ? 1 : 0) | (b.fire > 0 ? 2 : 0), Math.round(b.prog * 100), b.crop === 'grain' ? 1 : 0, b.enabled ? 1 : 0];
 function sendChunks(t, list, enc, per, extra) {
   const g = ++NET.gen, n = Math.max(1, Math.ceil(list.length / per));
   for (let k = 0; k < n; k++) { const m = { t, g, k, n, d: list.slice(k * per, (k + 1) * per).map(enc) }; if (!k && extra) Object.assign(m, extra); netSend(m); }

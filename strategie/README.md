@@ -6,7 +6,43 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze 1.0.1** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-První vydání je **1.0.1**. Další verze se objeví v nabídce až po svém vydání.
+V nabídce jsou **1.0.1**, **1.0.2** a **1.1.0**. Nový hráč dostane nejnovější
+vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Jak využít nové hospodářství v 1.1.0
+
+- **Soběstačná osada:** přímé jídlo ze zeleninových polí a pastvin. Lesovna
+  u vytěženého lesa obnovuje stromy, které dál musí zpracovat vesničané.
+- **Potravinová výroba:** přepni dokončené pole na obilí. Mlýn mele mouku,
+  Pekárna ji s dřevem mění na jídlo (1 mouka + 0,2 dřeva → 2 jídla).
+  Než se rozběhne řetězec, zachovej přímý zdroj jídla. V zimě pole stojí,
+  ale Mlýn a Pekárna mohou zpracovávat uložené zásoby.
+- **Obchod:** dvě vlastní Tržiště alespoň 24 metrů od sebe, průchodná cesta
+  a Karavana. Delší trasa přinese více zlata za jednu cestu, ale trvá déle
+  a musí se chránit. Nová Karavana hledá trasu sama; jinou zvolíš kliknutím
+  na cílové Tržiště nebo příkazem Obnovit obchodní trasu.
+
+## Publikování na GitHub Pages
+
+Repozitář má GitHub Pages nastavené na větev
+`claude/realistic-3d-strategy-ynyqjy`, kořenovou složku. Push do této větve
+spouští existující GitHub workflow **pages build and deployment**. Toto nastavení
+se zachovává. Před pushem spusť níže uvedené testy a přidej nové vydání i katalog
+do stejného commitu. Kořenový `index.html` otevře hru ve `strategie/` a soubor
+`.nojekyll` zachovává statické soubory bez zpracování Jekyllem.
+
+Veřejná adresa hry: **https://gonza11125.github.io/vlaky/**.
+Úspěšné nasazení se ověřuje v GitHub Actions pro odpovídající commit.
+
+Webový balík lze připravit i samostatně:
+
+```sh
+python strategie/tools/build_site.py --output /tmp/vek-site
+```
+
+Cílová složka musí být prázdná. Balík obsahuje všechna vydání a výběr verzí,
+neobsahuje pracovní zdroje, testy, nástroje ani jiné části repozitáře.
+Soubor `release-info.json` v sestaveném balíku uvádí zahrnutá vydání.
 
 ## Spuštění a vývoj
 
@@ -64,12 +100,18 @@ výběr dál funguje, jen se po návratu na hlavní adresu použije nejnovějš�
 
 ```sh
 python -m unittest discover -s strategie/tests -p 'test_*.py'
+node --test strategie/tests/gameplay.test.cjs
 python strategie/tests/browser_smoke.py
+python strategie/tests/economy_browser.py
 ```
 
-První příkaz používá pouze standardní Python. Pro druhý je potřeba Python
-Playwright a Chromium. Prohlížečový test si vytvoří dočasnou kopii hry, server
-a zkušební vydání **1.0.2**; do skutečného seznamu žádnou falešnou verzi nepřidává.
+První příkaz používá pouze standardní Python, druhý vestavěný testovací systém
+Node.js. Prohlížečové testy vyžadují Python Playwright a Chromium. Vytvářejí
+dočasnou kopii hry, server a případná zkušební vydání; do skutečného seznamu
+žádnou falešnou verzi nepřidávají.
 Ověřuje spuštění hry, přepínání tam i zpět, uložení, import, zapamatování volby
 a ovládání na úzkém displeji. Three.js stáhne pro test z oficiálního npm balíčku
 přes HTTPS a ověří jeho integritu podle metadat registru.
+Ekonomický test navíc ověřuje výrobu, lesnictví, náklad karavan při uložení,
+chování soupeře a skutečné spojení dvou hráčů přes BroadcastChannel. Přímé
+WebRTC spojení mezi různými zařízeními zůstává závislé na síti obou hráčů.

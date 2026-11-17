@@ -279,6 +279,10 @@ function unitGeo(type, team) {
   let p;
   if (type === 'rider') p = horseParts(false);
   else if (type === 'knight') p = horseParts(true);
+  else if (type === 'caravan') {
+    p = [P(box(1.5, 0.25, 2.6), C.woodD, 0, 0.65, 0), P(box(1.5, 0.8, 2.4), C.wood, 0, 1.1, 0), P(cyl(0.85, 0.85, 2.5, 8), 'T', 0, 1.8, 0, Math.PI / 2, 0, 0), P(box(0.5, 0.5, 0.5), C.straw, 0, 1.4, 1.4)];
+    for (const [x, z] of [[-0.9,-0.9],[0.9,-0.9],[-0.9,0.9],[0.9,0.9]]) p.push(P(cyl(0.45,0.45,0.15,10), C.woodD, x,0.45,z,0,0,Math.PI/2));
+  }
   else if (type === 'catapult') {
     p = [P(box(1.3, 0.3, 2.2), C.wood, 0, 0.6, 0), P(box(0.16, 0.16, 2.4), C.woodD, 0, 1.3, -0.2, 0.7, 0, 0), P(box(0.5, 0.2, 0.5), C.woodD, 0, 2.05, -1.05),
       P(box(0.14, 1.2, 0.14), C.woodD, 0.5, 1.2, 0.4), P(box(0.14, 1.2, 0.14), C.woodD, -0.5, 1.2, 0.4), P(box(1.2, 0.14, 0.14), C.woodD, 0, 1.8, 0.4), P(box(0.5, 0.3, 0.06), 'T', 0, 0.95, 1.1)];
@@ -294,6 +298,13 @@ function buildingGeo(type, team) {
   const s = BUILDINGS[type].size, w = s * CS;
   let p = [];
   switch (type) {
+    case 'forester':
+      p = [P(box(3, 1.6, 2.6), C.wood, 0, 0.8, 0), gable(3.4, 3, 0.7, 0x415d37, 1.6, 0), P(box(0.6, 1, 0.1), C.woodD, 0, 0.5, 1.31), ...flag(-1.5, -1.4, 3.4)];
+      for (let i = 0; i < 3; i++) p.push(P(cyl(0.2, 0.2, 1.8, 6), C.woodD, 1.5, 0.22 + i * 0.35, 0, Math.PI / 2, 0, 0));
+      break;
+    case 'bakery':
+      p = [P(box(3.2, 1.8, 2.8), C.plaster, 0, 0.9, 0), gable(3.5, 3.2, 0.65, C.tile, 1.8, 0), P(box(0.65, 2.6, 0.65), C.stoneD, -1, 1.3, -0.6), P(cyl(0.65, 0.85, 0.9, 8), C.stone, 0.7, 0.45, 1.6), P(box(0.55, 0.35, 0.08), 0xd97e29, 0.7, 0.35, 2.3), ...flag(1.4, -1.3, 3.6)];
+      break;
     case 'tc':
       p = [P(box(w - 0.6, 0.4, w - 0.6), C.stoneD, 0, 0.2, 0), P(box(w - 1.2, 2.6, w - 1.2), C.plaster, 0, 1.7, 0),
         P(cyl(0, (w - 0.6) * 0.72, 1.9, 4), C.tile, 0, 3.95, 0, 0, Math.PI / 4, 0),

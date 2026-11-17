@@ -82,3 +82,69 @@ test('resource statistics count production, not the initial stock', () => {
   assert.equal(run(`T.res.food`), 217.5);
   assert.equal(run(`T.stats.produced.food`), 17.5);
 });
+
+const economy = fs.readFileSync(path.join(root, 'game.js'), 'utf8').includes('function productionTick');
+test('grain, flour and bread consume real inputs; paused factories make nothing', { skip: !economy }, () => {
+  const run = game();
+  run(`teams.push(mkTeam(0),mkTeam(1)); const T=teams[0]; T.res.grain=2; const mill={type:'mill',team:0,enabled:true,y:1}; const bakery={type:'bakery',team:0,enabled:true,y:1}; productionTick(mill,5);`);
+  assert.equal(run(`T.res.grain`), 0);
+  assert.equal(run(`T.res.flour`), 2);
+  run(`productionTick(bakery,5);`);
+  assert.equal(run(`T.res.food`), 203.5);
+  assert.equal(run(`T.res.flour`), 0.25);
+  assert.ok(Math.abs(run(`T.res.wood`) - 199.65) < 1e-8);
+  run(`bakery.enabled=false; productionTick(bakery,20);`);
+  assert.equal(run(`T.res.flour`), 0.25);
+  run(`bakery.enabled=true; T.res.wood=0; productionTick(bakery,20);`);
+  assert.equal(run(`T.res.food`), 203.5);
+});
+
+test('foresters restore depleted trees without generating wood or growing through buildings', { skip: !economy }, () => {
+  const run = game();
+  run(`teams.push(mkTeam(0),mkTeam(1)); makeWorld(73); const n=nodes.find(n=>n.type==='tree'); n.amt=0; nodeAt[cidx(n.cx,n.cy)]=-1; const f={type:'forester',team:0,enabled:true,y:1,x:n.x,z:n.z,workT:29}; productionTick(f,1);`);
+  assert.equal(run(`n.amt`), 100);
+  assert.equal(run(`teams[0].stats.regrown`), 1);
+  assert.equal(run(`teams[0].res.wood`), 200);
+  run(`n.amt=0; nodeAt[cidx(n.cx,n.cy)]=-1; resv[cidx(n.cx,n.cy)]=1; productionTick(f,30);`);
+  assert.equal(run(`n.amt`), 0);
+  assert.equal(run(`teams[0].stats.regrown`), 1);
+});
+
+function caravanGame() {
+  const run = game();
+  run(`teams.push(mkTeam(0),mkTeam(1)); walk.fill(1); hgt.fill(1);
+    const from={id:10,type:'market',team:0,done:true,dead:false,isB:true,size:3,cx:8,cy:8,x:19,z:19};
+    const to={...from,id:11,cx:40,x:83}; byId.set(10,from); byId.set(11,to);
+    const u={id:12,type:'caravan',team:0,def:UNITS.caravan,x:19,z:23,carry:0,path:null};`);
+  return run;
+}
+
+test('caravans earn gold only after a real outbound and return journey', { skip: !economy }, () => {
+  const run = caravanGame();
+  assert.equal(run(`tradeRoute(u,from,to)`), true);
+  run(`for(let i=0;i<1000 && !u.order.loaded;i++) updateCaravan(u,0.1);`);
+  assert.equal(run(`u.order.loaded`), true);
+  assert.equal(run(`teams[0].res.gold`), 0);
+  assert.equal(run(`u.carry`), 14);
+  run(`for(let i=0;i<1000 && teams[0].res.gold===0;i++) updateCaravan(u,0.1);`);
+  assert.equal(run(`teams[0].res.gold`), 14);
+  assert.equal(run(`teams[0].stats.tradeGold`), 14);
+  assert.equal(run(`isSoldier(u)`), false);
+  run(`to.dead=true; updateCaravan(u,0.1);`);
+  assert.equal(run(`u.order`), null);
+});
+
+test('short, enemy and impassable trade routes are rejected', { skip: !economy }, () => {
+  const run = caravanGame();
+  assert.equal(run(`tradeRoute(u,from,{...to,x:30,cx:13})`), false);
+  assert.equal(run(`tradeRoute(u,from,{...to,team:1})`), false);
+  run(`for(let y=0;y<N;y++) walk[cidx(25,y)]=0;`);
+  assert.equal(run(`tradeRoute(u,from,to)`), false);
+  assert.equal(run(`teams[0].res.gold`), 0);
+});
+
+test('trade orders preserve both endpoints and loaded state through serialization', { skip: !economy }, () => {
+  const run = caravanGame();
+  run(`tradeRoute(u,from,to); u.order.returning=true; u.order.loaded=true; const packed=packOrder(u.order); const restored=unpackOrder(u,packed,new Map());`);
+  assert.equal(run(`restored.from===from && restored.to===to && restored.returning && restored.loaded`), true);
+});
