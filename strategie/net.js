@@ -21,7 +21,7 @@ async function netBoot() {
     const u = window.claude && window.claude.use ? await window.claude.use('user') : null;
     if (u) { const me = await u.me(); NET.who = me && me.isOwner ? 'owner' : me && me.id ? 'member' : 'anon'; } else NET.who = window.claude ? 'anon' : null;
   } catch (e) { }
-  if (!NET.room && 'BroadcastChannel' in window) { try { NET.bc = new BroadcastChannel('vek-pokroku-net'); NET.bc.onmessage = e => netIn(e.data); } catch (e) { } }
+  if (!NET.room && 'BroadcastChannel' in window) { try { NET.bc = new BroadcastChannel(VEK_RELEASE.channel); NET.bc.onmessage = e => netIn(e.data); } catch (e) { } }
   NET.ready = true; netStatus(); netConnInfo(); netRestore();
 }
 function netRoomErr(e) { if (NET.roomErr) return; NET.roomErr = (e && e.code) || 'chyba'; netConnInfo(); }
@@ -48,15 +48,15 @@ function netStatus(text) {
   el('b-host').disabled = el('b-join').disabled = !(NET.room || NET.bc);
 }
 // lobby přežije znovunačtení stránky (na telefonu se při přepnutí do jiné aplikace stránka často načte znovu)
-function netRemember(on) { try { if (on) localStorage.setItem('vek-net', JSON.stringify({ role: NET.role, code: NET.code, t: Date.now() })); else localStorage.removeItem('vek-net'); } catch (e) { } }
+function netRemember(on) { try { if (on) localStorage.setItem(VEK_RELEASE.lobbyKey, JSON.stringify({ role: NET.role, code: NET.code, t: Date.now() })); else localStorage.removeItem(VEK_RELEASE.lobbyKey); } catch (e) { } }
 function netRestore() {
-  let v = null; try { v = JSON.parse(localStorage.getItem('vek-net') || 'null'); } catch (e) { }
+  let v = null; try { v = JSON.parse(localStorage.getItem(VEK_RELEASE.lobbyKey) || 'null'); } catch (e) { }
   if (!v || !v.code || Date.now() - v.t > 20 * 60000 || NET.role || el('start').hidden || !(NET.room || NET.bc)) return;
   if (v.role === 'host') { netReset(); NET.role = 'host'; NET.code = v.code; netStatus('Kód hry: ' + NET.code + '. Pošli ho soupeři. Hra začne, jakmile se připojí. Nastavení režimu výše platí pro oba.'); }
   else if (v.role === 'guest') { el('net-code').value = v.code; netJoin(); }
 }
 function netSend(d) {
-  d.c = NET.code;
+  d.c = NET.code; d.version = VEK_RELEASE.id;
   if (NET.rtc && NET.rtc.readyState === 'open') { if (NET.rtc.bufferedAmount < 1e6) try { NET.rtc.send(JSON.stringify(d)); } catch (e) { } return; }
   if (NET.room) NET.room.emit(NET.role === 'host' ? 'h' : 'g', d).catch(e => { if (NET.err) return; NET.err = (e && e.code) || 'chyba'; const t = NET.err === 'not_permitted' ? 'Nemáš právo posílat do hry. Vlastník ti musí stránku nasdílet s právem přispívat.' : 'Síť hlásí chybu (' + NET.err + ').'; netStatus(t); msg(t, 'bad'); });
   else if (NET.bc) NET.bc.postMessage(d);
@@ -104,6 +104,7 @@ function p2pWatch(pc) {
   pc.onconnectionstatechange = () => { if (pc !== NET.pc) return; if (pc.connectionState === 'failed') p2pUi('Napřímo se spojit nepodařilo. Zkuste být oba na stejné Wi-Fi a začněte znovu novou pozvánkou.', 'bad', null, null, false); };
 }
 async function p2pHost() {
+  if (!matchFormValid()) return;
   if (!window.RTCPeerConnection) { p2pUi('Tenhle prohlížeč přímé spojení neumí.', 'bad', null, null, false); return; }
   p2pClose(); netReset(); P2P.mode = 'host'; p2pUi('Připravuji pozvánku…', '', '', null, false);
   try {
@@ -148,6 +149,7 @@ async function p2pCopy() {
 
 // ---------- lobby ----------
 function netHost() {
+  if (!matchFormValid()) return;
   if (!NET.ready) return;
   netReset(); NET.role = 'host'; NET.code = Array.from({ length: 4 }, () => 'ABCDEFGHJKLMNPRSTUVXYZ'[Math.floor(Math.random() * 22)]).join('');
   netStatus('Kód hry: ' + NET.code + '. Pošli ho soupeři. Hra začne, jakmile se připojí. Nastavení režimu výše platí pro oba.');
@@ -161,7 +163,7 @@ function netJoin() {
   netStatus('Hledám hru ' + code + '…'); netRemember(true);
 }
 function hostStart() {
-  applyOpts(); G.mode = 'host'; MY = 0; G.speed = 1; el('b-speed').textContent = '1×';
+  if (!applyOpts()) return; G.mode = 'host'; MY = 0; G.speed = 1; el('b-speed').textContent = '1×';
   startFresh(); NET.started = true; NET.log = []; NET.out = []; NET.shots = []; NET.ack = 0; netRemember(false);
   el('start').hidden = true; G.paused = false;
   msg('Soupeř se připojil. Hraješ za modré, on za červené.', 'good');
@@ -185,6 +187,7 @@ function guestStart(sv) {
 // ---------- příjem ----------
 function netIn(d) {
   if (!d || typeof d !== 'object' || !NET.role || d.c !== NET.code) return;
+  if ((d.version || '1.0.1') !== VEK_RELEASE.id) { netStatus('Soupeř má jinou verzi hry. Oba vyberte stejnou verzi v nabídce Verze hry.'); return; }
   try { if (NET.role === 'host') hostIn(d); else guestIn(d); } catch (e) { console.error(e); }
 }
 function hostIn(d) {
@@ -239,7 +242,8 @@ function applyState(d) {
   if (d.pr) Object.assign(PRICE, d.pr);
   NET.pend = NET.pend.filter(p => p[0] > d.ack);
   for (const m of d.m || []) { if (m[0] === '!') alertAttack(m[1], m[2], !!m[3]); else msg(String(m[0]).slice(0, 200), m[1] === 'good' || m[1] === 'bad' ? m[1] : ''); }
-  if (d.over >= 0 && !G.over) endGame(d.over);
+  (d.T || []).forEach((s, i) => { if (teams[i] && s.stats) teams[i].stats = s.stats; });
+  if (Number.isInteger(d.over) && d.over >= -1 && !G.over) endGame(d.over, d.reason);
 }
 function applyWorld(d) {
   if (d.li > NET.logN) { if (!NET.resync) { NET.resync = performance.now(); NET.helloT = 0; } return; }   // něco uteklo: vyžádat celý stav znovu
@@ -266,8 +270,8 @@ function hostTick() {
   if (i % 2 === 0) sendChunks('u', units, encU, 90, { sh: NET.shots.splice(0, 40).map(s => [s[0], s[1], PK.indexOf(s[2])]) });
   if (i % 10 === 1) sendChunks('b', blds, encB, 85);
   if (i % 5 === 2) netSend({
-    t: 's', time: r1(G.time), fl: r1(G.flood || 0), rn: G.rain || 0, dr: EV.drought ? 1 : 0, fr: EV.frost ? 1 : 0, ack: NET.ack, over: G.over ? G.loser : -1,
-    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
+    t: 's', time: r1(G.time), fl: r1(G.flood || 0), rn: G.rain || 0, dr: EV.drought ? 1 : 0, fr: EV.frost ? 1 : 0, ack: NET.ack, over: G.over ? G.loser : -2, reason: G.endReason,
+    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
     q: blds.filter(b => b.team === 1 && b.queue.length).slice(0, 12).map(b => [b.id, b.queue.map(q => [q.kind, q.id, r1(q.t), q.total])]),
     pr: { food: Math.round(PRICE.food), wood: Math.round(PRICE.wood), stone: Math.round(PRICE.stone), metal: Math.round(PRICE.metal) }, m: NET.out.splice(0, 5),
   });

@@ -9,6 +9,20 @@ const SEASON_LEN = 60;            // sekund na roční období
 const FARM_SEASON = [0.8, 1.0, 1.3, 0];
 const TEAM_COLORS = [0x2f6fd0, 0xc8402f];
 
+const MAP_TYPES = { balanced: 'Vyvážená krajina', forest: 'Lesnatá krajina', highlands: 'Hornatá krajina' };
+const MATCH_DEFAULTS = { map: 'balanced', resources: 1, stocks: 1, goal: 'conquest', years: 5, peace: 0, seed: null };
+function matchOptions(value) {
+  const v = value || {}, choose = (key, allowed) => allowed.includes(v[key]) ? v[key] : MATCH_DEFAULTS[key];
+  return { map: choose('map', Object.keys(MAP_TYPES)), resources: choose('resources', [0.6, 1, 1.8]), stocks: choose('stocks', [0.75, 1, 2]),
+    goal: choose('goal', ['conquest', 'survival', 'development']), years: choose('years', [3, 5, 10]), peace: choose('peace', [0, 120, 300, 600]),
+    seed: Number.isInteger(v.seed) && v.seed >= 0 && v.seed <= 4294967295 ? v.seed : null };
+}
+function goalDescription(match) {
+  if (match.goal === 'survival') return 'Přežij ' + match.years + ' celých let. Po síti přežití obou osad znamená remízu.';
+  if (match.goal === 'development') return 'Dosáhni doby železné, 20 lidí, 300 jídla a 100 zlata dřív než soupeř.';
+  return 'Znič nepřátelské Sídlo a uchraň vlastní.';
+}
+
 const UNITS = {
   vil:      { name: 'Vesničan', cls: 'vil', at: 'tc', cost: { food: 50 }, time: 14, hp: 40, atk: 2, cd: 1.5, speed: 3.4, armor: 0, upkeep: 2,
               desc: 'Sbírá suroviny, staví a opravuje budovy, obdělává pole.' },

@@ -20,9 +20,11 @@ function msg(text, cls) {
 }
 function alertAttack(x, z, isB) { if (G.time - lastAlert < 15) return; lastAlert = G.time; ping = { x, z, until: performance.now() + 6000 }; msg(isB ? 'Nepřítel útočí na tvoje budovy!' : 'Nepřítel útočí na tvoje lidi!', 'bad'); }
 function showEnd(win) {
-  $('end-title').textContent = win ? 'Vítězství' : 'Porážka';
+  $('end-title').textContent = G.loser === -1 ? 'Remíza' : win ? 'Vítězství' : 'Porážka';
   const s = ME().stats, m = Math.floor(G.time / 60);
-  $('end-text').textContent = (win ? 'Nepřátelské Sídlo padlo. ' : 'Tvoje Sídlo padlo. ') + 'Hra trvala ' + m + ' min (rok ' + year() + '), dosáhl jsi epochy ' + ERAS[ME().era] + '. Zabito nepřátel: ' + s.kills + ', zbořeno budov: ' + s.razed + ', vlastní ztráty: ' + s.lost + '.';
+  $('end-text').textContent = G.endReason + ' Hra trvala ' + m + ' min (rok ' + year() + '), dosáhl jsi epochy ' + ERAS[ME().era] + '.';
+  $('end-goal').textContent = goalDescription(G.match);
+  $('end-stats').textContent = 'Porážení nepřátelé: ' + s.kills + ' · Zbořené budovy: ' + s.razed + ' · Vlastní ztráty: ' + s.lost + '. Vyrobeno a doneseno: ' + RES.map(r => RES_NAME[r] + ' ' + Math.floor((s.produced || {})[r] || 0)).join(', ') + '.';
   $('end').hidden = false; G.reveal = true; if (G.mode === 'ai') clearSave(); showSaveOffer();
 }
 function costHTML(cost) { return Object.keys(cost || {}).map(k => '<i class="dot ' + k + '"></i>' + cost[k]).join(''); }
@@ -232,7 +234,7 @@ $('b-place-ok').onclick = () => confirmPlace(false);
 $('b-place-no').onclick = cancelPlacing;
 
 addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
+  if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || document.querySelector('#version-dialog[open]')) return;
   keys[e.code] = true;
   if (e.code === 'Escape') { if (!$('techs').hidden) $('techs').hidden = true; else if (placing) cancelPlacing(); else setSel([]); }
   if (e.code === 'Space') { e.preventDefault(); togglePause(); }
@@ -324,6 +326,7 @@ function refreshUI() {
   $('s-pop').textContent = T.pop + '/' + T.cap;
   $('s-era').textContent = ERAS[T.era];
   $('s-time').textContent = 'Rok ' + year() + ' · ' + SEASONS[season()];
+  $('s-objective').textContent = goalDescription(G.match) + (peaceActive() ? ' Ochrana: ještě ' + Math.ceil((G.match.peace - G.time) / 60) + ' min.' : '') + (G.match.goal === 'survival' ? ' Zbývá ' + Math.max(0, Math.ceil((G.match.years * SEASON_LEN * 4 - G.time) / 60)) + ' min.' : '') + ' Mapa: ' + G.seed;
   let evs = '';
   if (G.real) {
     const sick = units.filter(u => u.team === MY && u.sick > 0).length, fires = blds.filter(b => b.team === MY && b.fire > 0).length;
@@ -388,12 +391,21 @@ $('b-tech').onclick = () => {
 $('b-tech-close').onclick = () => { $('techs').hidden = true; };
 const OPT = { diff: 1, aggr: 2, real: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
-function applyOpts() { G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; }
-$('b-start').onclick = () => { netReset(); netRemember(false); p2pClose(); applyOpts(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
+function selectedMatch() {
+  return matchOptions({ map: $('match-map').value, resources: +$('match-resources').value, stocks: +$('match-stocks').value,
+    goal: $('match-goal').value, years: +$('match-years').value, peace: +$('match-peace').value, seed: $('match-seed').value === '' ? null : +$('match-seed').value });
+}
+function matchFormValid() { return $('match-seed').reportValidity(); }
+function describeMatch() { const match = selectedMatch(); $('match-years').disabled = match.goal !== 'survival'; $('match-description').textContent = goalDescription(match); }
+$('match-settings').addEventListener('change', describeMatch); describeMatch();
+function applyOpts() { if (!matchFormValid()) return false; G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; G.match = selectedMatch(); return true; }
+$('b-start').onclick = () => { if (!applyOpts()) return; netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
 $('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = false; G.paused = true; };
 
 // ---------- uložení: účet na Claude (pro přihlášené, na všech zařízeních), prohlížeč a soubor ----------
-const SAVE_KEY = 'vek-pokroku-save-1';
+const SAVE_KEY = VEK_RELEASE.saveKey;
+const saveVersion = sv => sv && (sv.gameVersion || '1.0.1');
+const saveMatchesVersion = sv => sv && sv.v === 1 && saveVersion(sv) === VEK_RELEASE.id;
 const CLOUD = { db: null, uid: null, ready: false, tried: false, doc: null, parsed: null, busy: false, pending: null, dl: null };
 (async () => {
   try {
@@ -403,24 +415,24 @@ const CLOUD = { db: null, uid: null, ready: false, tried: false, doc: null, pars
     const uid = user ? await user.id() : null, canW = user ? await user.can('data.write') : null;
     if (db && uid && canW !== false) {
       CLOUD.db = db; CLOUD.uid = uid;
-      const sn = await Promise.race([db.collection('data/users/' + uid).doc('save').get(), new Promise((_, rej) => setTimeout(() => rej(0), 12000))]);
+      const sn = await Promise.race([db.collection('data/users/' + uid).doc(VEK_RELEASE.cloudDoc).get(), new Promise((_, rej) => setTimeout(() => rej(0), 12000))]);
       if (sn && sn.exists) CLOUD.doc = sn.data();
       CLOUD.ready = true;
     }
   } catch (_) { }
   CLOUD.tried = true; showSaveOffer();
 })();
-function readLocal() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return s && s.v === 1 ? s : null; } catch (_) { return null; } }
-function readCloud() { const d = CLOUD.doc; if (!d || typeof d.data !== 'string') return null; if (!CLOUD.parsed || CLOUD.parsed.saved !== d.saved) { try { CLOUD.parsed = JSON.parse(d.data); } catch (_) { return null; } } return CLOUD.parsed && CLOUD.parsed.v === 1 ? CLOUD.parsed : null; }
+function readLocal() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return saveMatchesVersion(s) ? s : null; } catch (_) { return null; } }
+function readCloud() { const d = CLOUD.doc; if (!d || typeof d.data !== 'string') return null; if (!CLOUD.parsed || CLOUD.parsed.saved !== d.saved) { try { CLOUD.parsed = JSON.parse(d.data); } catch (_) { return null; } } return saveMatchesVersion(CLOUD.parsed) ? CLOUD.parsed : null; }
 function readSave() { const a = readLocal(), c = readCloud(); if (!a) return c; if (!c) return a; return (c.saved || 0) >= (a.saved || 0) ? c : a; }
 function cloudSet(body) {
   if (!CLOUD.db) return; if (CLOUD.busy) { CLOUD.pending = body; return; }
-  CLOUD.busy = true; const ref = CLOUD.db.collection('data/users/' + CLOUD.uid).doc('save');
+  CLOUD.busy = true; const ref = CLOUD.db.collection('data/users/' + CLOUD.uid).doc(VEK_RELEASE.cloudDoc);
   (body ? ref.set(body).then(() => { CLOUD.doc = body; }) : ref.delete().then(() => { CLOUD.doc = null; })).catch(e => { if (e && e.code === 'invalid_argument') CLOUD.db = null; })
     .finally(() => { CLOUD.busy = false; const n = CLOUD.pending; if (n !== null) { CLOUD.pending = null; cloudSet(n); } });
 }
 function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (_) { } if (CLOUD.db && CLOUD.doc) cloudSet(undefined); }
-function makeSave() { return Object.assign(saveState(), { cam: { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw } }); }
+function makeSave() { return Object.assign(saveState(), { gameVersion: VEK_RELEASE.id, cam: { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw } }); }
 let lastCloud = 0;
 function doSave(quiet) {
   if (G.mode !== 'ai') { if (!quiet) msg('Hru po síti uložit nejde.', 'bad'); return false; }
@@ -434,7 +446,7 @@ function doSave(quiet) {
 }
 async function exportSave() {
   if (G.mode !== 'ai' || G.over || !$('start').hidden) { msg('Stáhnout jde jen rozehraná hra proti počítači.', 'bad'); return; }
-  const str = JSON.stringify(makeSave()), name = 'vek-pokroku-rok-' + (Math.floor(G.time / (SEASON_LEN * 4)) + 1) + '.json';
+  const str = JSON.stringify(makeSave()), name = 'vek-pokroku-' + VEK_RELEASE.id + '-rok-' + (Math.floor(G.time / (SEASON_LEN * 4)) + 1) + '.json';
   if (CLOUD.dl) { try { await CLOUD.dl.save({ filename: name, data: new Blob([str], { type: 'application/json' }) }); msg('Soubor s hrou je stažený.', 'good'); return; } catch (e) { if (e && (e.code === 'declined' || e.code === 'rate_limited')) return; } }
   try { const u = URL.createObjectURL(new Blob([str], { type: 'application/json' })), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); msg('Soubor s hrou je stažený.', 'good'); }
   catch (_) { msg('Stažení tady nejde.', 'bad'); }
@@ -447,6 +459,7 @@ function resetView() { sel = []; cmdSig = ''; rings.length = 0; markers.length =
 function startFresh() { resetView(); newGame(G.diff); cam.x = ME().tcx; cam.z = ME().tcz + 4; cam.yaw = 0; cam.dist = view.clientWidth < 760 ? 84 : 62; }
 function continueSave(given) {
   const sv = given && given.teams ? given : readSave(); if (!sv) return;
+  if (!saveMatchesVersion(sv)) { msg('Tahle uložená hra patří do verze ' + saveVersion(sv) + '. Nejdřív na ni přepni v nabídce Verze hry.', 'bad'); return; }
   G.mode = 'ai'; MY = 0;
   resetView();
   try { newGame(0, sv); } catch (e) { startFresh(); msg('Uloženou hru se nepodařilo načíst, začíná nová.', 'bad'); $('start').hidden = true; G.paused = false; return; }

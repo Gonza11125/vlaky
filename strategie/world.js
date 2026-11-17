@@ -50,6 +50,8 @@ function genHeights(seed) {
   for (let j = 0; j < NV; j++) for (let i = 0; i < NV; i++) {
     let h = (fbm(i / N * 4.2, j / N * 4.2, seed) - 0.4) * 15;
     const ridge = fbm(i / N * 9, j / N * 9, seed + 99);
+    if (G.match.map === 'forest') h *= 0.78;
+    if (G.match.map === 'highlands') h += Math.max(0, ridge - 0.42) * 13;
     if (h > 3) h += (ridge - 0.45) * 6 * sstep(3, 5, h);
     for (const s of STARTS) { const d = Math.hypot(i - s.cx - 1.5, j - s.cy - 1.5); h = lerp(h, 1.3, sstep(17, 9, d)); }
     const e = Math.min(i, j, N - i, N - j);
@@ -65,7 +67,7 @@ function addNode(type, cx, cy, force) {
   if (!inMap(cx, cy)) return null;
   const i = cidx(cx, cy);
   if ((!walk[i] && !force) || nodeAt[i] >= 0 || resv[i]) return null;
-  const n = { id: nodes.length, isNode: true, type, def: NODE_DEF[type], cx, cy, x: cellC(cx) + (rnd() - 0.5) * 0.8, z: cellC(cy) + (rnd() - 0.5) * 0.8, amt: NODE_DEF[type].amt, inst: -1, v: rnd() };
+  const n = { id: nodes.length, isNode: true, type, def: NODE_DEF[type], cx, cy, x: cellC(cx) + (rnd() - 0.5) * 0.8, z: cellC(cy) + (rnd() - 0.5) * 0.8, amt: Math.round(NODE_DEF[type].amt * G.match.resources), inst: -1, v: rnd() };
   if (type === 'fish') { n.x = cellC(cx); n.z = cellC(cy); }
   nodes.push(n); nodeAt[i] = n.id; return n;
 }
@@ -86,7 +88,7 @@ function genNodes(seed) {
     const dS = Math.min(...STARTS.map(s => Math.hypot(cx - s.cx - 1, cy - s.cy - 1)));
     if (dS < 8) continue;
     const f = fbm(cx / N * 8 + 40, cy / N * 8 + 40, seed + 7);
-    if (f > 0.55) { forest[cidx(cx, cy)] = 1; if (rnd() < 0.72) addNode('tree', cx, cy); }
+    if (f > (G.match.map === 'forest' ? 0.45 : 0.55)) { forest[cidx(cx, cy)] = 1; if (rnd() < 0.72) addNode('tree', cx, cy); }
     else if (rnd() < 0.012) addNode('tree', cx, cy);
   }
   // spravedlivé zásoby u obou startů (zrcadlově)
@@ -184,17 +186,29 @@ function nearestFree(cx, cy, maxR) {
 }
 
 function makeWorld(fixed) {
-  let seed = fixed != null ? fixed : (Math.random() * 1e9) | 0;
-  for (let tries = 0; tries < 40; tries++, seed += 101) {
+  const requested = fixed != null ? fixed : (Math.random() * 1e9) | 0;
+  let seed = requested, connected = false;
+  for (let tries = 0; tries < 40; tries++) {
+    seed = requested + tries * 101;
     srand(seed);
     const land = genHeights(seed);
     if (land < 0.55) continue;
     occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); PT = -1;
     const a = STARTS[0], b = STARTS[1];
-    if (findPath(a.cx - 1, a.cy + 1, b.cx - 1, b.cy + 1, b.cx - 1, b.cy + 1, 0).ok) break;
+    if (findPath(a.cx - 1, a.cy + 1, b.cx - 1, b.cy + 1, b.cx - 1, b.cy + 1, 0).ok) { connected = true; break; }
   }
+  // Even an unlucky seed has a passable connection. Replay the same search on load.
+  if (!connected) {
+    const a = STARTS[0], b = STARTS[1];
+    for (let k = 0; k <= N * 2; k++) {
+      const x = Math.round(lerp(a.cx, b.cx, k / (N * 2))), y = Math.round(lerp(a.cy, b.cy, k / (N * 2)));
+      for (let j = y - 3; j <= y + 3; j++) for (let i = x - 3; i <= x + 3; i++) if (i >= 0 && j >= 0 && i <= N && j <= N) hgt[j * NV + i] = 1.3;
+    }
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) calcWalk(x, y);
+  }
+  occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); PT = -1;
   genNodes(seed);
-  return seed;
+  return requested;
 }
 
 // ---------- geometrie ----------

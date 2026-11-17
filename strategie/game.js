@@ -1,7 +1,7 @@
 'use strict';
 // Simulace: scéna, jednotky, budovy, boj, ekonomika, protivník.
 
-const G = { time: 0, speed: 1, paused: true, over: false, diff: 1, snow: 0, aggr: 2, real: false, mode: 'ai' };
+const G = { time: 0, speed: 1, paused: true, over: false, diff: 1, snow: 0, aggr: 2, real: false, mode: 'ai', match: matchOptions() };
 let MY = 0;                                 // tým místního hráče
 const NET = { role: null, code: '', out: [], shots: [], log: [] };
 function say(team, text, cls) { if (team === MY) msg(text, cls); else if (G.mode === 'host') NET.out.push([text, cls || '']); }
@@ -22,8 +22,10 @@ const season = () => Math.floor(G.time / SEASON_LEN) % 4;
 const year = () => Math.floor(G.time / (SEASON_LEN * 4)) + 1;
 
 function mkTeam(id) {
-  return { id, color: TEAM_COLORS[id], res: { food: 200, wood: 200, stone: 100, ore: 0, metal: 0, gold: 0, know: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0 } };
+  return { id, color: TEAM_COLORS[id], res: { food: 200 * G.match.stocks, wood: 200 * G.match.stocks, stone: 100 * G.match.stocks, ore: 0, metal: 0, gold: 0, know: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0, produced: {} } };
 }
+function gainResource(T, key, amount) { T.res[key] += amount; const p = T.stats.produced || (T.stats.produced = {}); p[key] = (p[key] || 0) + amount; }
+const peaceActive = () => G.time < G.match.peace;
 const afford = (T, cost) => !cost || Object.keys(cost).every(k => T.res[k] >= cost[k]);
 function pay(T, cost) { for (const k in cost) T.res[k] -= cost[k]; }
 function refund(T, cost, f) { for (const k in cost) T.res[k] += cost[k] * (f || 1); }
@@ -304,7 +306,7 @@ function faceTo(u, t) { u.face = Math.atan2(t.x - u.x, t.z - u.z); }
 // ---------- rozkazy ----------
 function orderStop(u) { u.order = null; u.path = null; }
 function orderMove(u, x, z, amove) { u.order = { type: amove ? 'amove' : 'move', x, z }; pathTo(u, x, z); }
-function orderAttack(u, t, auto, resume) { u.order = { type: 'attack', target: t, auto: !!auto, resume: resume || null, ox: u.x, oz: u.z, rt: 0 }; u.path = null; }
+function orderAttack(u, t, auto, resume) { if (peaceActive() && t.team !== u.team) return; u.order = { type: 'attack', target: t, auto: !!auto, resume: resume || null, ox: u.x, oz: u.z, rt: 0 }; u.path = null; }
 function orderGather(u, n) { if (u.type !== 'vil') return orderMove(u, n.x, n.z); if (u.ctype !== n.def.res) u.carry = 0; u.ctype = n.def.res; u.order = { type: 'gather', node: n, phase: 'go', drop: null }; pathTo(u, n.x, n.z); }
 function orderBuild(u, b) { if (u.type !== 'vil') return orderMove(u, b.x, b.z); u.order = { type: 'build', b }; pathToB(u, b); }
 function orderFarm(u, b) { if (u.type !== 'vil') return; u.order = { type: 'farm', b }; b.worker = u; pathTo(u, b.x + (Math.random() - 0.5) * 2, b.z + (Math.random() - 0.5) * 2); }
@@ -325,6 +327,7 @@ function armorOf(u) { let a = u.def.armor; const t = teams[u.team].tech; if (u.d
 function hurt(t, src, base, cls, pierce, bonus) {
   if (!t || t.dead) return;
   if (t.isAnimal) { t.hp -= base; t.flee = 1.6; t.t = 0; if (t.hp <= 0) killAnimal(t); return; }
+  if (src && src.team !== t.team && peaceActive()) return;
   let d = base; const tc = t.isB ? 'bld' : t.def.cls;
   if (bonus && bonus[tc]) d *= bonus[tc];
   if (t.isB) { if (cls !== 'siege') d *= (cls === 'arch' || cls === 'bld') ? 0.25 : 0.5; }
@@ -338,6 +341,7 @@ function hurt(t, src, base, cls, pierce, bonus) {
     orderAttack(t, src, true, t.order && t.order.resume);
 }
 function findEnemy(e, range, wantB) {
+  if (peaceActive()) return null;
   let best = null, bd = range;
   for (const u of units) { if (u.team === e.team || u.dead) continue; const d = Math.hypot(u.x - e.x, u.z - e.z); if (d < bd) { bd = d; best = u; } }
   if (best && !(wantB === 'prefer')) return best;
@@ -448,7 +452,7 @@ function updateUnit(u, dt) {
         if (!o.drop || o.drop.dead) { toDrop(u, o); break; }
         const end = follow(u, dt), d = distEnt(u, o.drop);
         if (d <= 1.7 || (end && d <= 3.2)) {
-          T.res[u.ctype] += u.carry; u.carry = 0;
+          gainResource(T, u.ctype, u.carry); u.carry = 0;
           if (n.amt <= 0) { nextNode(u, o); break; }
           o.phase = 'go'; pathTo(u, n.x, n.z);
         } else if (end) pathToB(u, o.drop);
@@ -500,7 +504,7 @@ function updateUnit(u, dt) {
       if (b.worker !== u) { if (farmFree(b)) b.worker = u; else { u.order = null; break; } }
       if (u.path) { follow(u, dt); break; }
       const r = farmRate(T);
-      if (r > 0 && !(G.flood > 0.2 && b.y < G.flood - 0.1)) { T.res.food += r * dt; u.working = true; o.w = (o.w || 0) - dt; if (o.w <= 0) { o.w = 4 + Math.random() * 4; pathTo(u, b.x + (Math.random() - 0.5) * 3.6, b.z + (Math.random() - 0.5) * 3.6); } }
+      if (r > 0 && !(G.flood > 0.2 && b.y < G.flood - 0.1)) { gainResource(T, 'food', r * dt); u.working = true; o.w = (o.w || 0) - dt; if (o.w <= 0) { o.w = 4 + Math.random() * 4; pathTo(u, b.x + (Math.random() - 0.5) * 3.6, b.z + (Math.random() - 0.5) * 3.6); } }
       break;
     }
   }
@@ -569,7 +573,7 @@ function updateBuilding(b, dt) {
   if (b.type === 'smelter' && T.res.ore >= 0.5) {
     let r = 0.3 * dt * (T.tech.iron ? 1.5 : 1) * (T.tech.blast ? 2 : 1);
     r = Math.min(r, T.res.ore / 2, T.res.wood / 0.5);
-    if (r > 0) { T.res.ore -= r * 2; T.res.wood -= r * 0.5; T.res.metal += r; if (Math.random() < dt * 1.5) puff(b.x + 0.5, b.y + 4, b.z - 0.3, 0x55504c, 0.6, 2.2, 1.6); }
+    if (r > 0) { T.res.ore -= r * 2; T.res.wood -= r * 0.5; gainResource(T, 'metal', r); if (Math.random() < dt * 1.5) puff(b.x + 0.5, b.y + 4, b.z - 0.3, 0x55504c, 0.6, 2.2, 1.6); }
   }
 }
 function knowRate(T) {
@@ -584,9 +588,9 @@ function econ(T, dt) {
   let cap = 0, past = 0, mill = 0, mkt = 0; const cn = T.n = {};
   for (const b of blds) if (b.team === T.id && b.done) { cn[b.type] = (cn[b.type] || 0) + 1; cap += b.def.pop || 0; if (b.type === 'pasture') past++; else if (b.type === 'mill') mill++; else if (b.type === 'market') mkt++; }
   T.cap = Math.min(MAXPOP, cap); T.mill = mill > 0;
-  T.res.gold += Math.min(mkt, 2) * 0.15 * dt;
-  T.res.know += knowRate(T) * dt;
-  T.res.food += past * (season() === 3 ? 0.16 : 0.24) * dt;
+  gainResource(T, 'gold', Math.min(mkt, 2) * 0.15 * dt);
+  gainResource(T, 'know', knowRate(T) * dt);
+  gainResource(T, 'food', past * (season() === 3 ? 0.16 : 0.24) * dt);
   T.res.food -= upkeepRate(T) * dt;
   if (T.res.food <= 0) {
     T.res.food = 0;
@@ -661,7 +665,7 @@ function execCmd(team, c) {
   const B = id => { const b = byId.get(id); return b && b.isB && b.team === team && !b.dead ? b : null; };
   switch (c[0]) {
     case 'move': formation(U(c[1]), +c[2], +c[3], (u, x, z) => orderMove(u, x, z, c[4] && u.type !== 'vil')); break;
-    case 'atk': { const t = byId.get(c[2]); if (t && t.team !== team && !t.dead) U(c[1]).forEach(u => orderAttack(u, t)); break; }
+    case 'atk': { if (peaceActive()) { say(team, 'Ještě platí ochrana před útoky.', 'bad'); break; } const t = byId.get(c[2]); if (t && t.team !== team && !t.dead) U(c[1]).forEach(u => orderAttack(u, t)); break; }
     case 'gather': { const n = nodes[c[2]]; if (!n || n.amt <= 0 || (n.def.req && !T.tech[n.def.req])) break; U(c[1]).forEach(u => u.type === 'vil' ? orderGather(u, n) : orderMove(u, n.x, n.z)); break; }
     case 'hunt': { const a = animals.find(a => a.id === c[2]); if (a) U(c[1]).forEach(u => orderHunt(u, a)); break; }
     case 'build': { const b = B(c[2]); if (b) U(c[1]).forEach(u => orderBuild(u, b)); break; }
@@ -784,7 +788,7 @@ function aiTick() {
   // útok a obrana
   const home = { x: tc.x + (teams[0].tcx - tc.x) * 0.12, z: tc.z + (teams[0].tcz - tc.z) * 0.12 };
   const attacking = G.time - AI.launch < 200;
-  if (G.aggr > 0 && G.time >= AI.attackAt && army.length >= Math.min(armyT * 0.7, 5 + AI.wave * 3)) {
+  if (!peaceActive() && G.aggr > 0 && G.time >= AI.attackAt && army.length >= Math.min(armyT * 0.7, 5 + AI.wave * 3)) {
     AI.attackAt = G.time + [260, 210, 170][D] * AGT[G.aggr]; AI.wave++; AI.launch = G.time;
     const tgt = aiTarget(tc);
     if (tgt) { formation(army, tgt.x, tgt.z, (u, x, z) => orderMove(u, x, z, true)); say(0, 'Zvědové hlásí: nepřátelské vojsko vyrazilo k tvé osadě!', 'bad'); }
@@ -814,15 +818,24 @@ function simStep(dt) {
   AI.acc += dt; if (AI.acc >= 1) { AI.acc = 0; if (G.mode === 'ai') aiTick(); }
   for (let i = units.length - 1; i >= 0; i--) if (units[i].dead) units.splice(i, 1);
   for (let i = blds.length - 1; i >= 0; i--) if (blds[i].dead) blds.splice(i, 1);
+  checkVictory();
 }
-function endGame(loser) { if (G.over) return; G.over = true; G.loser = loser; G.paused = true; showEnd(loser !== MY); }
+function checkVictory() {
+  if (G.over) return;
+  if (G.match.goal === 'survival' && G.time >= G.match.years * SEASON_LEN * 4) endGame(G.mode === 'ai' ? 1 : -1, 'Cíl přežití splněn.');
+  if (G.match.goal === 'development') {
+    const winners = teams.filter(T => T.era >= 2 && T.pop >= 20 && T.res.food >= 300 && T.res.gold >= 100);
+    if (winners.length) endGame(winners.length === 2 ? -1 : 1 - winners[0].id, 'Cíl rozvoje splněn.');
+  }
+}
+function endGame(loser, reason) { if (G.over) return; G.over = true; G.loser = loser; G.endReason = reason || 'Sídlo bylo zničeno.'; G.paused = true; showEnd(loser !== MY); }
 
 function resetWorld() {
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
   units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
   byId.clear(); nodeMeshes = {}; nextId = 1;
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
-  Object.assign(G, { time: 0, over: false, reveal: false, snow: 0, flood: 0, rain: 0 });
+  Object.assign(G, { time: 0, over: false, loser: null, endReason: '', reveal: false, snow: 0, flood: 0, rain: 0 });
   Object.assign(EV, { season: -1, acc: 0, floodAt: 0, floodT: -1, floodMax: 0, drought: false, frost: false });
   Object.assign(AI, { acc: 0, wave: 0, launch: -999 });
   Object.assign(PRICE, { food: 30, wood: 30, stone: 45, metal: 90 });
@@ -838,10 +851,11 @@ function applyLook() {
 function addMeat(n) { n.mesh = new THREE.Mesh(meatG || (meatG = meatGeo()), unitMat); n.mesh.position.set(n.x, heightAt(n.x, n.z), n.z); n.mesh.visible = !!explored[cidx(n.cx, n.cy)]; scene.add(n.mesh); }
 function newGame(diff, sv) {
   resetWorld();
-  if (sv) Object.assign(G, sv.G); else G.diff = diff; AI.attackAt = aiFirstAttack();
+  if (sv) Object.assign(G, sv.G); else G.diff = diff;
+  G.match = matchOptions(G.match); AI.attackAt = Math.max(aiFirstAttack(), G.match.peace);
   teams.push(mkTeam(0), mkTeam(1));
   applyLook();
-  G.seed = makeWorld(sv ? sv.seed : null); G.baseNodes = nodes.length;
+  G.seed = makeWorld(sv ? sv.seed : G.match.seed); G.baseNodes = nodes.length;
   buildTerrain();
   if (sv) { loadState(sv); return; }
   buildNodes();
@@ -883,7 +897,7 @@ function saveState() {
   for (let i = 0; i < N * N; i++) if (explored[i]) bytes[i >> 3] |= 1 << (i & 7);
   for (let i = 0; i < bytes.length; i++) bits += String.fromCharCode(bytes[i]);
   return {
-    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real },
+    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match },
     AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, EV: Object.assign({}, EV), flood: G.flood, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
     teams: teams.map(T => ({ res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
     amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),

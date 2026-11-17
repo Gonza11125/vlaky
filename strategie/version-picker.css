@@ -1,0 +1,11 @@
+.version-picker { margin: 14px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--ink); }
+.version-picker label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--brass); }
+.version-picker select { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel-2); color: var(--fg); font: inherit; }
+.version-picker select:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+.version-dialog { box-sizing: border-box; width: min(480px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: 20px; border: 1px solid var(--line); border-top: 3px solid var(--brass); border-radius: 6px; background: var(--panel); color: var(--fg); font: inherit; }
+.version-dialog::backdrop { background: #0d1213cc; }
+.version-dialog h2 { margin: 0 0 10px; font: 24px var(--display); }
+.version-dialog .row { justify-content: flex-end; }
+.version-dialog .pick { min-height: 44px; }
+#b-version { color: var(--brass); }
+@media (max-width: 760px) { #tools { flex-wrap: wrap; } }
