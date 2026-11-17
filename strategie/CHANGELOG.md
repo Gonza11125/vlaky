@@ -1,5 +1,13 @@
 # Vydání Věku pokroku
 
+## 1.2.0 – Ovládání a ochrana uložených partií
+
+- Herní nabídka s návratem do hry nebo bezpečným návratem k nové partii.
+- Nápověda během hraní (tlačítko, F1) a automatická pauza pro sólo partii.
+- Převzetí platné místní uložené partie z 1.1.0 při první návštěvě 1.2.0;
+  původní uložená hra zůstává zachovaná.
+- Kontrola struktury uložení a limit 5 MB pro importovaný soubor.
+
 ## 1.1.0 – Hospodářství a obchodní cesty
 
 - Pole lze přepínat mezi zeleninou (přímé jídlo) a obilím.

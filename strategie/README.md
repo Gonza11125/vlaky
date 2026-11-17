@@ -6,8 +6,19 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze 1.0.1** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2** a **1.1.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0** a **1.2.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.2.0
+
+- **Menu** během partie umožňuje pokračovat nebo uložit a vrátit se
+  do úvodní nabídky. Odpojení ze síťové hry ukládání nepodporuje.
+- **Nápověda** je přístupná tlačítkem v liště i klávesou F1. V sólo
+  hře se při čtení simulace pozastaví.
+- **Přechod z 1.1.0:** není-li v prohlížeči uložená hra 1.2.0,
+  při první návštěvě vznikne kopie platného místního uložení 1.1.0.
+  Originál zůstane beze změny a ostatní verze mají oddělená uložení.
+- Neúplná uložení se před načtením odmítnou; import má limit 5 MB.
 
 ## Jak využít nové hospodářství v 1.1.0
 
@@ -100,7 +111,7 @@ výběr dál funguje, jen se po návratu na hlavní adresu použije nejnovějš�
 
 ```sh
 python -m unittest discover -s strategie/tests -p 'test_*.py'
-node --test strategie/tests/gameplay.test.cjs
+node --test strategie/tests/*.test.cjs
 python strategie/tests/browser_smoke.py
 python strategie/tests/economy_browser.py
 ```

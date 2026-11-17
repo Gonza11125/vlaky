@@ -169,6 +169,8 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
     <div id="tools">
       <button class="tbtn" id="b-idle" title="Najít nečinného vesničana (klávesa tečka)">Nečinní 0</button>
       <button class="tbtn" id="b-tech">Technologie</button>
+      <button class="tbtn" id="b-help" title="Nápověda (F1)">Nápověda</button>
+      <button class="tbtn" id="b-menu" title="Herní nabídka">Menu</button>
       <button class="tbtn" id="b-speed" title="Rychlost hry">1×</button>
       <button class="tbtn" id="b-pause" title="Pauza (mezerník)">Pauza</button>
       <button class="tbtn" id="b-save" title="Uloží hru">Uložit</button>
@@ -271,6 +273,39 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <p id="end-goal"></p>
       <div id="end-stats"></div>
       <button class="go" id="b-again">Nová hra</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="pause-menu" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div class="card">
+      <h1 id="pause-title">Herní nabídka</h1>
+      <p class="lead">Můžeš pokračovat nebo se vrátit k nastavení nové partie. Ve hře proti počítači se postup před návratem uloží do prohlížeče.</p>
+      <div class="row" style="gap:12px;flex-wrap:wrap">
+        <button class="go" id="b-resume">Pokračovat ve hře</button>
+        <button class="go alt" id="b-return">Zpět do hlavní nabídky</button>
+      </div>
+      <p class="hint">Odchod ze síťové partie ukončí spojení se soupeřem; síťovou hru nelze uložit.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h1 id="help-title">Jak hrát Věk pokroku</h1>
+        <button class="pick" id="b-help-close">Zavřít</button>
+      </div>
+      <p class="lead">Rozvíjej osadu, přežij zimu a rozhodni partii cílem zvoleným v úvodní nabídce.</p>
+      <h2>První kroky</h2>
+      <ol>
+        <li>Vyber vesničany a zajisti jídlo (keře, ryby, zvěř) a dřevo.</li>
+        <li>Postav potřebné stavby, získej zásoby na zimu a vyzkoumej zemědělství.</li>
+        <li>Pro obilí používej mlýn a pekárnu; lesovna pouze obnovuje stromy, dřevo musí někdo vytěžit.</li>
+        <li>Pro obchod postav dvě propojená tržiště nejméně 24 metrů od sebe a vyškol karavanu.</li>
+      </ol>
+      <h2>Ovládání</h2>
+      <p>Levé kliknutí: výběr. Pravé kliknutí: příkaz. Tažení: označení jednotek. WASD nebo šipky: posun mapy. Q/E: otočení. H: návrat k sídlu. Tečka: nečinný vesničan. Čísla 1–9: skupiny jednotek, Ctrl + číslo: uložit skupinu.</p>
+      <p>Mezerník: pauza v sólo hře. F1: nápověda. Escape: zavřít nabídku nebo zrušit výběr. Na mobilu použij spodní lištu výběru a klepni na příkaz vybrané jednotky.</p>
+      <button class="go" id="b-help-done">Rozumím, pokračovat</button>
     </div>
   </div>
 

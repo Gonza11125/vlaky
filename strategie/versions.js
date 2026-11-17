@@ -10,5 +10,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.1.0",
     "description": "Hospodářství: obilí, mouka a pekárny, obnova lesa, obchodní karavany a nové možnosti pro hráče i soupeře."
+  },
+  {
+    "id": "1.2.0",
+    "description": "Herní nabídka a nápověda během hraní, bezpečnější načítání a převzetí uložené partie z 1.1.0."
   }
 ];

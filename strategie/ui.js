@@ -240,8 +240,9 @@ $('b-place-no').onclick = cancelPlacing;
 addEventListener('keydown', e => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || document.querySelector('#version-dialog[open]')) return;
   keys[e.code] = true;
-  if (e.code === 'Escape') { if (!$('techs').hidden) $('techs').hidden = true; else if (placing) cancelPlacing(); else setSel([]); }
-  if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+  if (e.code === 'Escape') { if (!$('help').hidden) closeHelp(); else if (!$('pause-menu').hidden) closeMenu(); else if (!$('techs').hidden) $('techs').hidden = true; else if (placing) cancelPlacing(); else setSel([]); }
+  if (e.code === 'F1') { e.preventDefault(); if ($('help').hidden) openHelp(); else closeHelp(); }
+  if (e.code === 'Space' && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
   if (e.code === 'Period') idleVil();
   if (e.code === 'KeyH') { cam.x = ME().tcx; cam.z = ME().tcz; }
   if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -397,6 +398,55 @@ $('b-tech').onclick = () => {
   $('tech-list').innerHTML = h; $('techs').hidden = false;
 };
 $('b-tech-close').onclick = () => { $('techs').hidden = true; };
+
+let menuWasPaused = false, helpWasPaused = false;
+function restorePause(wasPaused) {
+  if (G.mode !== 'ai' || G.over || !$('start').hidden) return;
+  G.paused = wasPaused;
+  $('b-pause').textContent = wasPaused ? 'Pokračovat' : 'Pauza';
+  $('b-pause').classList.toggle('warn', wasPaused);
+}
+function openMenu() {
+  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden) return;
+  menuWasPaused = G.paused;
+  if (G.mode === 'ai') restorePause(true);
+  $('b-return').textContent = G.mode === 'ai' ? 'Uložit a zpět do nabídky' : 'Odpojit a zpět do nabídky';
+  $('pause-menu').hidden = false;
+  $('b-resume').focus();
+}
+function closeMenu(restore = true) {
+  if ($('pause-menu').hidden) return;
+  $('pause-menu').hidden = true;
+  if (restore) restorePause(menuWasPaused);
+  $('b-menu').focus();
+}
+function openHelp() {
+  if (!$('help').hidden || !$('pause-menu').hidden) return;
+  helpWasPaused = G.paused;
+  if (G.mode === 'ai' && $('start').hidden) restorePause(true);
+  $('help').hidden = false;
+  $('b-help-close').focus();
+}
+function closeHelp() {
+  if ($('help').hidden) return;
+  $('help').hidden = true;
+  restorePause(helpWasPaused);
+  $('b-help').focus();
+}
+$('b-menu').onclick = openMenu;
+$('b-resume').onclick = () => closeMenu();
+$('b-return').onclick = () => {
+  if (G.mode === 'ai') doSave(true);
+  closeMenu(false);
+  netReset(); netRemember(false); p2pClose();
+  G.paused = true; G.mode = 'ai';
+  $('start').hidden = false;
+  showSaveOffer();
+};
+$('b-help').onclick = openHelp;
+$('b-help-close').onclick = closeHelp;
+$('b-help-done').onclick = closeHelp;
+
 const OPT = { diff: 1, aggr: 2, real: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
 function selectedMatch() {
@@ -413,7 +463,14 @@ $('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); 
 // ---------- uložení: účet na Claude (pro přihlášené, na všech zařízeních), prohlížeč a soubor ----------
 const SAVE_KEY = VEK_RELEASE.saveKey;
 const saveVersion = sv => sv && (sv.gameVersion || '1.0.1');
-const saveMatchesVersion = sv => sv && sv.v === 1 && saveVersion(sv) === VEK_RELEASE.id;
+const saveValid = sv => !!(sv && sv.v === 1 && Number.isSafeInteger(sv.seed) &&
+  sv.G && Number.isFinite(sv.G.time) && sv.G.time >= 0 &&
+  sv.AI && sv.PRICE && typeof sv.explored === 'string' &&
+  Array.isArray(sv.teams) && sv.teams.length === 2 &&
+  sv.teams.every(t => t && t.res && t.tech && Number.isInteger(t.era)) &&
+  Array.isArray(sv.amt) && Array.isArray(sv.meat) &&
+  Array.isArray(sv.blds) && Array.isArray(sv.units) && Array.isArray(sv.animals));
+const saveMatchesVersion = sv => saveValid(sv) && saveVersion(sv) === VEK_RELEASE.id;
 const CLOUD = { db: null, uid: null, ready: false, tried: false, doc: null, parsed: null, busy: false, pending: null, dl: null };
 (async () => {
   try {
@@ -430,7 +487,26 @@ const CLOUD = { db: null, uid: null, ready: false, tried: false, doc: null, pars
   } catch (_) { }
   CLOUD.tried = true; showSaveOffer();
 })();
-function readLocal() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return saveMatchesVersion(s) ? s : null; } catch (_) { return null; } }
+function readLocal() {
+  try {
+    let raw = localStorage.getItem(SAVE_KEY);
+    // Preserve 1.1.0 data and copy only the compatible save into the new release.
+    if (!raw && VEK_RELEASE.id === '1.2.0') {
+      const older = localStorage.getItem('vek-pokroku-save-1.1.0');
+      if (older && older.length < 5000000) {
+        const source = JSON.parse(older);
+        if (saveValid(source) && saveVersion(source) === '1.1.0') {
+          source.gameVersion = VEK_RELEASE.id;
+          raw = JSON.stringify(source);
+          localStorage.setItem(SAVE_KEY, raw);
+        }
+      }
+    }
+    if (!raw || raw.length > 5000000) return null;
+    const sv = JSON.parse(raw);
+    return saveMatchesVersion(sv) ? sv : null;
+  } catch (_) { return null; }
+}
 function readCloud() { const d = CLOUD.doc; if (!d || typeof d.data !== 'string') return null; if (!CLOUD.parsed || CLOUD.parsed.saved !== d.saved) { try { CLOUD.parsed = JSON.parse(d.data); } catch (_) { return null; } } return saveMatchesVersion(CLOUD.parsed) ? CLOUD.parsed : null; }
 function readSave() { const a = readLocal(), c = readCloud(); if (!a) return c; if (!c) return a; return (c.saved || 0) >= (a.saved || 0) ? c : a; }
 function cloudSet(body) {
@@ -460,13 +536,14 @@ async function exportSave() {
   catch (_) { msg('Stažení tady nejde.', 'bad'); }
 }
 const fileIn = document.createElement('input'); fileIn.type = 'file'; fileIn.accept = '.json,application/json'; fileIn.style.display = 'none'; document.body.appendChild(fileIn);
-fileIn.onchange = () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return; const r = new FileReader();
+fileIn.onchange = () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return; if (f.size > 5000000) { msg('Soubor s hrou je příliš velký (max. 5 MB).', 'bad'); return; } const r = new FileReader();
   r.onload = () => { let sv; try { sv = JSON.parse(r.result); } catch (_) { sv = null; } if (!sv || sv.v !== 1 || !sv.teams) { msg('Tohle není uložená hra Věku pokroku.', 'bad'); return; } continueSave(sv); };
   r.readAsText(f); };
 function resetView() { sel = []; cmdSig = ''; rings.length = 0; markers.length = 0; ghost = null; placing = null; $('place').hidden = true; lastSeason = -1; snowShown = -1; baseT = 0; acc = 0; lastAlert = -99; ping = null; for (const k in groups) delete groups[k]; }
 function startFresh() { resetView(); newGame(G.diff); cam.x = ME().tcx; cam.z = ME().tcz + 4; cam.yaw = 0; cam.dist = view.clientWidth < 760 ? 84 : 62; }
 function continueSave(given) {
   const sv = given && given.teams ? given : readSave(); if (!sv) return;
+  if (!saveValid(sv)) { msg('Uložená hra je neúplná nebo poškozená.', 'bad'); return; }
   if (!saveMatchesVersion(sv)) { msg('Tahle uložená hra patří do verze ' + saveVersion(sv) + '. Nejdřív na ni přepni v nabídce Verze hry.', 'bad'); return; }
   G.mode = 'ai'; MY = 0;
   resetView();
