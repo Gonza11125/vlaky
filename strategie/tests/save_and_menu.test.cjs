@@ -22,39 +22,48 @@ function reader(localStorage) {
   return new Function('localStorage', 'VEK_RELEASE', 'SAVE_KEY',
     source.slice(start, end) + '\n' + source.slice(beginLocal, endLocal) +
     '\nreturn { readLocal, saveValid, saveMatchesVersion };'
-  )(localStorage, { id: '1.2.0' }, 'vek-pokroku-save-1.2.0');
+  )(localStorage, { id: '1.3.0' }, 'vek-pokroku-save-1.3.0');
 }
 const fixture = () => ({
-  v: 1, gameVersion: '1.1.0', seed: 73, saved: Date.now(),
+  v: 1, gameVersion: '1.2.0', seed: 73, saved: Date.now(),
   G: { time: 90 }, AI: {}, PRICE: {}, explored: 'AAAA',
   teams: [{ era: 0, res: {}, tech: {} }, { era: 0, res: {}, tech: {} }],
   amt: [], meat: [], blds: [], units: [], animals: [],
 });
 
-test('valid 1.1.0 save migrates on first visit, without modifying original', () => {
+test('valid 1.2.0 save migrates on first visit, without modifying original', () => {
   const previous = JSON.stringify(fixture());
-  const local = storage({ 'vek-pokroku-save-1.1.0': previous });
+  const local = storage({ 'vek-pokroku-save-1.2.0': previous });
   const loaded = reader(local).readLocal();
-  assert.equal(loaded.gameVersion, '1.2.0');
-  assert.equal(local.getItem('vek-pokroku-save-1.1.0'), previous);
-  assert.equal(JSON.parse(local.getItem('vek-pokroku-save-1.2.0')).gameVersion, '1.2.0');
+  assert.equal(loaded.gameVersion, '1.3.0');
+  assert.equal(local.getItem('vek-pokroku-save-1.2.0'), previous);
+  assert.equal(JSON.parse(local.getItem('vek-pokroku-save-1.3.0')).gameVersion, '1.3.0');
 });
 
 test('an incomplete previous save is never migrated', () => {
   const incomplete = fixture();
   delete incomplete.animals;
-  const local = storage({ 'vek-pokroku-save-1.1.0': JSON.stringify(incomplete) });
+  const local = storage({ 'vek-pokroku-save-1.2.0': JSON.stringify(incomplete) });
   assert.equal(reader(local).readLocal(), null);
-  assert.equal(local.getItem('vek-pokroku-save-1.2.0'), null);
+  assert.equal(local.getItem('vek-pokroku-save-1.3.0'), null);
+});
+
+test('1.1.0 save is used if no 1.2.0 save exists', () => {
+  const previous = fixture();
+  previous.gameVersion = '1.1.0';
+  const local = storage({ 'vek-pokroku-save-1.1.0': JSON.stringify(previous) });
+  const loaded = reader(local).readLocal();
+  assert.equal(loaded.gameVersion, '1.3.0');
+  assert.equal(JSON.parse(local.getItem('vek-pokroku-save-1.1.0')).gameVersion, '1.1.0');
 });
 
 test('new save takes precedence over older release save', () => {
   const current = fixture();
-  current.gameVersion = '1.2.0';
+  current.gameVersion = '1.3.0';
   current.G.time = 250;
   const local = storage({
-    'vek-pokroku-save-1.1.0': JSON.stringify(fixture()),
-    'vek-pokroku-save-1.2.0': JSON.stringify(current),
+    'vek-pokroku-save-1.2.0': JSON.stringify(fixture()),
+    'vek-pokroku-save-1.3.0': JSON.stringify(current),
   });
   assert.equal(reader(local).readLocal().G.time, 250);
 });
