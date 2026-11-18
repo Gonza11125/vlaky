@@ -21,3 +21,22 @@ jobs:
         run: python -m unittest discover -s strategie/tests -p 'test_*.py'
       - name: Node simulation tests
         run: node --test strategie/tests/*.test.cjs
+
+  browser-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install --disable-pip-version-check 'playwright==1.56.0'
+          python -m playwright install --with-deps chromium
+      - name: Test city management in Chromium
+        run: python strategie/tests/city_browser.py
+      - name: Test game releases and save controls in Chromium
+        run: python strategie/tests/browser_smoke.py
+      - name: Test economy and two-player synchronization in Chromium
+        run: python strategie/tests/economy_browser.py
