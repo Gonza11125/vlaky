@@ -3,11 +3,41 @@
 Hráč otevře `strategie/`, které ho přesměruje na naposledy vybrané vydání
 (při první návštěvě na nejnovější). V úvodní nabídce je **Verze hry**.
 Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné označení.
-Tlačítko **Verze 1.0.1** v horní liště dovoluje změnu i během hraní.
+Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0** a **1.2.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0** a **1.3.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.3.0 – Živé město
+
+V horní liště otevři **Město** (na klávesnici také **C**).
+Zde vidíš pracovní rozdělení vesničanů a stav budov. Automatiku práce lze
+zapnout a vypnout; nikdy nepřepisuje ručně zadané příkazy. Pro jídlo, dřevo,
+kámen, rudu a zlato nastavíš priority 0–3. Automatika přiděluje práci
+jen volným vesničanům, dostupným surovinám a dokončeným polím.
+Při nedostatku zásob mění skutečné pořadí práce podle potřeb osady.
+
+Vizuální **pěšiny** propojují sídlo s dokončenými přístupnými budovami.
+Nespotřebovávají suroviny, nemění průchodnost terénu a nepřidávají bonus pohybu.
+
+| Mechanika | Klasický režim | Realistický režim |
+| --- | --- | --- |
+| Přehled práce, priority a volitelná automatika | Ano | Ano |
+| Vizuální pěšiny | Ano | Ano |
+| Ruční opravy poškozených budov | Bez materiálů | Spotřebují dřevo, u hradeb/věží kámen |
+| Automatické opravy | Nejsou potřeba (stavby samy nechátrají) | Zapínatelné, pokud jsou volní lidé a materiál |
+| Přirozené opotřebení budov | Ne | Ano, nezničí stavbu samo |
+| Spokojenost obyvatel a vliv na práci | Ne | Ano |
+| Volné pochůzky nečinných obyvatel | Ne | Ano |
+
+Spokojenost se postupně mění podle hladovění, zásob, zranění, stavu budov
+a pohrom. Ve skutečné ekonomice má mírný vliv na výtěžnost těžby a polí.
+
+**Uložení:** pokud prohlížeč nemá uloženou partii 1.3.0, může na první
+návštěvě vytvořit kopii platného místního uložení z 1.2.0 nebo 1.1.0.
+Starší soubory zůstanou na původních místech. Mezi verzemi nejsou sdílené
+síťové partie ani ukládání přes službu Claude.
 
 ## Novinky ve 1.2.0
 
@@ -114,6 +144,7 @@ python -m unittest discover -s strategie/tests -p 'test_*.py'
 node --test strategie/tests/*.test.cjs
 python strategie/tests/browser_smoke.py
 python strategie/tests/economy_browser.py
+# Na GitHub Actions se při změnách spouští také testy Node.js a Pythonu.
 ```
 
 První příkaz používá pouze standardní Python, druhý vestavěný testovací systém

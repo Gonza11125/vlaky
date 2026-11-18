@@ -240,9 +240,11 @@ $('b-place-no').onclick = cancelPlacing;
 addEventListener('keydown', e => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || document.querySelector('#version-dialog[open]')) return;
   keys[e.code] = true;
+  if (e.code === 'Escape' && !$('city-panel').hidden) { closeCity(); return; }
+  if (e.code === 'KeyC') { e.preventDefault(); if ($('city-panel').hidden) openCity(); else closeCity(); }
   if (e.code === 'Escape') { if (!$('help').hidden) closeHelp(); else if (!$('pause-menu').hidden) closeMenu(); else if (!$('techs').hidden) $('techs').hidden = true; else if (placing) cancelPlacing(); else setSel([]); }
   if (e.code === 'F1') { e.preventDefault(); if ($('help').hidden) openHelp(); else closeHelp(); }
-  if (e.code === 'Space' && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
+  if (e.code === 'Space' && $('city-panel').hidden && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
   if (e.code === 'Period') idleVil();
   if (e.code === 'KeyH') { cam.x = ME().tcx; cam.z = ME().tcz; }
   if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -267,6 +269,10 @@ function drawMiniBase() {
 function drawMini() {
   const S = mini.width, k = S / WORLD;
   mctx.imageSmoothingEnabled = true; mctx.drawImage(mbase, 0, 0, S, S);
+  if (cityRoadCells.length) {
+    mctx.fillStyle = '#b3a080';
+    for (const cell of cityRoadCells) mctx.fillRect(cellC(cell % N) * k - 0.7, cellC((cell / N) | 0) * k - 0.7, 1.4, 1.4);
+  }
   for (const b of blds) { if (!b.mesh.visible) continue; mctx.fillStyle = b.team ? '#ff5a45' : '#58a6ff'; const s = Math.max(3, b.size * CS * k); mctx.fillRect(b.x * k - s / 2, b.z * k - s / 2, s, s); }
   for (const u of units) { if (!u.mesh.visible) continue; mctx.fillStyle = u.team ? '#ff8a7a' : '#bfe0ff'; mctx.fillRect(u.x * k - 1, u.z * k - 1, 2.2, 2.2); }
   mctx.strokeStyle = '#fff'; mctx.lineWidth = 1; mctx.beginPath();
@@ -332,6 +338,11 @@ function refreshUI() {
   $('rate-food').style.color = net < 0 ? 'var(--bad)' : '';
   $('rate-know').textContent = '+' + (knowRate(T) * 60).toFixed(0) + '/min';
   $('s-pop').textContent = T.pop + '/' + T.cap;
+  const cityCount = cityCensus(MY), cityData = cityState(T);
+  const cityWarning = T.hungry || cityCount.unfinished > 0 || (G.real && (cityCount.damaged > 0 || cityData.morale < 40));
+  $('s-city').textContent = 'Osada · ' + cityCount.idle + ' volní' + (G.real ? ' · ' + Math.round(cityData.morale) + '% pohoda' : '');
+  $('s-city').classList.toggle('attention', cityWarning);
+  if (!$('city-panel').hidden) renderCity();
   $('s-era').textContent = ERAS[T.era];
   $('s-time').textContent = 'Rok ' + year() + ' · ' + SEASONS[season()];
   $('s-objective').textContent = goalDescription(G.match) + (peaceActive() ? ' Ochrana: ještě ' + Math.ceil((G.match.peace - G.time) / 60) + ' min.' : '') + (G.match.goal === 'survival' ? ' Zbývá ' + Math.max(0, Math.ceil((G.match.years * SEASON_LEN * 4 - G.time) / 60)) + ' min.' : '') + ' Mapa: ' + G.seed;
@@ -407,7 +418,7 @@ function restorePause(wasPaused) {
   $('b-pause').classList.toggle('warn', wasPaused);
 }
 function openMenu() {
-  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden) return;
+  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden || !$('city-panel').hidden) return;
   menuWasPaused = G.paused;
   if (G.mode === 'ai') restorePause(true);
   $('b-return').textContent = G.mode === 'ai' ? 'Uložit a zpět do nabídky' : 'Odpojit a zpět do nabídky';
@@ -421,7 +432,7 @@ function closeMenu(restore = true) {
   $('b-menu').focus();
 }
 function openHelp() {
-  if (!$('help').hidden || !$('pause-menu').hidden) return;
+  if (!$('help').hidden || !$('pause-menu').hidden || !$('city-panel').hidden) return;
   helpWasPaused = G.paused;
   if (G.mode === 'ai' && $('start').hidden) restorePause(true);
   $('help').hidden = false;
@@ -446,6 +457,61 @@ $('b-return').onclick = () => {
 $('b-help').onclick = openHelp;
 $('b-help-close').onclick = closeHelp;
 $('b-help-done').onclick = closeHelp;
+
+
+let cityWasPaused = false;
+function renderCity() {
+  const T = ME(), c = cityState(T), census = cityCensus(MY);
+  $('city-mode').textContent = G.real
+    ? 'Realistický režim: řízení pracovníků, spokojenost a údržba budov.'
+    : 'Klasický režim: stavění bez chátrání a nákladů na opravy.';
+  $('city-pop').textContent = census.total;
+  $('city-idle').textContent = census.idle;
+  $('city-gather').textContent = census.gathering + census.hunting;
+  $('city-farm').textContent = census.farming;
+  $('city-build').textContent = census.building;
+  $('city-damage').textContent = census.unfinished + ' / ' + census.damaged;
+  $('b-city-auto').textContent = 'Automatická práce: ' + (c.auto ? 'ZAPNUTO' : 'VYPNUTO');
+  $('b-city-auto').classList.toggle('on', c.auto);
+  $('city-real').hidden = !G.real;
+  if (G.real) {
+    $('city-morale').textContent = Math.round(c.morale) + ' / 100';
+    $('b-city-maint').textContent = 'Automatické opravy: ' + (c.maintenance ? 'ZAPNUTO' : 'VYPNUTO');
+    $('b-city-maint').classList.toggle('on', c.maintenance);
+  }
+  for (const select of document.querySelectorAll('[data-city-priority]')) {
+    const val = String(c.priorities[select.dataset.cityPriority]);
+    if (select.value !== val) select.value = val;
+  }
+}
+function openCity() {
+  if (!$('start').hidden || G.over || !$('city-panel').hidden ||
+      !$('help').hidden || !$('pause-menu').hidden || !$('techs').hidden) return;
+  cityWasPaused = G.paused;
+  if (G.mode === 'ai') restorePause(true);
+  $('city-panel').hidden = false;
+  renderCity();
+  $('b-city-close').focus();
+}
+function closeCity() {
+  if ($('city-panel').hidden) return;
+  $('city-panel').hidden = true;
+  restorePause(cityWasPaused);
+  $('b-city').focus();
+}
+$('b-city').onclick = openCity;
+$('b-city-close').onclick = closeCity;
+$('b-city-auto').onclick = () => {
+  const c = cityState(ME()); act(['city', 'auto', !c.auto]);
+  if (G.mode !== 'guest') renderCity();
+};
+$('b-city-maint').onclick = () => {
+  if (!G.real) return;
+  const c = cityState(ME()); act(['city', 'maintenance', !c.maintenance]);
+  if (G.mode !== 'guest') renderCity();
+};
+for (const select of document.querySelectorAll('[data-city-priority]'))
+  select.onchange = () => act(['city', select.dataset.cityPriority, Number(select.value)]);
 
 const OPT = { diff: 1, aggr: 2, real: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
@@ -490,16 +556,20 @@ const CLOUD = { db: null, uid: null, ready: false, tried: false, doc: null, pars
 function readLocal() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
-    // Preserve 1.1.0 data and copy only the compatible save into the new release.
-    if (!raw && VEK_RELEASE.id === '1.2.0') {
-      const older = localStorage.getItem('vek-pokroku-save-1.1.0');
-      if (older && older.length < 5000000) {
-        const source = JSON.parse(older);
-        if (saveValid(source) && saveVersion(source) === '1.1.0') {
-          source.gameVersion = VEK_RELEASE.id;
-          raw = JSON.stringify(source);
-          localStorage.setItem(SAVE_KEY, raw);
-        }
+    // Clone a compatible older save without changing the original release.
+    if (!raw && VEK_RELEASE.id === '1.3.0') {
+      for (const previous of ['1.2.0', '1.1.0']) {
+        const older = localStorage.getItem('vek-pokroku-save-' + previous);
+        if (!older || older.length > 5000000) continue;
+        try {
+          const source = JSON.parse(older);
+          if (saveValid(source) && saveVersion(source) === previous) {
+            source.gameVersion = VEK_RELEASE.id;
+            raw = JSON.stringify(source);
+            localStorage.setItem(SAVE_KEY, raw);
+            break;
+          }
+        } catch (_) { /* Try the preceding version. */ }
       }
     }
     if (!raw || raw.length > 5000000) return null;
@@ -618,6 +688,7 @@ function frame(now) {
   if (now - fogT > 120) { fogT = now; updateFog(); }
   updatePuffs(dt);
   if (terrainDirty) { terrain.geometry.computeVertexNormals(); terrainDirty = false; }
+  if (cityRoadDirty) updateCityRoads();
   const t = now / 1000;
   for (const b of blds) if (b.team !== MY) { if (vis[cidx(cellOf(b.x), cellOf(b.z))]) b.seen = true; b.mesh.visible = !!b.seen; }
   if (G.real) {

@@ -14,5 +14,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.2.0",
     "description": "Herní nabídka a nápověda během hraní, bezpečnější načítání a převzetí uložené partie z 1.1.0."
+  },
+  {
+    "id": "1.3.0",
+    "description": "Živé město: správa obyvatel, pracovní priority, automatika a pěšiny; realistický režim doplňuje spokojenost, pochůzky a údržbu budov."
   }
 ];

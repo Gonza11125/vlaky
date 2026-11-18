@@ -231,13 +231,13 @@ function applyBlds(d) {
     if (!b) { if (!type) continue; const keep = nextId; nextId = e[0]; b = placeBuilding(team, type, e[2], e[3], done); nextId = Math.max(keep, e[0] + 1); }
     if (!b.isB) continue;
     b.hp = e[4]; b.maxHp = e[5]; b.gen = d.g; b.fire = e[6] & 2 ? 1 : 0; b.prog = e[7] / 100; b.crop = e[8] ? 'grain' : 'food'; b.enabled = e[9] !== 0;
-    if (done && !b.done) { b.done = true; b.mesh.scale.y = 1; cmdSig = ''; } else if (!done) b.mesh.scale.y = 0.12 + 0.88 * Math.min(1, b.prog);
+    if (done && !b.done) { b.done = true; b.mesh.scale.y = 1; cmdSig = ''; cityRoadDirty = true; } else if (!done) b.mesh.scale.y = 0.12 + 0.88 * Math.min(1, b.prog);
   }
-  if (chunkDone('bg', d)) for (let i = blds.length - 1; i >= 0; i--) if (blds[i].gen !== d.g) { dropEnt(blds[i]); blds.splice(i, 1); }
+  if (chunkDone('bg', d)) for (let i = blds.length - 1; i >= 0; i--) if (blds[i].gen !== d.g) { cityRoadDirty = true; dropEnt(blds[i]); blds.splice(i, 1); }
 }
 function applyState(d) {
   G.time = d.time; G.flood = d.fl || 0; G.rain = d.rn || 0; EV.drought = !!d.dr; EV.frost = !!d.fr;
-  (d.T || []).forEach((s, i) => { const T = teams[i]; if (!T || !s) return; RES.forEach((k, j) => { T.res[k] = s.r[j] || 0; }); T.era = s.era; T.pop = s.pop; T.cap = s.cap; T.hungry = !!s.h; T.cold = !!s.cold; if (s.tech) { T.tech = {}; s.tech.forEach(k => { T.tech[k] = true; }); T.busy = {}; (s.busy || []).forEach(k => { T.busy[k] = true; }); } });
+  (d.T || []).forEach((s, i) => { const T = teams[i]; if (!T || !s) return; RES.forEach((k, j) => { T.res[k] = s.r[j] || 0; }); T.era = s.era; T.pop = s.pop; T.cap = s.cap; T.hungry = !!s.h; T.cold = !!s.cold; if (s.city && typeof s.city === 'object') { T.city = s.city; cityState(T); } if (s.tech) { T.tech = {}; s.tech.forEach(k => { T.tech[k] = true; }); T.busy = {}; (s.busy || []).forEach(k => { T.busy[k] = true; }); } });
   const cn = teams[MY].n = {}; for (const b of blds) if (b.team === MY) { if (b.done) cn[b.type] = (cn[b.type] || 0) + 1; b.queue = []; }
   for (const q of d.q || []) { const b = byId.get(q[0]); if (b && b.isB) b.queue = q[1].map(x => ({ kind: x[0], id: x[1], t: x[2], total: x[3] })); }
   if (d.pr) Object.assign(PRICE, d.pr);
@@ -273,7 +273,7 @@ function hostTick() {
   if (i % 10 === 1) sendChunks('b', blds, encB, 85);
   if (i % 5 === 2) netSend({
     t: 's', time: r1(G.time), fl: r1(G.flood || 0), rn: G.rain || 0, dr: EV.drought ? 1 : 0, fr: EV.frost ? 1 : 0, ack: NET.ack, over: G.over ? G.loser : -2, reason: G.endReason,
-    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
+    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, city: { auto: cityState(T).auto, maintenance: cityState(T).maintenance, priorities: cityState(T).priorities, morale: cityState(T).morale }, stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
     q: blds.filter(b => b.team === 1 && b.queue.length).slice(0, 12).map(b => [b.id, b.queue.map(q => [q.kind, q.id, r1(q.t), q.total])]),
     pr: { food: Math.round(PRICE.food), wood: Math.round(PRICE.wood), stone: Math.round(PRICE.stone), metal: Math.round(PRICE.metal) }, m: NET.out.splice(0, 5),
   });

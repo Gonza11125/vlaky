@@ -1,6 +1,7 @@
 'use strict';
 // Simulace: scéna, jednotky, budovy, boj, ekonomika, protivník.
 
+let cityRoadDirty = true, cityRoadMesh = null, cityRoadCells = [];
 const G = { time: 0, speed: 1, paused: true, over: false, diff: 1, snow: 0, aggr: 2, real: false, mode: 'ai', match: matchOptions() };
 let MY = 0;                                 // tým místního hráče
 const NET = { role: null, code: '', out: [], shots: [], log: [] };
@@ -22,8 +23,187 @@ const season = () => Math.floor(G.time / SEASON_LEN) % 4;
 const year = () => Math.floor(G.time / (SEASON_LEN * 4)) + 1;
 
 function mkTeam(id) {
-  return { id, color: TEAM_COLORS[id], res: { food: 200 * G.match.stocks, wood: 200 * G.match.stocks, stone: 100 * G.match.stocks, ore: 0, metal: 0, gold: 0, know: 0, grain: 0, flour: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0, regrown: 0, tradeGold: 0, produced: {} } };
+  return { id, city: { auto: false, maintenance: true, priorities: { food: 3, wood: 2, stone: 1, ore: 1, gold: 0 }, morale: 85 }, color: TEAM_COLORS[id], res: { food: 200 * G.match.stocks, wood: 200 * G.match.stocks, stone: 100 * G.match.stocks, ore: 0, metal: 0, gold: 0, know: 0, grain: 0, flour: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0, regrown: 0, tradeGold: 0, produced: {} } };
 }
+
+const CITY_KINDS = ['food', 'wood', 'stone', 'ore', 'gold'];
+const CITY_DEFAULT = Object.freeze({ food: 3, wood: 2, stone: 1, ore: 1, gold: 0 });
+function cityState(T) {
+  if (!T.city || typeof T.city !== 'object') T.city = {};
+  const c = T.city;
+  c.auto = c.auto === true;
+  c.maintenance = c.maintenance !== false;
+  if (!c.priorities || typeof c.priorities !== 'object') c.priorities = {};
+  for (const key of CITY_KINDS) if (!Number.isInteger(c.priorities[key]) || c.priorities[key] < 0 || c.priorities[key] > 3) c.priorities[key] = CITY_DEFAULT[key];
+  if (!Number.isFinite(c.morale)) c.morale = 85;
+  c.morale = clamp(c.morale, 0, 100);
+  return c;
+}
+function cityCensus(team) {
+  const result = { total: 0, idle: 0, gathering: 0, farming: 0, building: 0, hunting: 0, moving: 0, injured: 0, buildings: 0, damaged: 0, unfinished: 0 };
+  for (const u of units) {
+    if (u.team !== team || u.dead || u.type !== 'vil') continue;
+    result.total++;
+    if (u.hp < u.maxHp * 0.6) result.injured++;
+    const type = u.order && u.order.type;
+    if (!type) result.idle++;
+    else if (type === 'gather') result.gathering++;
+    else if (type === 'farm') result.farming++;
+    else if (type === 'build') result.building++;
+    else if (type === 'hunt') result.hunting++;
+    else result.moving++;
+  }
+  for (const b of blds) {
+    if (b.team !== team || b.dead) continue;
+    if (!b.done) result.unfinished++;
+    else if (b.hp < b.maxHp * 0.85) result.damaged++;
+    if (!b.def.wall) result.buildings++;
+  }
+  return result;
+}
+function cityMorale(T, dt) {
+  const c = cityState(T);
+  if (!G.real) { c.morale = 100; return; }
+  let target = 85;
+  const census = cityCensus(T.id);
+  if (T.hungry) target -= 50;
+  else if (T.res.food < Math.max(80, T.pop * 6)) target -= 14;
+  if (T.cold) target -= 16;
+  if (T.pop > T.cap) target -= 15;
+  if (census.injured > 0) target -= Math.min(12, census.injured * 3);
+  if (census.damaged > 0) target -= Math.min(12, census.damaged * 2);
+  if (G.flood > 0.3) target -= 9;
+  target = clamp(target, 10, 100);
+  const rate = Math.min(1, dt * 0.04);
+  c.morale += (target - c.morale) * rate;
+}
+// Automation only takes villagers without orders. Player commands always win.
+function cityAssignJobs(T) {
+  const c = cityState(T);
+  if (!c.auto) return;
+  const idle = units.filter(u => u.team === T.id && u.type === 'vil' && !u.dead && !u.order && u.hp > 0);
+  if (!idle.length) return;
+  const busyBuilders = units.filter(u => u.team === T.id && u.type === 'vil' && u.order && u.order.type === 'build').length;
+  const buildings = blds.filter(b => b.team === T.id && !b.dead);
+  let builderCount = busyBuilders;
+  let assigned = 0;
+  for (const u of idle) {
+    if (assigned >= 3) break;
+    const toBuild = builderCount < 2 && buildings.find(b => !b.done);
+    const toRepair = G.real && c.maintenance && builderCount < 2 &&
+      buildings.filter(b => b.done && !b.def.wall && b.hp < b.maxHp * 0.75 &&
+        T.res[b.type === 'wall' || b.type === 'tower' ? 'stone' : 'wood'] >= 1)
+        .sort((a,b) => a.hp/a.maxHp - b.hp/b.maxHp)[0];
+    if (toBuild || toRepair) {
+      const target = toBuild || toRepair;
+      orderBuild(u, target);
+      builderCount++; assigned++; continue;
+    }
+    const jobs = { food: 0, wood: 0, stone: 0, ore: 0, gold: 0 };
+    for (const other of units) {
+      if (other.team !== T.id || other.dead || other.type !== 'vil' || !other.order) continue;
+      const o = other.order;
+      if (o.type === 'farm' || o.type === 'hunt') jobs.food++;
+      else if (o.type === 'gather' && o.node && o.node.def) {
+        const r = o.node.def.res;
+        if (r in jobs) jobs[r]++;
+      }
+    }
+    const options = [];
+    for (const kind of CITY_KINDS) {
+      const priority = c.priorities[kind];
+      if (priority === 0) continue;
+      let target = null, farm = null;
+      if (kind === 'food') {
+        if (season() !== 3) farm = buildings.find(b => b.type === 'farm' && b.done && farmFree(b));
+        target = nearestNode('bush', u.x, u.z, 90) || nearestNode('fish', u.x, u.z, 90);
+      } else {
+        const nodeType = kind === 'wood' ? 'tree' : kind;
+        target = nearestNode(nodeType, u.x, u.z, 90);
+      }
+      if (target && target.def.req && !T.tech[target.def.req]) target = null;
+      if (!farm && !target) continue;
+      const stock = kind === 'food' ? T.res.food + (T.res.grain || 0) : T.res[kind];
+      const desired = kind === 'food' ? Math.max(220, T.pop * 18) : kind === 'wood' ? 160 : 90;
+      const need = clamp(desired / (stock + 60), 0.3, 2.5);
+      const score = priority * need / (1 + jobs[kind] * 0.6);
+      options.push({ kind, score, target, farm });
+    }
+    options.sort((a,b) => b.score - a.score);
+    const pick = options[0];
+    if (!pick) break;
+    if (pick.farm) orderFarm(u, pick.farm);
+    else orderGather(u, pick.target);
+    assigned++;
+  }
+}
+function cityRoutine(T, dt) {
+  const c = cityState(T);
+  c.clock = (c.clock || 0) + dt;
+  if (c.clock < 2) return;
+  const elapsed = c.clock;
+  c.clock = 0;
+  cityMorale(T, elapsed);
+  cityAssignJobs(T);
+}
+function cityRepair(b, T, dt) {
+  const amount = Math.min(10 * dt, b.maxHp - b.hp);
+  if (amount <= 0) return 0;
+  if (!G.real) { b.hp += amount; return amount; }
+  const resource = b.def.wall || b.type === 'tower' ? 'stone' : 'wood';
+  const actual = Math.min(amount, Math.max(0, T.res[resource] || 0) / 0.12);
+  if (actual > 0) {
+    T.res[resource] -= actual * 0.12;
+    b.hp = Math.min(b.maxHp, b.hp + actual);
+  }
+  return actual;
+}
+function updateCityRoads() {
+  if (!cityRoadDirty || !scene || !terrain) return;
+  cityRoadDirty = false;
+  if (cityRoadMesh) {
+    scene.remove(cityRoadMesh);
+    cityRoadMesh.geometry.dispose();
+    cityRoadMesh.material.dispose();
+    cityRoadMesh = null;
+  }
+  const hub = blds.find(b => b.team === MY && b.type === 'tc' && !b.dead && b.done);
+  cityRoadCells = [];
+  if (!hub) return;
+  const start = nearestFree(hub.cx - 1, hub.cy + 1, 4);
+  if (!start) return;
+  const seen = new Set();
+  const oldPT = PT;
+  PT = MY;
+  for (const b of blds.filter(b => b.team === MY && !b.dead && b.done && !b.def.wall && b.type !== 'farm' && b !== hub).slice(0, 32)) {
+    if (Math.hypot(b.x - hub.x, b.z - hub.z) > 95) continue;
+    const dest = nearestFree(b.cx - 1, b.cy + b.size, 4);
+    if (!dest) continue;
+    const route = findPath(start.cx, start.cy, dest.cx, dest.cy, dest.cx, dest.cy, 0);
+    if (!route.ok) continue;
+    for (const cell of route.cells) if (!seen.has(cell)) { seen.add(cell); cityRoadCells.push(cell); }
+  }
+  PT = oldPT;
+  if (!cityRoadCells.length) return;
+  const mesh = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(CS * 0.88, CS * 0.88),
+    new THREE.MeshLambertMaterial({ color: 0xa99874, transparent: true, opacity: 0.86, depthWrite: false, side: THREE.DoubleSide }),
+    cityRoadCells.length
+  );
+  const matrix = new THREE.Matrix4(), rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+  const scale = new THREE.Vector3(1, 1, 1);
+  cityRoadCells.forEach((cell, i) => {
+    const x = cellC(cell % N), z = cellC((cell / N) | 0);
+    matrix.compose(new THREE.Vector3(x, heightAt(x, z) + 0.09, z), rot, scale);
+    mesh.setMatrixAt(i, matrix);
+  });
+  mesh.instanceMatrix.needsUpdate = true;
+  mesh.frustumCulled = false;
+  mesh.receiveShadow = true;
+  cityRoadMesh = mesh;
+  scene.add(mesh);
+}
+
 function gainResource(T, key, amount) { T.res[key] += amount; const p = T.stats.produced || (T.stats.produced = {}); p[key] = (p[key] || 0) + amount; }
 const peaceActive = () => G.time < G.match.peace;
 const isSoldier = u => u.type !== 'vil' && u.def.atk > 0;
@@ -233,11 +413,11 @@ function placeBuilding(team, type, cx, cy, instant) {
   b.mesh = new THREE.Mesh(geoFor('b', type, team), type === 'farm' ? farmMat : bldMat);
   b.mesh.castShadow = type !== 'farm'; b.mesh.receiveShadow = true;
   b.mesh.position.set(b.x, b.y, b.z); b.mesh.scale.y = instant ? 1 : 0.12; scene.add(b.mesh);
-  blds.push(b); byId.set(b.id, b);
+  blds.push(b); byId.set(b.id, b); cityRoadDirty = true;
   return b;
 }
 function finishBuilding(b) {
-  b.done = true; b.prog = 1; b.mesh.scale.y = 1;
+  b.done = true; b.prog = 1; b.mesh.scale.y = 1; cityRoadDirty = true;
   if (!b.def.line) say(b.team, b.def.name + ' – stavba dokončena.');
 }
 function killEnt(e, by) {
@@ -245,6 +425,7 @@ function killEnt(e, by) {
   const T = teams[e.team];
   if (e.isU) { T.pop--; T.stats.lost++; if (by) teams[by.team].stats.kills++; }
   else {
+    cityRoadDirty = true;
     for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; }
     for (const q of e.queue) { if (q.kind === 't') delete T.busy[q.id]; }
     if (by) teams[by.team].stats.razed++;
@@ -399,9 +580,10 @@ function gatherRate(u, n) {
   if (T.hungry) r *= 0.6;
   if (u.sick > 0) r *= 0.5;
   if (u.team === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff];
+  if (G.real) r *= 0.85 + cityState(T).morale / 100 * 0.15;
   return r;
 }
-function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff]; return r; }
+function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff]; if (G.real) r *= 0.85 + cityState(T).morale / 100 * 0.15; return r; }
 function toDrop(u, o) { o.drop = nearestDrop(u); if (!o.drop) { u.order = null; return; } o.phase = 'drop'; pathToB(u, o.drop); }
 function nextNode(u, o) {
   const n = nearestNode(o.node.type, o.node.x, o.node.z, 30);
@@ -417,6 +599,23 @@ function updateUnit(u, dt) {
   if (!T.hungry && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + 0.2 * dt);
   if (o && o.type === 'trade') { updateCaravan(u, dt); return; }
   if (!o) {
+    // Realistic village life: idle people stroll between nearby homes and workplaces.
+    // They remain idle for automation and any player order immediately takes precedence.
+    if (G.real && u.type === 'vil') {
+      u.leisureTimer = (u.leisureTimer == null ? 8 + Math.random() * 12 : u.leisureTimer) - dt;
+      if (u.leisure && u.path) {
+        if (follow(u, dt)) { u.leisure = false; u.path = null; u.leisureTimer = 8 + Math.random() * 14; }
+      } else if (u.leisureTimer <= 0) {
+        const nearby = blds.filter(b => b.team === u.team && b.done && !b.dead &&
+          (b.type === 'house' || b.type === 'tc' || b.type === 'market' || b.type === 'store') &&
+          Math.hypot(b.x - u.x, b.z - u.z) < 70);
+        if (nearby.length) {
+          const target = nearby[Math.floor(Math.random() * nearby.length)];
+          u.leisure = pathToB(u, target);
+        }
+        u.leisureTimer = 12 + Math.random() * 16;
+      }
+    }
     if (isSoldier(u)) { u.scan -= dt; if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, u.def.range ? u.def.range + 3 : 10, u.def.cls === 'siege' ? 'prefer' : true); if (e) orderAttack(u, e, true); } }
     return;
   }
@@ -496,7 +695,7 @@ function updateUnit(u, dt) {
         u.path = null; faceTo(u, b); u.working = true;
         if (!b.done) { const k = dt / b.def.time; b.prog += k; b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.9 * k); b.mesh.scale.y = 0.12 + 0.88 * Math.min(1, b.prog); if (b.prog >= 1) finishBuilding(b); }
         else if (b.fire > 0) { b.fireOut = (b.fireOut || 0) + dt * (T.n && T.n.well ? 2 : 1); if (b.fireOut > 5) { b.fire = 0; b.fireOut = 0; say(b.team, b.def.name + ': požár je uhašen.', 'good'); } }
-        else b.hp = Math.min(b.maxHp, b.hp + 10 * dt);
+        else u.working = cityRepair(b, T, dt) > 0;
       } else if (end) pathToB(u, b);
       break;
     }
@@ -620,6 +819,9 @@ let popWarn = 0;
 function updateBuilding(b, dt) {
   if (!b.done) return;
   const T = teams[b.team], def = b.def;
+  // Wear is exclusive to the realistic mode; never destroys a building outright.
+  if (G.real && !def.wall && b.type !== 'tc' && b.type !== 'farm' && !(b.fire > 0))
+    b.hp = Math.max(b.maxHp * 0.45, b.hp - 0.045 * dt);
   if (b.type === 'forester' || b.type === 'mill' || b.type === 'bakery') productionTick(b, dt);
   if (def.atk) { b.cd -= dt; if (b.cd <= 0) { const t = findEnemy(b, def.range + b.size, false); if (t) { b.cd = def.cd; shoot(b, t, 'arrow', def.atk + T.era, 'bld', 0, null); } else b.cd = 0.4; } }
   const q = b.queue[0];
@@ -739,6 +941,13 @@ function execCmd(team, c) {
       break;
     }
     case 'stop': U(c[1]).forEach(orderStop); break;
+    case 'city': {
+      const city = cityState(T), key = c[1], val = c[2];
+      if (key === 'auto' && typeof val === 'boolean') city.auto = val;
+      else if (key === 'maintenance' && typeof val === 'boolean') city.maintenance = val;
+      else if (CITY_KINDS.includes(key) && Number.isInteger(val) && val >= 0 && val <= 3) city.priorities[key] = val;
+      break;
+    }
     case 'crop': { const b = B(c[1]); if (b && b.done && b.type === 'farm' && ['food', 'grain'].includes(c[2])) b.crop = c[2]; break; }
     case 'production': { const b = B(c[1]); if (b && b.done && ['forester', 'mill', 'bakery'].includes(b.type)) b.enabled = !b.enabled; break; }
     case 'route': {
@@ -899,6 +1108,7 @@ function simStep(dt) {
   for (const b of blds) if (!b.dead) updateBuilding(b, dt);
   updateProjs(dt);
   for (const T of teams) econ(T, dt);
+  for (const T of teams) cityRoutine(T, dt);
   if (G.real) realTick(dt);
   AI.acc += dt; if (AI.acc >= 1) { AI.acc = 0; if (G.mode === 'ai') aiTick(); }
   for (let i = units.length - 1; i >= 0; i--) if (units[i].dead) units.splice(i, 1);
@@ -918,7 +1128,7 @@ function endGame(loser, reason) { if (G.over) return; G.over = true; G.loser = l
 function resetWorld() {
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
   units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
-  byId.clear(); nodeMeshes = {}; nextId = 1;
+  byId.clear(); nodeMeshes = {}; nextId = 1; cityRoadMesh = null; cityRoadCells = []; cityRoadDirty = true;
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
   Object.assign(G, { time: 0, over: false, loser: null, endReason: '', reveal: false, snow: 0, flood: 0, rain: 0 });
   Object.assign(EV, { season: -1, acc: 0, floodAt: 0, floodT: -1, floodMax: 0, drought: false, frost: false });
@@ -986,7 +1196,7 @@ function saveState() {
   return {
     v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match },
     AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, EV: Object.assign({}, EV), flood: G.flood, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
-    teams: teams.map(T => ({ res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
+    teams: teams.map(T => ({ city: cityState(T), res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
     amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),
     meat: nodes.slice(G.baseNodes).map(n => [n.cx, n.cy, r1(n.x), r1(n.z), Math.round(n.amt), r1(n.v)]),
     blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, fire: b.fire || 0, crop: b.crop, enabled: b.enabled, workT: b.workT, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
@@ -997,7 +1207,7 @@ function saveState() {
 function loadState(sv) {
   Object.assign(G, sv.G); Object.assign(AI, sv.AI); Object.assign(PRICE, sv.PRICE); if (sv.EV) Object.assign(EV, sv.EV); G.flood = sv.flood || 0;
   const bits = atob(sv.explored); for (let i = 0; i < N * N; i++) explored[i] = (bits.charCodeAt(i >> 3) >> (i & 7)) & 1;
-  sv.teams.forEach((t, i) => Object.assign(teams[i], t));
+  sv.teams.forEach((t, i) => { Object.assign(teams[i], t); cityState(teams[i]); });
   sv.amt.forEach((a, i) => { const n = nodes[i]; if (!n) return; n.amt = a; if (a <= 0) nodeAt[cidx(n.cx, n.cy)] = -1; });
   buildNodes();
   for (const m of sv.meat) { const n = { id: nodes.length, isNode: true, type: 'meat', def: NODE_DEF.meat, cx: m[0], cy: m[1], x: m[2], z: m[3], amt: m[4], inst: -1, v: m[5] }; nodes.push(n); if (n.amt > 0) { nodeAt[cidx(n.cx, n.cy)] = n.id; addMeat(n); } }

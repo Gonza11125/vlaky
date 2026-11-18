@@ -1,5 +1,17 @@
 # Vydání Věku pokroku
 
+## 1.3.0 – Živé město (klasický a realistický režim)
+
+- V obou režimech panel Město, přehled práce a stav budov.
+- Volitelná automatika nečinných vesničanů s prioritami pěti surovin.
+- Vizuální pěšiny mezi sídlem a budovami bez vlivu na průchodnost.
+- Jen realisticky: procházky volných obyvatel, spokojenost,
+  mírný dopad spokojenosti na produktivitu, přirozené opotřebení
+  a materiálově nákladné opravy.
+- Zachování ručních rozkazů, synchronizace městské správy po síti.
+- Kopie platných místních uložených her 1.2.0/1.1.0 do nové verze.
+- Nové testy městské správy, oprav a vizuálních cest.
+
 ## 1.2.0 – Ovládání a ochrana uložených partií
 
 - Herní nabídka s návratem do hry nebo bezpečným návratem k nové partii.
