@@ -3,6 +3,19 @@
 
 const RES = ['food', 'wood', 'stone', 'ore', 'metal', 'gold', 'know', 'grain', 'flour'];
 const RES_NAME = { food: 'Jídlo', wood: 'Dřevo', stone: 'Kámen', ore: 'Ruda', metal: 'Kov', gold: 'Zlato', know: 'Vědění', grain: 'Obilí', flour: 'Mouka' };
+
+/* 1.5.0: výrobní řetězce. rate je počet cyklů za sekundu,
+ * vstupy a výstupy jsou skutečné jednotky zdrojů na jeden cyklus. */
+const ECON_RECIPES = Object.freeze({
+  mill: { name: 'Mletí obilí', rate: 0.4, input: { grain: 1 }, output: { flour: 1 } },
+  bakery: { name: 'Pečení chleba', rate: 0.35, input: { flour: 1, wood: 0.2 }, output: { food: 2 } },
+  smelter: { name: 'Tavení kovu', rate: 0.3, input: { ore: 2, wood: 0.5 }, output: { metal: 1 } },
+});
+const ECON_RESERVE = ['wood', 'ore', 'grain', 'flour'];
+const ECON_RESERVE_DEFAULT = Object.freeze({ wood: 20, ore: 0, grain: 0, flour: 0 });
+const ECON_PRIORITY_SCALE = [0, 0.65, 1, 1.25];
+const ECON_TARGETS = [0, 50, 150, 300, 600];
+
 const ERAS = ['Doba kamenná', 'Doba bronzová', 'Doba železná', 'Středověk', 'Novověk'];
 const SEASONS = ['Jaro', 'Léto', 'Podzim', 'Zima'];
 const SEASON_LEN = 60;            // sekund na roční období
@@ -52,7 +65,7 @@ const BUILDINGS = {
   forester: { name: 'Lesovna', size: 2, hp: 500, time: 25, req: ['agri'], cost: { wood: 80, food: 40 },
               desc: 'Každých 30 sekund obnoví jeden vytěžený strom do vzdálenosti 22 metrů. Strom nesmí překrývat stavbu. Dřevo pak musí pokácet a donést vesničané.' },
   bakery:   { name: 'Pekárna', size: 2, hp: 600, time: 28, req: ['agri', 'pottery'], cost: { wood: 80, stone: 40 },
-              desc: 'Z 1 mouky a 0,2 dřeva upeče 2 jídla. Navazuje na obilné pole a Mlýn; peče i v zimě, dokud jsou zásoby.' },
+              desc: 'Z 1 mouky a 0,2 dřeva upeče 2 jídla. V realistickém režimu potřebuje pekaře; výrobu lze řídit podle zásob.' },
   tc:       { name: 'Sídlo', size: 3, hp: 2400, pop: 6, drop: true, atk: 6, range: 11, cd: 1.6, cost: null,
               desc: 'Srdce osady. Cvičí vesničany, přijímá suroviny a posouvá osadu do další epochy. Když padne, prohráváš.' },
   house:    { name: 'Dům', size: 2, hp: 500, time: 18, pop: 5, cost: { wood: 30 },
@@ -66,7 +79,7 @@ const BUILDINGS = {
   library:  { name: 'Knihovna', size: 2, hp: 600, time: 30, req: ['writing'], cost: { wood: 80, stone: 40 },
               desc: 'Vytváří vědění a zkoumá vědecké objevy. Počítají se nejvýš čtyři.' },
   smelter:  { name: 'Huť', size: 2, hp: 700, time: 28, req: ['bronze'], cost: { wood: 40, stone: 60 },
-              desc: 'Sama taví rudu na kov: 2 rudy a trochu dřeva na 1 kov.' },
+              desc: 'Ze 2 rud a 0,5 dřeva vyrobí 1 kov. V realistickém režimu potřebuje hutníka a dostupné zásobování.' },
   smithy:   { name: 'Kovárna', size: 2, hp: 700, time: 28, req: ['bronze'], cost: { wood: 70, stone: 30 },
               desc: 'Zkoumá nástroje, zbraně a zbroj.' },
   barracks: { name: 'Kasárna', size: 3, hp: 1100, time: 30, cost: { wood: 90 },
@@ -78,7 +91,7 @@ const BUILDINGS = {
   workshop: { name: 'Dílna', size: 3, hp: 1000, time: 34, req: ['mechanics'], cost: { wood: 140, metal: 30 },
               desc: 'Staví obléhací stroje.' },
   mill:     { name: 'Mlýn', size: 2, hp: 500, time: 22, req: ['agri'], cost: { wood: 60 },
-              desc: 'Každou sekundu semele až 0,4 obilí na 0,4 mouky. Mouku potřebuje Pekárna. Vyžaduje pole přepnuté na obilí a funguje i v zimě.' },
+              desc: 'Mele 1 obilí na 1 mouku, až 0,4 za sekundu. V realistickém režimu potřebuje mlynáře. Výrobu lze zpomalit nebo pozastavit.' },
   market:   { name: 'Tržiště', size: 3, hp: 800, time: 30, req: ['currency'], cost: { wood: 120, stone: 40 },
               desc: 'Tady prodáš přebytky za zlato a nakoupíš, co chybí. Ceny se hýbou podle toho, co prodáváš a kupuješ. Samo vynáší trochu zlata z obchodu.' },
   palisade: { name: 'Palisáda', size: 1, hp: 350, time: 5, wall: true, line: true, cost: { wood: 6 },

@@ -1,5 +1,17 @@
 # Vydání Věku pokroku
 
+## 1.5.0 – Hospodářství a život obyvatel
+
+- **Ekonomika (K)**: přehled zásob a skutečných toků surovin za posledních až 60 sekund, výhled spotřeby jídla na zimu a seznam výroben.
+- **Společné recepty výroby**: Mlýn (obilí → mouka), Pekárna (mouka + dřevo → jídlo) a Huť (ruda + dřevo → kov); jejich činnost, využití surovin a záznamy jsou sjednocené.
+- **Řízení každé výrobny**: výkon vypnutý/nízký/běžný/vysoký, limit cílových zásob a možnost pozastavení včetně hutě.
+- **Rezervy dřeva, rudy, obilí a mouky**: výroba nedojde pod nastavené minimum. Výroba neprodukuje záporné zásoby.
+- **Klasický režim**: výrobny pracují bez nutnosti přidělovat pracovníka; prioritami a cíli lze provoz dál řídit.
+- **Realistický režim**: Mlýn, Pekárna a Huť vyžadují řemeslníka, kterého lze manuálně přiřadit nebo při zapnuté automatice přivolat z nečinných vesničanů. Blízkost dokončeného Skladu/Sídla ovlivňuje výrobní efektivitu (nikoli fyzickou dopravu zboží).
+- **Zkušenosti vesničanů**: sběr, zemědělství, stavění a řemeslo mají čtyři úrovně; v realistickém režimu mírně zvyšují výkonnost. Povolání i zkušenosti se ukládají.
+- **Synchronizace a kompatibilita**: síťově se předávají průběh práce, nastavení výroben, zkušenosti a ekonomická historie; uložené hry z 1.4.0 až 1.1.0 se místně převezmou bez změny původní kopie.
+- Nové jednotkové a prohlížečové testy; starší vydání zůstávají samostatná.
+
 ## 1.4.0 – Živé město II
 
 - Nové stavební detaily a vizuální změny staveb v pokročilejších epochách.

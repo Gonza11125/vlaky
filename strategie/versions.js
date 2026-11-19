@@ -22,5 +22,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.4.0",
     "description": "Živé město II: nové architektonické detaily podle epoch, lešení a fáze stavby, animace práce, větrný mlýn, výbava osady, upravené pěšiny a grafické profily pro tablety."
+  },
+  {
+    "id": "1.5.0",
+    "description": "Hospodářství a život obyvatel: nový panel Ekonomika, řízení výroby a rezerv, skutečná bilance surovin, zkušenosti profesí a realistické obsazování výroben a dostupnost skladů."
   }
 ];

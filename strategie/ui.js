@@ -240,11 +240,13 @@ $('b-place-no').onclick = cancelPlacing;
 addEventListener('keydown', e => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || document.querySelector('#version-dialog[open]')) return;
   keys[e.code] = true;
+  if (e.code === 'Escape' && !$('economy-panel').hidden) { closeEconomy(); return; }
   if (e.code === 'Escape' && !$('city-panel').hidden) { closeCity(); return; }
   if (e.code === 'KeyC') { e.preventDefault(); if ($('city-panel').hidden) openCity(); else closeCity(); }
+  if (e.code === 'KeyK') { e.preventDefault(); if ($('economy-panel').hidden) openEconomy(); else closeEconomy(); }
   if (e.code === 'Escape') { if (!$('help').hidden) closeHelp(); else if (!$('pause-menu').hidden) closeMenu(); else if (!$('techs').hidden) $('techs').hidden = true; else if (placing) cancelPlacing(); else setSel([]); }
   if (e.code === 'F1') { e.preventDefault(); if ($('help').hidden) openHelp(); else closeHelp(); }
-  if (e.code === 'Space' && $('city-panel').hidden && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
+  if (e.code === 'Space' && $('city-panel').hidden && $('economy-panel').hidden && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
   if (e.code === 'Period') idleVil();
   if (e.code === 'KeyH') { cam.x = ME().tcx; cam.z = ME().tcz; }
   if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -303,7 +305,7 @@ function addBtn(o) {
 function tryQueue(b, kind, id) { act(['queue', b.id, kind, id]); }
 function buildCmd() {
   const T = ME(), own = ownUnits(), b = sel[0];
-  const sig = sel.map(e => e.id).join(',') + '|' + Object.keys(T.tech).length + '|' + Object.keys(T.busy).length + '|' + T.era + '|' + (placing ? placing.type : '') + amoveMode + razeArm + (b && b.type === 'market' ? Object.values(PRICE).map(Math.round).join() : '') + (b && b.isB ? [b.done,b.crop,b.enabled].join() : '');
+  const sig = sel.map(e => e.id).join(',') + '|' + Object.keys(T.tech).length + '|' + Object.keys(T.busy).length + '|' + T.era + '|' + (placing ? placing.type : '') + amoveMode + razeArm + (b && b.type === 'market' ? Object.values(PRICE).map(Math.round).join() : '') + (b && b.isB ? [b.done,b.crop,b.enabled,b.priority,b.target,!!b.crafter&&!craftStaffFree(b)].join() : '');
   if (sig === cmdSig) return; cmdSig = sig;
   $('cmd').innerHTML = ''; cmdBtns = [];
   if (own.length) {
@@ -315,7 +317,28 @@ function buildCmd() {
   } else if (b && b.isB && b.team === MY) {
     if (b.done) {
       if (b.type === 'farm') addBtn({ label: b.crop === 'grain' ? 'Pěstovat zeleninu' : 'Pěstovat obilí', desc: 'Zelenina dává přímo jídlo. Obilí potřebuje Mlýn a Pekárnu, které vyrobí více jídla za cenu dřeva a dalších staveb.', fn: () => act(['crop', b.id, b.crop === 'grain' ? 'food' : 'grain']) });
-      if (['mill', 'bakery', 'forester'].includes(b.type)) addBtn({ label: b.enabled ? 'Pozastavit výrobu' : 'Obnovit výrobu', fn: () => act(['production', b.id]) });
+      if (ECON_RECIPES[b.type]) {
+        industryState(b);
+        addBtn({label:'Výkon: '+['Vypnuto','Nízký','Běžný','Vysoký'][b.priority],
+          desc:'Přepíná výkon a spotřebu surovin. Výrobní cíle nastavíš v Ekonomice.',
+          fn:()=>{act(['industry',b.id,'priority',(b.priority+1)%4]);cmdSig='';}});
+        if (G.real) {
+          const staffed=!craftStaffFree(b);
+          addBtn({label:staffed?'Odvolat řemeslníka':'Přiřadit řemeslníka',
+            desc:'Volný vesničan přijde pracovat do této výrobny. Zkušenosti mu zvýší výkon.',
+            fn:()=>{
+              if(staffed) act(['stop',[b.crafter.id]]);
+              else {
+                const worker=units.filter(u=>u.team===MY&&u.type==='vil'&&!u.dead&&!u.order)
+                  .sort((a,c)=>distEnt(a,b)-distEnt(c,b))[0];
+                if(worker)act(['craft',[worker.id],b.id]);
+                else msg('Žádný volný vesničan. Zastav jednu práci nebo zapni automatiku.','bad');
+              }
+              cmdSig='';
+            }});
+        }
+      }
+      if (['mill', 'bakery', 'forester', 'smelter'].includes(b.type)) addBtn({ label: b.enabled ? 'Pozastavit výrobu' : 'Obnovit výrobu', fn: () => act(['production', b.id]) });
       for (const id in UNITS) { const d = UNITS[id]; if (d.at !== b.type || !hasReq(T, d)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc + ' Životy ' + d.hp + ', útok ' + d.atk + (d.range ? ', dostřel ' + d.range : '') + ', zbroj ' + d.armor + '. Sní ' + d.upkeep + ' jídla za minutu.', fn: () => tryQueue(b, 'u', id) }); }
       for (const id in TECHS) { const d = TECHS[id]; if (d.at !== b.type || !techAvail(T, id)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc, cls: 'tech', fn: () => tryQueue(b, 't', id) }); }
       if (b.type === 'market') for (const r in PRICE) {
@@ -338,11 +361,12 @@ function buildCmd() {
     addBtn({ label: 'Zrušit výběr', fn: () => setSel([]) });
   }
 }
-const TASK = { move: 'jde', amove: 'táhne do útoku', attack: 'bojuje', build: 'staví', farm: 'pracuje na poli', trade: 'jede po obchodní trase' };
+const TASK = { craft: 'pracuje ve výrobně', move: 'jde', amove: 'táhne do útoku', attack: 'bojuje', build: 'staví', farm: 'pracuje na poli', trade: 'jede po obchodní trase' };
 function refreshUI() {
   const T = ME();
   for (const r of RES) $('r-' + r).textContent = Math.floor(T.res[r]);
-  const net = (farmIncome(T) - upkeepRate(T)) * 60;
+  const measured=economyRate(T,'food');
+  const net=measured.seconds>5?measured.net:(farmIncome(T)-upkeepRate(T))*60;
   $('rate-food').textContent = (net >= 0 ? '+' : '−') + Math.abs(net).toFixed(0) + '/min';
   if (G.real) { const fc = foodCap(T); $('rate-food').textContent += ' · sklad ' + fc; $('r-food').style.color = T.res.food > fc ? 'var(--brass)' : ''; } else $('r-food').style.color = '';
   $('rate-food').style.color = net < 0 ? 'var(--bad)' : '';
@@ -383,9 +407,16 @@ function refreshUI() {
     else if (e.isU) {
       const o = e.order, task = !o ? 'čeká' : o.type === 'gather' ? 'sbírá: ' + RES_NAME[o.node.def.res].toLowerCase() : TASK[o.type];
       h = '<h2>' + e.def.name + (e.team !== MY ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Životy ' + Math.ceil(e.hp) + '/' + e.maxHp + ' · útok ' + atkOf(e) + ' · zbroj ' + armorOf(e) + (e.def.range ? ' · dostřel ' + e.def.range : '') + '</p>' +
-        (e.team === MY ? '<p>Teď ' + task + (e.carry >= 1 ? ', nese ' + Math.floor(e.carry) + ' (' + RES_NAME[e.ctype].toLowerCase() + ')' : '') + '.</p>' : '');
+        (e.team === MY ? (e.type==='vil'&&G.real?'<p>Odbornost: '+ECON_SKILLS.map(k=>({gather:'Sběr',farm:'Zemědělství',build:'Stavění',craft:'Řemeslo'})[k]+' '+professionLevel(e,k)).join(' · ')+'</p>':'')+'<p>Teď ' + task + (e.carry >= 1 ? ', nese ' + Math.floor(e.carry) + ' (' + RES_NAME[e.ctype].toLowerCase() + ')' : '') + '.</p>' : '');
     } else {
       h = '<h2>' + e.def.name + (e.team !== MY ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Odolnost ' + Math.ceil(e.hp) + '/' + e.maxHp + (e.done ? '' : ' · rozestavěno ' + Math.floor(e.prog * 100) + ' %') + '</p>';
+      if (ECON_RECIPES[e.type] && e.done) {
+        const recipe=ECON_RECIPES[e.type],eff=Math.round(industryLogistics(e)*100);
+        h+='<p><b>Výroba: '+industryStatus(e)+'</b> · výkon '+['vypnuto','nízký','běžný','vysoký'][industryState(e).priority]+
+          (G.real?' · dostupnost skladu '+eff+' %':'')+'</p>';
+        h+='<p>'+Object.entries(recipe.input).map(([key,val])=>val+' '+RES_NAME[key].toLowerCase()).join(' + ')+
+          ' → '+Object.entries(recipe.output).map(([key,val])=>val+' '+RES_NAME[key].toLowerCase()).join(' + ')+'</p>';
+      }
       if (e.team === MY) {
         if (!e.done) {
           const p=clamp(e.prog*100,0,100);
@@ -414,6 +445,7 @@ $('b-idle').onclick = idleVil;
 $('b-pause').onclick = togglePause;
 $('b-speed').onclick = () => { if (G.mode !== 'ai') { msg('Ve hře po síti se rychlost nemění.'); return; } G.speed = G.speed >= 3 ? 1 : G.speed + 1; $('b-speed').textContent = G.speed + '×'; };
 $('b-tech').onclick = () => {
+  if(!$('economy-panel').hidden)return;
   const T = ME(); let h = '';
   ERAS.forEach((era, i) => {
     h += '<h2>' + era + '</h2><div class="tgrid">';
@@ -434,7 +466,7 @@ function restorePause(wasPaused) {
   $('b-pause').classList.toggle('warn', wasPaused);
 }
 function openMenu() {
-  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden || !$('city-panel').hidden) return;
+  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden || !$('city-panel').hidden || !$('economy-panel').hidden) return;
   menuWasPaused = G.paused;
   if (G.mode === 'ai') restorePause(true);
   $('b-return').textContent = G.mode === 'ai' ? 'Uložit a zpět do nabídky' : 'Odpojit a zpět do nabídky';
@@ -448,7 +480,7 @@ function closeMenu(restore = true) {
   $('b-menu').focus();
 }
 function openHelp() {
-  if (!$('help').hidden || !$('pause-menu').hidden || !$('city-panel').hidden) return;
+  if (!$('help').hidden || !$('pause-menu').hidden || !$('city-panel').hidden || !$('economy-panel').hidden) return;
   helpWasPaused = G.paused;
   if (G.mode === 'ai' && $('start').hidden) restorePause(true);
   $('help').hidden = false;
@@ -486,6 +518,8 @@ function renderCity() {
   $('city-gather').textContent = census.gathering + census.hunting;
   $('city-farm').textContent = census.farming;
   $('city-build').textContent = census.building;
+  $('city-craft').textContent = census.crafting;
+  $('city-experts').textContent = G.real ? census.apprentices+' / '+census.experts : '—';
   $('city-damage').textContent = census.unfinished + ' / ' + census.damaged;
   $('b-city-auto').textContent = 'Automatická práce: ' + (c.auto ? 'ZAPNUTO' : 'VYPNUTO');
   $('b-city-auto').classList.toggle('on', c.auto);
@@ -506,7 +540,7 @@ function renderCity() {
 }
 function openCity() {
   if (!$('start').hidden || G.over || !$('city-panel').hidden ||
-      !$('help').hidden || !$('pause-menu').hidden || !$('techs').hidden) return;
+      !$('help').hidden || !$('pause-menu').hidden || !$('techs').hidden || !$('economy-panel').hidden) return;
   cityWasPaused = G.paused;
   if (G.mode === 'ai') restorePause(true);
   $('city-panel').hidden = false;
@@ -537,6 +571,107 @@ $('city-art-quality').onchange = () => {
     resize();
     renderCity();
   }
+};
+
+
+// ---------- 1.5: interaktivní hospodářství ----------
+let economyWasPaused=false,economyShownAt=0;
+function renderEconomy() {
+  const T=ME(),c=cityState(T),out=economicOutlook(T),census=cityCensus(MY);
+  if(!T)return;
+  const sec=Math.round(out.food.seconds);
+  const winterNeed=upkeepRate(T)*SEASON_LEN;
+  $('economy-mode').textContent=G.real
+    ? 'Realistický režim: každý mlýn, pekárna a huť potřebuje řemeslníka. Vzdálenější sklady snižují výkon.'
+    : 'Klasický režim: automatická výroba bez přidělování řemeslníků, s volitelnými prioritami a rezervami.';
+  const net=out.food.net,foodSlope=sec>=5?(net>=0?'+'+net.toFixed(1):net.toFixed(1))+' / min':'měří se';
+  const stock=(T.res.food||0);
+  $('economy-overview').innerHTML=
+    '<div><strong>'+Math.floor(stock)+'</strong><span>Jídlo ve skladech</span></div>'+
+    '<div><strong>'+foodSlope+'</strong><span>Naměřená bilance jídla</span></div>'+
+    '<div><strong>'+Math.ceil(winterNeed)+'</strong><span>Spotřeba jídla za jednu zimu</span></div>'+
+    '<div><strong>'+out.staffed+' / '+out.industry+'</strong><span>'+(G.real?'Obsazené výrobny':'Aktivní výrobny')+'</span></div>'+
+    '<div><strong>'+census.idle+'</strong><span>Volní vesničané</span></div>'+
+    '<div><strong>'+Math.round(c.morale)+' %</strong><span>Spokojenost '+(G.real?'obyvatel':'(klasický režim)')+'</span></div>';
+  $('economy-flows').innerHTML=RES.map(key=>{
+    const r=economyRate(T,key),sum=r.net;
+    const known=r.seconds>=1;
+    return '<div class="economy-flow"><strong>'+RES_NAME[key]+': '+Math.floor(T.res[key]||0)+'</strong>'+
+      '<small>+ '+(known?r.gain.toFixed(1):'—')+' / min · výroba</small>'+
+      '<small>− '+(known?r.use.toFixed(1):'—')+' / min · spotřeba výroby a jídla</small>'+
+      '<small class="'+(sum<0?'down':'up')+'">'+(known?(sum>=0?'+':'')+sum.toFixed(1)+' / min':'Měří se…')+'</small></div>';
+  }).join('');
+  for(const select of document.querySelectorAll('[data-economy-reserve]')) {
+    const key=select.dataset.economyReserve,val=String(c.reserves[key]);
+    if(select.value!==val)select.value=val;
+  }
+  $('economy-worker-note').textContent=G.real
+    ? 'Vyber volného řemeslníka pro každou výrobnu, nebo zapni automatickou práci v panelu Město. Dostupnost skladu je odhad podle vzdálenosti k dokončenému Sídlu nebo Skladu.'
+    : 'Výrobny pracují automaticky. Výkon určuje množství spotřebovaných vstupů a produkovaných výstupů.';
+  const bList=blds.filter(b=>b.team===MY&&!b.dead&&ECON_RECIPES[b.type]&&b.done);
+  $('economy-lines').innerHTML=bList.length?bList.map(b=>{
+    const recipe=ECON_RECIPES[b.type],staff=G.real&&!craftStaffFree(b),w=b.crafter;
+    industryState(b);
+    const txt=Object.entries(recipe.input).map(([k,x])=>x+' '+RES_NAME[k].toLowerCase()).join(' + ')+
+      ' → '+Object.entries(recipe.output).map(([k,x])=>x+' '+RES_NAME[k].toLowerCase()).join(' + ');
+    const status=industryStatus(b),log=Math.round(industryLogistics(b)*100);
+    const options=[0,1,2,3].map((p)=>'<option value="'+p+'" '+(p===b.priority?'selected':'')+'>'+['Vypnuto','Nízký','Běžný','Vysoký'][p]+'</option>').join('');
+    const targets=ECON_TARGETS.map(x=>'<option value="'+x+'" '+(x===b.target?'selected':'')+'>'+(x?x:'Bez cíle')+'</option>').join('');
+    const state=G.real?(staff?('Vesničan #'+w.id+' · úroveň '+professionLevel(w,'craft')):'Neobsazeno'):'Automatická';
+    return '<tr><td><strong>'+b.def.name+'</strong> #'+b.id+'</td>'+
+      '<td class="'+(status==='Vyrábí'?'':'bad')+'">'+status+(G.real?'<br><small>sklad '+log+' %</small>':'')+'</td>'+
+      '<td>'+txt+'</td>'+
+      '<td><select aria-label="Výkon '+b.def.name+'" data-economy-industry="priority" data-economy-id="'+b.id+'">'+options+'</select></td>'+
+      '<td><select aria-label="Cíl '+b.def.name+'" data-economy-industry="target" data-economy-id="'+b.id+'">'+targets+'</select></td>'+
+      '<td>'+state+'</td>'+
+      '<td><button class="pick" data-economy-action="toggle" data-economy-id="'+b.id+'">'+(b.enabled?'Zastavit':'Spustit')+'</button>'+
+      (G.real?'<button class="pick" data-economy-action="staff" data-economy-id="'+b.id+'">'+(staff?'Odvolat':'Obsadit')+'</button>':'')+'</td></tr>';
+  }).join(''):'<tr><td colspan="7">Zatím žádné hotové výrobny. Postav Mlýn, Pekárnu nebo Huť po výzkumu potřebných technologií.</td></tr>';
+}
+function openEconomy() {
+  if(!$('start').hidden||G.over||!$('economy-panel').hidden||
+     !$('city-panel').hidden||!$('help').hidden||!$('pause-menu').hidden||!$('techs').hidden)return;
+  economyWasPaused=G.paused;
+  if(G.mode==='ai')restorePause(true);
+  $('economy-panel').hidden=false;
+  renderEconomy();
+  $('b-economy-close').focus();
+}
+function closeEconomy() {
+  if($('economy-panel').hidden)return;
+  $('economy-panel').hidden=true;
+  restorePause(economyWasPaused);
+  $('b-economy').focus();
+}
+$('b-economy').onclick=openEconomy;
+$('b-economy-close').onclick=closeEconomy;
+$('economy-reserves').onchange=e=>{
+  const sel=e.target.closest('[data-economy-reserve]');if(!sel)return;
+  act(['city','reserve',Number(sel.value),sel.dataset.economyReserve]);
+  sel.blur();
+  if(G.mode!=='guest')renderEconomy();
+};
+$('economy-lines').onchange=e=>{
+  const select=e.target.closest('[data-economy-industry]');
+  if(!select)return;
+  act(['industry',Number(select.dataset.economyId),select.dataset.economyIndustry,Number(select.value)]);
+  select.blur();
+  if(G.mode!=='guest')renderEconomy();
+};
+$('economy-lines').onclick=e=>{
+  const btn=e.target.closest('[data-economy-action]');if(!btn)return;
+  const b=byId.get(Number(btn.dataset.economyId));if(!b||b.dead||b.team!==MY)return;
+  if(btn.dataset.economyAction==='toggle')act(['production',b.id]);
+  else if(btn.dataset.economyAction==='staff') {
+    if(!craftStaffFree(b))act(['stop',[b.crafter.id]]);
+    else {
+      const idle=units.filter(u=>u.team===MY&&u.type==='vil'&&!u.dead&&!u.order)
+        .sort((a,c)=>distEnt(a,b)-distEnt(c,b))[0];
+      if(!idle)msg('Není k dispozici žádný nečinný vesničan.','bad');
+      else act(['craft',[idle.id],b.id]);
+    }
+  }
+  if(G.mode!=='guest')renderEconomy();
 };
 
 const OPT = { diff: 1, aggr: 2, real: 0 };
@@ -583,8 +718,8 @@ function readLocal() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     // Clone a compatible older save without changing the original release.
-    if (!raw && VEK_RELEASE.id === '1.4.0') {
-      for (const previous of ['1.3.0', '1.2.0', '1.1.0']) {
+    if (!raw && VEK_RELEASE.id === '1.5.0') {
+      for (const previous of ['1.4.0', '1.3.0', '1.2.0', '1.1.0']) {
         const older = localStorage.getItem('vek-pokroku-save-' + previous);
         if (!older || older.length > 5000000) continue;
         try {
@@ -747,6 +882,11 @@ function frame(now) {
   drawWorldUI(now);
   renderer.render(scene, camera);
   if (now - uiT > 200) { uiT = now; refreshUI(); }
+  if (!$('economy-panel').hidden && now - economyShownAt > 1400 &&
+      !(document.activeElement && document.activeElement.tagName==='SELECT' &&
+        document.activeElement.closest('#economy-panel'))) {
+    economyShownAt=now;renderEconomy();
+  }
   if (now - baseT > 900) { baseT = now; drawMiniBase(); }
   if (now - miniT > 150) { miniT = now; drawMini(); }
 }

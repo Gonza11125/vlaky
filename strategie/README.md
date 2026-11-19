@@ -6,8 +6,31 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0** a **1.4.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0** a **1.5.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.5.0 – Hospodářství a život obyvatel
+
+Hra má nově tlačítko **Ekonomika** (klávesa **K**) s bilancemi výroby a spotřeby
+za posledních nejvýše 60 sekund. Výrobny (Mlýn, Pekárna, Huť) mají vlastní
+výkonové priority, volitelný cíl vyrobené suroviny a lze jim nastavit
+**rezervu vstupů**, kterou nesmějí spotřebovat. Sledované toky jsou
+skutečné výrobní změny zásob; bez jednorázových stavebních nákladů a obchodu.
+Přehled uvádí také předpokládanou spotřebu jídla na příští zimu při stávající
+velikosti osady.
+
+**Klasický režim** zachovává automatickou výrobu, řemeslníci nejsou povinní.
+**Realistický režim** vyžaduje pro dokončený mlýn, pekárnu a huť volného
+vesničana (přidělíš výběrem výrobny nebo tlačítkem Obsadit v Ekonomice;
+automatika v Městě obsazuje pouze volné lidi). Účinnost závisí také na
+vzdálenosti k nejbližšímu dokončenému Skladu nebo Sídlu. Není simulován
+fyzický převoz surovin mezi budovami: stav zásob zůstává celoměstský.
+
+Vesničané v realistickém režimu získávají zkušenost v jednotlivých
+profesích (sběr, pole, stavba, řemeslo) na čtyřech úrovních a jejich
+produktivita mírně roste. Všechny nové parametry se ukládají a sdílejí
+po síti. Staré místní uložené partie **1.4.0–1.1.0** se mohou převzít
+bez přepsání předchozího souboru.
 
 ## Novinky ve 1.4.0 – Živé město II
 

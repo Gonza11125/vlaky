@@ -86,7 +86,7 @@ test('resource statistics count production, not the initial stock', () => {
 const economy = fs.readFileSync(path.join(root, 'game.js'), 'utf8').includes('function productionTick');
 test('grain, flour and bread consume real inputs; paused factories make nothing', { skip: !economy }, () => {
   const run = game();
-  run(`teams.push(mkTeam(0),mkTeam(1)); const T=teams[0]; T.res.grain=2; const mill={type:'mill',team:0,enabled:true,y:1}; const bakery={type:'bakery',team:0,enabled:true,y:1}; productionTick(mill,5);`);
+  run(`teams.push(mkTeam(0),mkTeam(1)); const T=teams[0]; T.res.grain=2; const mill={type:'mill',team:0,done:true,priority:2,target:0,enabled:true,y:1,fire:0}; const bakery={type:'bakery',team:0,done:true,priority:2,target:0,enabled:true,y:1,fire:0}; productionTick(mill,5);`);
   assert.equal(run(`T.res.grain`), 0);
   assert.equal(run(`T.res.flour`), 2);
   run(`productionTick(bakery,5);`);

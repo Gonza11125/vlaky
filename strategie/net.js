@@ -2,7 +2,7 @@
 // Hra dvou hráčů po síti. Hostitel počítá celou hru a posílá stav, host posílá jen rozkazy.
 // Zprávy se mohou ztratit, proto se posílá vždy celý stav a rozkazy se opakují do potvrzení.
 
-const UT = Object.keys(UNITS), BT = Object.keys(BUILDINGS), OT = ['', 'move', 'amove', 'attack', 'gather', 'build', 'farm', 'hunt', 'trade'], PK = ['arrow', 'shot', 'rock', 'ball'];
+const UT = Object.keys(UNITS), BT = Object.keys(BUILDINGS), OT = ['', 'move', 'amove', 'attack', 'gather', 'build', 'farm', 'hunt', 'trade', 'craft'], PK = ['arrow', 'shot', 'rock', 'ball'];
 Object.assign(NET, { room: null, bc: null, ready: false, started: false, peerAt: 0, lost: false, tick: 0, lastTick: 0, gen: 0, seq: 0, pend: [], ack: 0, lastResend: 0, initId: 0, parts: null, logN: 0, lastInit: 0, ug: null, bg: null, helloT: 0 });
 const el = id => document.getElementById(id);
 
@@ -220,7 +220,15 @@ function applyUnits(d) {
     u.tx = x; u.tz = z; u.hp = e[4]; u.gen = d.g; const f = e[5];
     u.moving = !!(f & 1); u.working = !!(f & 2); u.sick = f & 4 ? 1 : 0; u.face = e[6] / 10;
     const ot = (f >> 3) & 15; u.order = ot ? { type: OT[ot], node: { def: { res: RES[(f >> 7) & 15] } } } : null;
-    u.carry = (e[7] || 0) / 10; u.ctype = RES[e[8]] || null; u.homeMarket = e[9];
+    u.carry = (e[7] || 0) / 10;u.ctype = RES[e[8]] || null;u.homeMarket=e[9];
+    if(u.order&&u.order.type==='craft') {
+      const workplace=byId.get(e[10]);
+      if(workplace&&workplace.isB){u.order.b=workplace;workplace.crafter=u;}
+    }
+    if(e[11]&&u.type==='vil') {
+      const exp=professionExp(u);
+      for(let k=0;k<ECON_SKILLS.length;k++)exp[ECON_SKILLS[k]]=e[11][k]||0;
+    }
   }
   if (chunkDone('ug', d)) for (let i = units.length - 1; i >= 0; i--) if (units[i].gen !== d.g) { teams[units[i].team].pop--; dropEnt(units[i]); units.splice(i, 1); }
   for (const s of d.sh || []) { const a = byId.get(s[0]), t = byId.get(s[1]); if (a && t && PK[s[2]]) { shoot(a, t, PK[s[2]], 0); projs[projs.length - 1].fx = true; } }
@@ -231,13 +239,14 @@ function applyBlds(d) {
     if (!b) { if (!type) continue; const keep = nextId; nextId = e[0]; b = placeBuilding(team, type, e[2], e[3], done); nextId = Math.max(keep, e[0] + 1); }
     if (!b.isB) continue;
     b.hp = e[4]; b.maxHp = e[5]; b.gen = d.g; b.fire = e[6] & 2 ? 1 : 0; b.prog = e[7] / 100; b.crop = e[8] ? 'grain' : 'food'; b.enabled = e[9] !== 0;
+    b.priority=e[10];b.target=e[11];industryState(b);
     if (done && !b.done) { b.done = true; b.mesh.scale.y = 1; cmdSig = ''; cityRoadDirty = true; } else if (!done) b.mesh.scale.y = 0.12 + 0.88 * Math.min(1, b.prog);
   }
   if (chunkDone('bg', d)) for (let i = blds.length - 1; i >= 0; i--) if (blds[i].gen !== d.g) { cityRoadDirty = true; dropEnt(blds[i]); blds.splice(i, 1); }
 }
 function applyState(d) {
   G.time = d.time; G.flood = d.fl || 0; G.rain = d.rn || 0; EV.drought = !!d.dr; EV.frost = !!d.fr;
-  (d.T || []).forEach((s, i) => { const T = teams[i]; if (!T || !s) return; RES.forEach((k, j) => { T.res[k] = s.r[j] || 0; }); T.era = s.era; T.pop = s.pop; T.cap = s.cap; T.hungry = !!s.h; T.cold = !!s.cold; if (s.city && typeof s.city === 'object') { T.city = s.city; cityState(T); } if (s.tech) { T.tech = {}; s.tech.forEach(k => { T.tech[k] = true; }); T.busy = {}; (s.busy || []).forEach(k => { T.busy[k] = true; }); } });
+  (d.T || []).forEach((s, i) => { const T = teams[i]; if (!T || !s) return; RES.forEach((k, j) => { T.res[k] = s.r[j] || 0; }); T.era = s.era; T.pop = s.pop; T.cap = s.cap; T.hungry = !!s.h; T.cold = !!s.cold; if (s.city && typeof s.city === 'object') { T.city = s.city; cityState(T); }if(s.economy&&typeof s.economy==='object'){T.economy=s.economy;economyState(T);} if (s.tech) { T.tech = {}; s.tech.forEach(k => { T.tech[k] = true; }); T.busy = {}; (s.busy || []).forEach(k => { T.busy[k] = true; }); } });
   const cn = teams[MY].n = {}; for (const b of blds) if (b.team === MY) { if (b.done) cn[b.type] = (cn[b.type] || 0) + 1; b.queue = []; }
   for (const q of d.q || []) { const b = byId.get(q[0]); if (b && b.isB) b.queue = q[1].map(x => ({ kind: x[0], id: x[1], t: x[2], total: x[3] })); }
   if (d.pr) Object.assign(PRICE, d.pr);
@@ -261,8 +270,8 @@ function applyWorld(d) {
 
 // ---------- odesílání ----------
 function netCmd(c) { NET.pend.push([++NET.seq, c]); netSend({ t: 'c', l: NET.pend.slice(0, 12) }); NET.lastResend = performance.now(); }
-const encU = u => { const o = u.order, ot = o ? Math.max(0, OT.indexOf(o.type)) : 0, ri = o && o.type === 'gather' ? RES.indexOf(o.node.def.res) : 0; return [u.id, u.team * 100 + UT.indexOf(u.type), Math.round(u.x * 10), Math.round(u.z * 10), Math.ceil(u.hp), (u.moving ? 1 : 0) | (u.working ? 2 : 0) | (u.sick > 0 ? 4 : 0) | (ot << 3) | (ri << 7), Math.round(u.face * 10), Math.round(u.carry * 10), RES.indexOf(u.ctype), u.homeMarket]; };
-const encB = b => [b.id, b.team * 100 + BT.indexOf(b.type), b.cx, b.cy, Math.ceil(b.hp), b.maxHp, (b.done ? 1 : 0) | (b.fire > 0 ? 2 : 0), Math.round(b.prog * 100), b.crop === 'grain' ? 1 : 0, b.enabled ? 1 : 0];
+const encU = u => { const o = u.order, ot = o ? Math.max(0, OT.indexOf(o.type)) : 0, ri = o && o.type === 'gather' ? RES.indexOf(o.node.def.res) : 0; return [u.id, u.team * 100 + UT.indexOf(u.type), Math.round(u.x * 10), Math.round(u.z * 10), Math.ceil(u.hp), (u.moving ? 1 : 0) | (u.working ? 2 : 0) | (u.sick > 0 ? 4 : 0) | (ot << 3) | (ri << 7), Math.round(u.face * 10), Math.round(u.carry * 10), RES.indexOf(u.ctype), u.homeMarket,o&&o.type==='craft'?o.b.id:0,u.type==='vil'?ECON_SKILLS.map(k=>Math.floor(professionExp(u)[k])):null]; };
+const encB = b => [b.id, b.team * 100 + BT.indexOf(b.type), b.cx, b.cy, Math.ceil(b.hp), b.maxHp, (b.done ? 1 : 0) | (b.fire > 0 ? 2 : 0), Math.round(b.prog * 100), b.crop === 'grain' ? 1 : 0, b.enabled ? 1 : 0, b.priority, b.target];
 function sendChunks(t, list, enc, per, extra) {
   const g = ++NET.gen, n = Math.max(1, Math.ceil(list.length / per));
   for (let k = 0; k < n; k++) { const m = { t, g, k, n, d: list.slice(k * per, (k + 1) * per).map(enc) }; if (!k && extra) Object.assign(m, extra); netSend(m); }
@@ -273,7 +282,7 @@ function hostTick() {
   if (i % 10 === 1) sendChunks('b', blds, encB, 85);
   if (i % 5 === 2) netSend({
     t: 's', time: r1(G.time), fl: r1(G.flood || 0), rn: G.rain || 0, dr: EV.drought ? 1 : 0, fr: EV.frost ? 1 : 0, ack: NET.ack, over: G.over ? G.loser : -2, reason: G.endReason,
-    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, city: { auto: cityState(T).auto, maintenance: cityState(T).maintenance, priorities: cityState(T).priorities, morale: cityState(T).morale }, stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
+    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, city: { auto: cityState(T).auto, maintenance: cityState(T).maintenance, priorities: cityState(T).priorities, morale: cityState(T).morale, reserves: cityState(T).reserves }, economy: economyState(T), stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
     q: blds.filter(b => b.team === 1 && b.queue.length).slice(0, 12).map(b => [b.id, b.queue.map(q => [q.kind, q.id, r1(q.t), q.total])]),
     pr: { food: Math.round(PRICE.food), wood: Math.round(PRICE.wood), stone: Math.round(PRICE.stone), metal: Math.round(PRICE.metal) }, m: NET.out.splice(0, 5),
   });
