@@ -20,7 +20,7 @@ class ReleaseTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for name in (*release.GAME_FILES, 'play.html', 'versions.js'):
+        for name in (*release.game_files_for_html((ROOT / 'play.html').read_text(encoding='utf-8')), 'play.html', 'versions.js'):
             shutil.copyfile(ROOT / name, self.root / name)
         shutil.copytree(ROOT / 'versions', self.root / 'versions')
 
@@ -38,12 +38,19 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('data-version="' + expected + '"', html)
         self.assertIn('src="../../version-picker.js"', html)
         self.assertIn('src="../../versions.js"', html)
-        for name in release.GAME_FILES:
+        for name in release.game_files_for_html(html):
             self.assertEqual((target / name).read_bytes(), (self.root / name).read_bytes())
         for name, contents in old.items():
             if name != 'versions.js':
                 self.assertEqual((self.root / name).read_bytes(), contents, name)
         self.assertEqual(release.read_releases(self.root)[-1]['id'], expected)
+
+    def test_archive_optional_script_is_required_if_referenced(self):
+        newest = self.root / 'versions' / '1.6.0'
+        self.assertIn('atmosphere.js', release.game_files_for_html((newest / 'index.html').read_text()))
+        self.assertTrue((newest / 'atmosphere.js').is_file())
+        self.assertNotIn('atmosphere.js', release.game_files_for_html(
+            (self.root / 'versions' / '1.0.1' / 'index.html').read_text()))
 
     def test_version_numbers_compare_numerically(self):
         major = max(release.version_tuple(r['id'])[0] for r in release.read_releases(self.root)) + 1
@@ -80,7 +87,8 @@ class ReleaseTests(unittest.TestCase):
         output = self.root / 'site'
         ids = build(self.root, output)
         for version in ids:
-            for name in ('index.html', *release.GAME_FILES):
+            archived_html = (self.root / 'versions' / version / 'index.html').read_text(encoding='utf-8')
+            for name in ('index.html', *release.game_files_for_html(archived_html)):
                 self.assertEqual((output / 'versions' / version / name).read_bytes(),
                                  (self.root / 'versions' / version / name).read_bytes())
         self.assertTrue((output / 'release-info.json').is_file())

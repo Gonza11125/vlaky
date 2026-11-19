@@ -11,6 +11,13 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = 'window.VEK_RELEASES = '
 GAME_FILES = ('data.js', 'world.js', 'game.js', 'net.js', 'ui.js')
+OPTIONAL_GAME_FILES = ('atmosphere.js',)
+
+
+def game_files_for_html(html):
+    """Keep old immutable snapshots compatible with optional new game modules."""
+    return GAME_FILES + tuple(name for name in OPTIONAL_GAME_FILES
+                              if 'src="' + name + '"' in html)
 
 
 def version_tuple(version):
@@ -53,7 +60,7 @@ def publish(root, version=None, description='Nové vydání Věku pokroku.'):
         staged = Path(temp) / version
         staged.mkdir()
         (staged / 'index.html').write_text(html, encoding='utf-8')
-        for name in GAME_FILES:
+        for name in game_files_for_html(html):
             shutil.copyfile(root / name, staged / name)
         staged.rename(target)
     # Replace the registry only once the complete release exists on disk.

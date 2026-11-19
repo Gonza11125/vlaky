@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import shutil
 
-from release import ROOT, GAME_FILES, read_releases, version_tuple
+from release import ROOT, read_releases, version_tuple, game_files_for_html
 
 
 def build(root, output):
@@ -17,7 +17,12 @@ def build(root, output):
     files = [(root / name, Path(name)) for name in ('index.html', 'versions.js', 'version-picker.js', 'version-picker.css')]
     for release in releases:
         folder = Path('versions') / release['id']
-        files.extend((root / folder / name, folder / name) for name in ('index.html', *GAME_FILES))
+        source_html = (root / folder / 'index.html')
+        if not source_html.is_file() or source_html.is_symlink():
+            raise ValueError('Chybí HTML vydání: ' + str(source_html))
+        source_text = source_html.read_text(encoding='utf-8')
+        files.extend((root / folder / name, folder / name)
+                     for name in ('index.html', *game_files_for_html(source_text)))
     for source, _ in files:
         if not source.is_file() or source.is_symlink():
             raise ValueError('Chybějící nebo nepovolený soubor vydání: ' + str(source))
