@@ -6,8 +6,29 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0** a **1.5.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0** a **1.6.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.6.0 – Atmosféra a svět
+
+Verze doplňuje čistě **obrazové a zvukové efekty** bez zásahu do výroby,
+boje či možností pohybu. Celá osada prochází každých 120 herních sekund
+svítáním, dnem, soumrakem a nocí. Za soumraku se rozsvěcují lampy
+u dokončených staveb; realistický režim má tmavší noc, klasický
+zachovává snazší orientaci v mapě. Denní cyklus nijak nemění rychlost
+technologií, práce nebo spotřeby.
+
+V **Město → Atmosféra** lze přepnout trvale denní světlo, proměnlivou
+oblačnost, částice počasí a kvalitu efektů. Automatická kvalita
+snižuje počty částic po delším poklesu FPS. Přes tlačítko **Zvuk**
+v horní liště nebo v Městě je možné ručně spustit syntetický ambientní
+zvuk (vítr a ptáci). Hra nikdy nespouští zvuk bez výslovného kliknutí.
+Hlasitost a vzhledové volby zůstávají místní pro daný prohlížeč; po síti
+se synchronizuje herní čas, nikoli lokální zvukové preference.
+
+Kompatibilní místní uložené partie z **1.5.0 až 1.1.0** je možné
+převzít bez přepsání originálu. Samostatné archivované vydání 1.6.0
+je v `versions/1.6.0/`.
 
 ## Novinky ve 1.5.0 – Hospodářství a život obyvatel
 

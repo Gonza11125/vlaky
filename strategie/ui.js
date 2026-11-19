@@ -43,9 +43,7 @@ function updateCamera() {
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), ty = Math.max(0, heightAt(cam.x, cam.z));
   camera.position.set(cam.x + Math.sin(cam.yaw) * cp * cam.dist, ty + sp * cam.dist, cam.z + Math.cos(cam.yaw) * cp * cam.dist);
   camera.lookAt(cam.x, ty, cam.z);
-  sun.target.position.set(cam.x, 0, cam.z);
-  if (G.real) { const p = (G.time % 120) / 120 * 6.283, el = 0.5 + 0.5 * Math.sin(p); sun.position.set(cam.x + 75 * Math.cos(p), 42 + 78 * el, cam.z + 30 + 30 * Math.sin(p)); sun.color.setHex(0xffb074).lerp(_col.setHex(0xfff4e2), sstep(0, 0.55, el)); sun.intensity = (0.72 + 0.26 * el) * (G.rain ? 0.75 : 1); }
-  else { sun.position.set(cam.x + 60, 110, cam.z + 45); sun.color.setHex(0xfff1da); sun.intensity = 0.9; }
+  // Denní/noční cyklus, světla i tón oblohy spravuje vizuální modul 1.6.
 }
 function pan(right, fwd) { cam.x += Math.cos(cam.yaw) * right - Math.sin(cam.yaw) * fwd; cam.z += -Math.sin(cam.yaw) * right - Math.cos(cam.yaw) * fwd; }
 const pxPerUnit = () => H / (2 * Math.tan(camera.fov * Math.PI / 360) * cam.dist);
@@ -379,6 +377,7 @@ function refreshUI() {
   if (!$('city-panel').hidden) renderCity();
   $('s-era').textContent = ERAS[T.era];
   $('s-time').textContent = 'Rok ' + year() + ' · ' + SEASONS[season()];
+  $('s-atmo').textContent = ATMOS.enabled?atmoClock(G.time).label:'Stálý den';
   $('s-objective').textContent = goalDescription(G.match) + (peaceActive() ? ' Ochrana: ještě ' + Math.ceil((G.match.peace - G.time) / 60) + ' min.' : '') + (G.match.goal === 'survival' ? ' Zbývá ' + Math.max(0, Math.ceil((G.match.years * SEASON_LEN * 4 - G.time) / 60)) + ' min.' : '') + ' Mapa: ' + G.seed;
   let evs = '';
   if (G.real) {
@@ -529,6 +528,15 @@ function renderCity() {
     $('b-city-maint').textContent = 'Automatické opravy: ' + (c.maintenance ? 'ZAPNUTO' : 'VYPNUTO');
     $('b-city-maint').classList.toggle('on', c.maintenance);
   }
+  $('atmo-day').checked=ATMOS.enabled;
+  $('atmo-clouds').checked=ATMOS.clouds;
+  $('atmo-fx').checked=ATMOS.fx;
+  $('atmo-quality').value=ATMOS.quality;
+  $('atmo-volume').value=String(Math.round(ATMOS.volume*100));
+  $('atmo-volume-value').textContent=Math.round(ATMOS.volume*100)+' %';
+  $('atmo-fps').textContent='FPS '+ATMOS.fps+' · atmosféra '+(atmoQuality()==='low'?'úsporná':'detailní');
+  $('b-atmo-sound').textContent=ATMOS.sound?'Vypnout zvuk':'Zapnout zvuk';
+  $('atmo-audio-hint').textContent=ATMOS.audioHint;
   $('city-art-quality').value = CITY_ART.quality;
   $('city-art-hint').textContent = 'Aktivní grafika: ' +
     (cityArtQuality() === 'low' ? 'úsporná' : 'detailní') +
@@ -676,6 +684,21 @@ $('economy-lines').onclick=e=>{
   if(G.mode!=='guest')renderEconomy();
 };
 
+// Nastavení atmosféry je pouze místní; do síťového průběhu ani ekonomiky nezasahuje.
+for(const id of ['atmo-day','atmo-clouds','atmo-fx']){
+  $(id).onchange=()=>{
+    atmoSetSetting(id==='atmo-day'?'enabled':id==='atmo-clouds'?'clouds':'fx',$(id).checked);
+    renderCity();
+  };
+}
+$('atmo-quality').onchange=()=>{atmoSetSetting('quality',$('atmo-quality').value);renderCity();};
+$('atmo-volume').oninput=()=>atmoSetSetting('volume',Number($('atmo-volume').value)/100);
+$('atmo-volume').onchange=()=>renderCity();
+$('b-atmo-sound').onclick=async()=>{
+  await atmoSetSound(!ATMOS.sound);
+  if(!$('city-panel').hidden)renderCity();
+};
+$('b-sound').onclick=async()=>{await atmoSetSound(!ATMOS.sound);$('b-sound').textContent=ATMOS.sound?'Zvuk ✓':'Zvuk';};
 const OPT = { diff: 1, aggr: 2, real: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
 function selectedMatch() {
@@ -720,8 +743,8 @@ function readLocal() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     // Clone a compatible older save without changing the original release.
-    if (!raw && VEK_RELEASE.id === '1.5.0') {
-      for (const previous of ['1.4.0', '1.3.0', '1.2.0', '1.1.0']) {
+    if (!raw && VEK_RELEASE.id === '1.6.0') {
+      for (const previous of ['1.5.0', '1.4.0', '1.3.0', '1.2.0', '1.1.0']) {
         const older = localStorage.getItem('vek-pokroku-save-' + previous);
         if (!older || older.length > 5000000) continue;
         try {
@@ -859,14 +882,6 @@ function frame(now) {
       if (b.fire > 0 && b.mesh.visible && Math.random() < dt * 9) { const ox = (Math.random() - 0.5) * b.size * 1.4, oz = (Math.random() - 0.5) * b.size * 1.4; puff(b.x + ox, b.y + 2.4 + Math.random() * 1.6, b.z + oz, Math.random() < 0.6 ? 0xff7a1e : 0xffc23a, 1.1, 0.8, 2.8); if (Math.random() < 0.5) puff(b.x + ox, b.y + 4.5, b.z + oz, 0x3a3632, 1.2, 2.4, 2.4); }
       else if (b.type === 'house' && b.done && b.mesh.visible && G.snow > 0.3 && Math.random() < dt * 0.35) puff(b.x - 0.9, b.y + 3.1, b.z - 0.4, 0xcfcac2, 0.35, 2.4, 1.1);
     }
-    const snowing = G.snow > 0.25 && season() === 3, raining = !!G.rain;
-    weather.visible = snowing || raining;
-    if (weather.visible) {
-      const wp = weather.geometry.attributes.position, a = wp.array, sp = raining ? 42 : 5, mt = weather.material;
-      mt.size = raining ? 0.34 : 0.42; mt.color.setHex(raining ? 0xcfe2f0 : 0xffffff); mt.opacity = raining ? 0.75 : 0.9;
-      for (let i = 1; i < a.length; i += 3) { a[i] -= sp * dt; if (a[i] < 0) a[i] += 45; if (!raining) a[i - 1] += Math.sin(t + i) * dt * 0.8; }
-      wp.needsUpdate = true; weather.position.set(cam.x, 0, cam.z);
-    }
     waterMesh.position.y = (G.flood || 0) + Math.sin(t * 0.9) * 0.035;
   } else if (waterMesh.position.y !== 0) waterMesh.position.y = 0;
   for (const a of animals) { const m = a.mesh; m.visible = !!vis[cidx(cellOf(a.x), cellOf(a.z))]; m.position.set(a.x, heightAt(a.x, a.z) + (a.moving ? Math.abs(Math.sin(t * 8 + a.id)) * 0.1 : 0), a.z); let d = a.face - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); m.rotation.y += d * Math.min(1, dt * 8); }
@@ -881,6 +896,7 @@ function frame(now) {
   cityArtAnimate(t, dt);
   for (let i = markers.length - 1; i >= 0; i--) { const k = markers[i]; k.t -= dt; if (k.t <= 0) { scene.remove(k.m); markers.splice(i, 1); } else { k.m.scale.setScalar(0.4 + k.t * 1.6); k.m.material.opacity = k.t / 0.6; } }
   updateCamera();
+  atmoFrame(now,dt,t);
   drawWorldUI(now);
   renderer.render(scene, camera);
   if (now - uiT > 200) { uiT = now; refreshUI(); }
@@ -908,7 +924,7 @@ function boot() {
   document.addEventListener('gesturestart', e => e.preventDefault());
   resize(); applySnow(0); snowShown = 0;
   addEventListener('resize', resize);
-  window.GAME = { G, teams, units, blds, cam };
+  window.GAME = { G, teams, units, blds, cam, ATMOS };
   window.addEventListener('contextmenu', e => { if (placing) e.preventDefault(); });
   requestAnimationFrame(frame);
 }

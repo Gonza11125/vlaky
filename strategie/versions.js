@@ -26,5 +26,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.5.0",
     "description": "Hospodářství a život obyvatel: nový panel Ekonomika, řízení výroby a rezerv, skutečná bilance surovin, zkušenosti profesí a realistické obsazování výroben a dostupnost skladů."
+  },
+  {
+    "id": "1.6.0",
+    "description": "Atmosféra a svět: svítání, den, soumrak a noc, světla města, dynamická oblačnost, déšť a sníh, volitelný syntetický zvuk větru a ptáků, adaptivní množství částic a nastavení grafiky."
   }
 ];

@@ -1,5 +1,17 @@
 # Vydání Věku pokroku
 
+## 1.6.0 – Atmosféra a svět
+
+- **Denní cyklus:** skutečné střídání svítání, dne, soumraku a noci po 120 herních sekundách. Mění se barva oblohy a mlhy, slunce a celkové osvětlení; vypínatelné v Městě.
+- **Světla osady:** za tmy svítí okna a lampy u dokončených domů, tržišť, dílen a dalších budov. Světla jsou dekorativní a nepřekreslují průchodnost ani simulaci.
+- **Proměnlivá oblačnost:** jemná změna množství přímého světla, samostatný přepínač.
+- **Déšť a sníh:** částice realistického počasí používají vítr a nastavitelnou hustotu; herní záplavy a roční období se řídí původní simulací.
+- **Volitelný syntetický zvuk:** vítr a denní ptactvo přes Web Audio; zapíná se až kliknutím na tlačítko Zvuk, nikdy automaticky. Nastavení hlasitosti.
+- **Výkon:** automatické snížení počtu částic při poklesu FPS, 280 částic v úsporném a až 1 600 v detailním režimu, limit dekorativních lamp 18/70. Jen grafické efekty.
+- **Režimy:** obě varianty mají den, noc a lampy; realistická varianta má výraznější tmu a zachované nebezpečné počasí, klasická zůstává čitelnější.
+- **Ukládání:** kopie kompatibilních místních uložených partií 1.5.0–1.1.0; původní verze zůstávají neměnné. Atmosférická nastavení jsou místní prohlížečové preference, synchronizace hry je nepotřebuje.
+- Nové testy osvětlení, výkonu, nastavení a prohlížečového rozhraní.
+
 ## 1.5.0 – Hospodářství a život obyvatel
 
 - **Ekonomika (K)**: přehled zásob a skutečných toků surovin za posledních až 60 sekund, výhled spotřeby jídla na zimu a seznam výroben.

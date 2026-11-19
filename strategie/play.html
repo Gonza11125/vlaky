@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku – Hospodářství a život obyvatel</title>
+<title>Věk pokroku – Atmosféra a svět</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -202,6 +202,16 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   .economy-reserves { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .economy-card { max-height:90dvh; }
 }
+
+/* 1.6 Atmosféra */
+#s-atmo { color:#e5bd74; font-size:12px; white-space:nowrap; }
+.atmo-settings { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 14px;margin:8px 0 14px; }
+.atmo-settings label { display:flex;flex-wrap:wrap;align-items:center;gap:7px;font-size:13px; }
+.atmo-settings label:has(select),.atmo-settings label:has(input[type="range"]) { flex-direction:column;align-items:flex-start; }
+.atmo-settings input[type="checkbox"] { accent-color:#d7a84a;min-width:19px;min-height:19px; }
+.atmo-settings select {background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:8px;max-width:100%;}
+.atmo-settings input[type="range"] { width:min(210px,100%);accent-color:#d7a84a; }
+@media(max-width:480px){.atmo-settings{grid-template-columns:1fr;}#s-atmo{font-size:11px;}}
 </style>
 
 <div id="app">
@@ -214,6 +224,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <span class="res"><b>Lidé</b><em id="s-pop">0/0</em></span>
       <span class="era" id="s-era">Doba kamenná</span>
       <span id="s-time">Rok 1 · Jaro</span>
+      <span id="s-atmo" title="Denní a noční cyklus">Den</span>
       <span id="s-city" title="Přehled obyvatel a práce">Osada</span>
       <span id="s-ev"></span>
     </div>
@@ -221,6 +232,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <button class="tbtn" id="b-idle" title="Najít nečinného vesničana (klávesa tečka)">Nečinní 0</button>
       <button class="tbtn" id="b-tech">Technologie</button>
       <button class="tbtn" id="b-city" title="Správa osady (C)">Město</button>
+      <button class="tbtn" id="b-sound" title="Zapnout nebo vypnout ambientní zvuk">Zvuk</button>
       <button class="tbtn" id="b-economy" title="Hospodářství a výrobní řetězce (K)">Ekonomika</button>
       <button class="tbtn" id="b-help" title="Nápověda (F1)">Nápověda</button>
       <button class="tbtn" id="b-menu" title="Herní nabídka">Menu</button>
@@ -247,7 +259,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
-      <p class="lead"><b>Hospodářství a život obyvatel:</b> výrobní řetězce, řemeslníci, postup v profesích, řízení zásob a měření skutečné výroby.</p>
+      <p class="lead"><b>Atmosféra a svět:</b> den a noc, světlo v oknech, počasí, zvuky přírody a výkonové nastavení scény.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
@@ -259,6 +271,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Technologie navazují.</b> Bez písma není knihovna, bez matematiky katapult, bez oceli rytíř.</li>
         <li><b>Mapu neznáš.</b> Vidíš jen okolí svých lidí a budov. Nepřítele, zlato i zvěř musíš najít, osadu si ohradíš palisádou a branou.</li>
         <li><b>Zlato a trh.</b> Zlato se těží, nebo ho získáš prodejem přebytků na Tržišti. Platí se jím pokročilé jednotky a pozdější epochy.</li>
+        <li><b>Svět kolem tebe:</b> během každé partie se střídá den a noc. Za soumraku se ve městě rozsvěcují světla. Zvuk spustíš tlačítkem Zvuk, vzhled i výkon měníš v panelu Město.</li>
         <li><b>Hospodářství:</b> tlačítkem Ekonomika (K) zobrazíš toky surovin, rezervy, výrobny a jejich výkon. V realistickém režimu obsazuj mlýny, pekárny a hutě řemeslníky.</li>
         <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
         <li><b>Obnova lesa.</b> Lesovna obnovuje vytěžené stromy ve svém okolí. Dřevo dál potřebuje dřevorubce a cestu do skladu.</li>
@@ -408,6 +421,23 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         </select>
       </label>
       <p class="city-note" id="city-art-hint"></p>
+      <h2>Atmosféra a výkon – 1.6.0</h2>
+      <p class="city-note">Světlo, počasí a zvuk jsou pouze vizuální a zvukové efekty. Neovlivňují výrobu, délku dne ve hře ani síťovou synchronizaci.</p>
+      <div class="atmo-settings">
+        <label><input id="atmo-day" type="checkbox" checked> Střídání dne a noci</label>
+        <label><input id="atmo-clouds" type="checkbox" checked> Dynamická oblačnost a zabarvení oblohy</label>
+        <label><input id="atmo-fx" type="checkbox" checked> Déšť a sněhové částice</label>
+        <label>Detaily atmosféry
+          <select id="atmo-quality"><option value="auto">Automatické podle FPS</option><option value="low">Úsporné</option><option value="high">Detailní</option></select>
+        </label>
+        <label>Hlasitost prostředí
+          <input id="atmo-volume" type="range" min="0" max="100" step="5" value="35">
+          <span id="atmo-volume-value">35 %</span>
+        </label>
+      </div>
+      <div class="city-actions"><button class="pick" id="b-atmo-sound">Zapnout zvuk</button></div>
+      <p class="city-note" id="atmo-audio-hint">Zvuk se spouští až po dotyku tlačítka.</p>
+      <p class="city-note" id="atmo-fps">FPS —</p>
       <p class="city-note">Pěšiny se vizuálně vytvářejí mezi sídlem a dokončenými budovami a mění vzhled s epochou. Nezvyšují rychlost pohybu a nespotřebovávají materiál.</p>
     </div>
   </div>
@@ -464,5 +494,6 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 <script src="data.js"></script>
 <script src="world.js"></script>
 <script src="game.js"></script>
+<script src="atmosphere.js"></script>
 <script src="net.js"></script>
 <script src="ui.js"></script>

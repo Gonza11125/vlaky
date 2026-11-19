@@ -16,7 +16,7 @@ let fogTex, fogMesh, fogData;
 const PRICE = { food: 30, wood: 30, stone: 45, metal: 90 };
 const byId = new Map();
 let nextId = 1;
-let scene, camera, renderer, sun, terrain, terrainBase, waterMesh;
+let scene, camera, renderer, sun, skyLight, terrain, terrainBase, waterMesh;
 let unitMat, sickMat, bldMat, farmMat, ghostMat, grainTex, weather, nodeMeshes = {};
 const geoCache = {};
 const season = () => Math.floor(G.time / SEASON_LEN) % 4;
@@ -650,7 +650,7 @@ function initScene(canvas) {
   scene.background = new THREE.Color(0x9db7c6);
   scene.fog = new THREE.Fog(0x9db7c6, 170, 460);
   camera = new THREE.PerspectiveCamera(35, 1, 1, 900);
-  scene.add(new THREE.HemisphereLight(0xe3ecf5, 0x6d6450, 0.72));
+  skyLight=new THREE.HemisphereLight(0xe3ecf5,0x6d6450,0.72);scene.add(skyLight);
   sun = new THREE.DirectionalLight(0xfff1da, 0.9);
   sun.castShadow = true; sun.shadow.mapSize.set(G.coarse ? 1024 : 2048, G.coarse ? 1024 : 2048);
   const sc = sun.shadow.camera; sc.left = -75; sc.right = 75; sc.top = 75; sc.bottom = -75; sc.near = 10; sc.far = 320;
@@ -1579,6 +1579,7 @@ function checkVictory() {
 function endGame(loser, reason) { if (G.over) return; G.over = true; G.loser = loser; G.endReason = reason || 'Sídlo bylo zničeno.'; G.paused = true; showEnd(loser !== MY); }
 
 function resetWorld() {
+  atmoReset();
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
   units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
   cityArtClear();
