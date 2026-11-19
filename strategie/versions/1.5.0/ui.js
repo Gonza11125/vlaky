@@ -575,7 +575,9 @@ $('city-art-quality').onchange = () => {
 
 
 // ---------- 1.5: interaktivní hospodářství ----------
-let economyWasPaused=false,economyShownAt=0;
+let economyWasPaused=false,economyShownAt=0,economyPointerInside=false;
+$('economy-panel').addEventListener('pointerenter',()=>{economyPointerInside=true;});
+$('economy-panel').addEventListener('pointerleave',()=>{economyPointerInside=false;});
 function renderEconomy() {
   const T=ME(),c=cityState(T),out=economicOutlook(T),census=cityCensus(MY);
   if(!T)return;
@@ -882,9 +884,14 @@ function frame(now) {
   drawWorldUI(now);
   renderer.render(scene, camera);
   if (now - uiT > 200) { uiT = now; refreshUI(); }
-  if (!$('economy-panel').hidden && now - economyShownAt > 1400 &&
-      !(document.activeElement && document.activeElement.tagName==='SELECT' &&
-        document.activeElement.closest('#economy-panel'))) {
+  // Solo hra je po dobu otevření ekonomiky pozastavená. Neměň za běhu
+  // DOM <select> při výběru možností: Playwright i dotyková zařízení
+  // mohou jinak přijít o právě otevřenou nabídku.
+  // V multiplayeru se údaje periodicky obnovují jen mimo interakci s panelem.
+  if (G.mode==='guest' && !$('economy-panel').hidden &&
+      now-economyShownAt>5000 &&
+      !(document.activeElement && document.activeElement.closest('#economy-panel')) &&
+      !economyPointerInside) {
     economyShownAt=now;renderEconomy();
   }
   if (now - baseT > 900) { baseT = now; drawMiniBase(); }
