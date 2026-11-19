@@ -135,6 +135,7 @@ function atmoReset(){
   ATMOS.lastLampSync=-1;
   ATMOS.slow=false;ATMOS.goodSamples=ATMOS.lowSamples=0;
   ATMOS.sampleStart=0;ATMOS.frames=0;ATMOS.fps=60;
+  if(ATMOS.audio)ATMOS.audio.nextBird=0;
 }
 function atmoLampTexture(){
   if(ATMOS.lampTex)return ATMOS.lampTex;
@@ -163,7 +164,8 @@ function atmoSyncLamps(force){
   if(!force&&ATMOS.lastLampSync>=0&&time-ATMOS.lastLampSync<3)return;
   ATMOS.lastLampSync=time;
   const max=atmoQuality()==='low'?18:70;
-  const source=blds.filter(b=>!b.dead&&b.mesh);
+  // Nepřátelské budovy za mlhou války nesmějí prozrazovat polohu svými lampami.
+  const source=blds.filter(b=>b.team===MY&&!b.dead&&b.mesh);
   const data=atmoLampPlan(source,max);
   const stamp=data.map(d=>d.id+':'+d.y.toFixed(1)).join(',');
   if(stamp===ATMOS.lampStamp)return;
