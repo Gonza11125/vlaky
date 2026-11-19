@@ -22,57 +22,52 @@ function reader(localStorage) {
   return new Function('localStorage', 'VEK_RELEASE', 'SAVE_KEY',
     source.slice(start, end) + '\n' + source.slice(beginLocal, endLocal) +
     '\nreturn { readLocal, saveValid, saveMatchesVersion };'
-  )(localStorage, { id: '1.3.0' }, 'vek-pokroku-save-1.3.0');
+  )(localStorage, { id: '1.4.0' }, 'vek-pokroku-save-1.4.0');
 }
-const fixture = () => ({
-  v: 1, gameVersion: '1.2.0', seed: 73, saved: Date.now(),
-  G: { time: 90 }, AI: {}, PRICE: {}, explored: 'AAAA',
+const fixture = (version='1.3.0',time=90) => ({
+  v: 1, gameVersion: version, seed: 73, saved: Date.now(),
+  G: { time }, AI: {}, PRICE: {}, explored: 'AAAA',
   teams: [{ era: 0, res: {}, tech: {} }, { era: 0, res: {}, tech: {} }],
   amt: [], meat: [], blds: [], units: [], animals: [],
 });
 
-test('valid 1.2.0 save migrates on first visit, without modifying original', () => {
-  const previous = JSON.stringify(fixture());
-  const local = storage({ 'vek-pokroku-save-1.2.0': previous });
-  const loaded = reader(local).readLocal();
-  assert.equal(loaded.gameVersion, '1.3.0');
-  assert.equal(local.getItem('vek-pokroku-save-1.2.0'), previous);
-  assert.equal(JSON.parse(local.getItem('vek-pokroku-save-1.3.0')).gameVersion, '1.3.0');
+test('1.3.0 save migrates on first visit and stays intact', () => {
+  const previous=JSON.stringify(fixture());
+  const local=storage({'vek-pokroku-save-1.3.0':previous});
+  const loaded=reader(local).readLocal();
+  assert.equal(loaded.gameVersion,'1.4.0');
+  assert.equal(local.getItem('vek-pokroku-save-1.3.0'),previous);
+  assert.equal(JSON.parse(local.getItem('vek-pokroku-save-1.4.0')).gameVersion,'1.4.0');
 });
-
-test('an incomplete previous save is never migrated', () => {
-  const incomplete = fixture();
-  delete incomplete.animals;
-  const local = storage({ 'vek-pokroku-save-1.2.0': JSON.stringify(incomplete) });
-  assert.equal(reader(local).readLocal(), null);
-  assert.equal(local.getItem('vek-pokroku-save-1.3.0'), null);
-});
-
-test('1.1.0 save is used if no 1.2.0 save exists', () => {
-  const previous = fixture();
-  previous.gameVersion = '1.1.0';
-  const local = storage({ 'vek-pokroku-save-1.1.0': JSON.stringify(previous) });
-  const loaded = reader(local).readLocal();
-  assert.equal(loaded.gameVersion, '1.3.0');
-  assert.equal(JSON.parse(local.getItem('vek-pokroku-save-1.1.0')).gameVersion, '1.1.0');
-});
-
-test('new save takes precedence over older release save', () => {
-  const current = fixture();
-  current.gameVersion = '1.3.0';
-  current.G.time = 250;
-  const local = storage({
-    'vek-pokroku-save-1.2.0': JSON.stringify(fixture()),
-    'vek-pokroku-save-1.3.0': JSON.stringify(current),
-  });
-  assert.equal(reader(local).readLocal().G.time, 250);
-});
-
-test('game menu and help controls are present exactly once', () => {
-  for (const id of ['b-help', 'b-menu', 'help', 'b-help-close',
-                    'pause-menu', 'b-resume', 'b-return', 'b-help-done']) {
-    assert.equal(html.split('id="' + id + '"').length - 1, 1, id);
+test('1.2.0 and 1.1.0 remain fallback sources', () => {
+  for(const version of ['1.2.0','1.1.0']) {
+    const raw=JSON.stringify(fixture(version));
+    const local=storage({['vek-pokroku-save-'+version]:raw});
+    assert.equal(reader(local).readLocal().gameVersion,'1.4.0');
+    assert.equal(local.getItem('vek-pokroku-save-'+version),raw);
   }
-  assert.match(html, /aria-modal="true"/);
-  assert.match(source, /if \(e\.code === 'F1'\)/);
+});
+test('incomplete save is rejected without overwriting another edition', () => {
+  const bad=fixture();
+  delete bad.animals;
+  const local=storage({'vek-pokroku-save-1.3.0':JSON.stringify(bad)});
+  assert.equal(reader(local).readLocal(),null);
+  assert.equal(local.getItem('vek-pokroku-save-1.4.0'),null);
+});
+test('existing 1.4.0 save takes precedence', () => {
+  const local=storage({
+    'vek-pokroku-save-1.3.0':JSON.stringify(fixture('1.3.0',90)),
+    'vek-pokroku-save-1.4.0':JSON.stringify(fixture('1.4.0',250)),
+  });
+  assert.equal(reader(local).readLocal().G.time,250);
+});
+test('menu, help, city and graphics controls are unique', () => {
+  for(const id of ['b-help','b-menu','help','b-help-close','pause-menu',
+    'b-resume','b-return','b-help-done','b-city','city-panel',
+    'city-art-quality','city-art-hint']) {
+    assert.equal(html.split('id="'+id+'"').length-1,1,id);
+  }
+  assert.match(html,/aria-modal="true"/);
+  assert.match(source,/if \(e\.code === 'F1'\)/);
+  assert.match(source,/cityArtAnimate\(t, dt\)/);
 });

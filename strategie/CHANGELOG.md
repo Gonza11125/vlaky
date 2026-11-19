@@ -1,5 +1,17 @@
 # Vydání Věku pokroku
 
+## 1.4.0 – Živé město II
+
+- Nové stavební detaily a vizuální změny staveb v pokročilejších epochách.
+- Animované nástroje, pohyb paží, nesené suroviny a větrný mlýn.
+- Skutečný grafický postup výstavby: lešení, stavební fáze a panel budovy.
+- Tlačítko k přivolání až tří nečinných stavitelů nebo opravářů.
+- Dekorace kolem budov (ploty, vozy, seno, dřevo, sudy, ohniště) v instancích.
+- Vylepšené pěšiny a barevné varianty podle epochy.
+- Tři volby kvality vykreslování a úspornější grafika na dotykových zařízeních.
+- Původní ekonomika, klasický a realistický režim a síťová logika zachovány.
+- Migrace uložených her 1.3.0/1.2.0/1.1.0 a automatické testy v Chromiu.
+
 ## 1.3.0 – Živé město (klasický a realistický režim)
 
 - V obou režimech panel Město, přehled práce a stav budov.

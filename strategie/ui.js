@@ -31,7 +31,7 @@ function costHTML(cost) { return Object.keys(cost || {}).map(k => '<i class="dot
 
 // ---------- kamera a výběr v prostoru ----------
 function resize() {
-  W = view.clientWidth; H = view.clientHeight; DPR = Math.min(window.devicePixelRatio || 1, G.coarse ? 1.5 : 2);
+  W = view.clientWidth; H = view.clientHeight; DPR = cityArtPixelRatio(Math.min(window.devicePixelRatio || 1, G.coarse ? 1.5 : 2));
   $('msgs').style.top = ($('top').offsetHeight + 8) + 'px';
   if (!W || !H) return;
   renderer.setPixelRatio(DPR); renderer.setSize(W, H, false);
@@ -324,6 +324,16 @@ function buildCmd() {
       }
       if (b.queue.length) addBtn({ label: 'Zrušit poslední', desc: 'Zruší poslední položku ve frontě a vrátí suroviny.', fn: () => act(['unq', b.id]) });
     }
+    if (!b.done || b.hp < b.maxHp || b.fire > 0) addBtn({
+      label: b.done ? 'Povolat opraváře' : 'Povolat stavitele',
+      desc: 'Přiřadí až tři nejbližší nečinné vesničany. Ručně zadaná práce ostatních zůstane beze změny.',
+      fn: () => {
+        const available = units.filter(u => u.team === MY && !u.dead && u.type === 'vil' && !u.order)
+          .sort((a,other) => Math.hypot(a.x-b.x,a.z-b.z)-Math.hypot(other.x-b.x,other.z-b.z)).slice(0,3);
+        if (available.length) act(['build', ids(available), b.id]);
+        else msg('Nemáš žádného volného vesničana.', 'bad');
+      }
+    });
     if (b.type !== 'tc') addBtn({ label: razeArm === b.id ? 'Opravdu zbořit?' : 'Zbořit', cls: razeArm === b.id ? 'on' : '', fn: () => { if (razeArm === b.id) { act(['raze', b.id]); setSel([]); } else razeArm = b.id; } });
     addBtn({ label: 'Zrušit výběr', fn: () => setSel([]) });
   }
@@ -377,7 +387,13 @@ function refreshUI() {
     } else {
       h = '<h2>' + e.def.name + (e.team !== MY ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Odolnost ' + Math.ceil(e.hp) + '/' + e.maxHp + (e.done ? '' : ' · rozestavěno ' + Math.floor(e.prog * 100) + ' %') + '</p>';
       if (e.team === MY) {
-        if (!e.done) h += '<p>Pošli sem vesničany, ať stavbu dokončí.</p>';
+        if (!e.done) {
+          const p=clamp(e.prog*100,0,100);
+          const workers=units.filter(u=>u.team===MY&&u.type==='vil'&&u.order&&u.order.type==='build'&&u.order.b===e).length;
+          h+='<p><b>Fáze stavby: '+cityArtStage(e)+'</b> · '+Math.floor(p)+' %</p>'+
+            '<div class="bar construction"><i style="width:'+p+'%"></i></div>'+
+            '<p>'+workers+' stavitelů pracuje na této budově. Můžeš povolat další volné dělníky.</p>';
+        }
         else if (e.queue.length) { const q = e.queue[0], d = (q.kind === 'u' ? UNITS : TECHS)[q.id]; h += '<div class="bar q"><i style="width:' + clamp(q.t / q.total * 100, 0, 100) + '%"></i></div><div class="qrow">' + e.queue.map((x, i) => '<span class="qitem">' + (i ? '' : (q.t >= q.total ? 'čeká na dům: ' : '')) + (x.kind === 'u' ? UNITS : TECHS)[x.id].name + '</span>').join('') + '</div>'; }
         else if (e.type === 'farm') h += '<p>' + (e.crop === 'grain' ? 'Obilné pole. ' : 'Zeleninové pole. ') + (farmFree(e) ? 'Pole leží ladem. Pošli sem vesničana.' : season() === 3 ? 'Zima: pole odpočívá.' : 'Úroda ' + (farmRate(T) * 60 * (e.crop === 'grain' ? 1.25 : 1)).toFixed(0) + (e.crop === 'grain' ? ' obilí' : ' jídla') + ' za minutu.') + '</p>';
         else if (['forester', 'mill', 'bakery'].includes(e.type)) h += '<p>' + (!e.enabled ? 'Výroba pozastavena. ' : e.type === 'forester' ? 'V okolí lze obnovit ' + depletedTrees(e).length + ' stromů. ' : e.type === 'mill' && T.res.grain < 0.01 ? 'Čeká na obilí. ' : e.type === 'bakery' && (T.res.flour < 0.01 || T.res.wood < 0.01) ? 'Čeká na mouku nebo dřevo. ' : 'Výroba běží. ') + e.def.desc + '</p>';
@@ -479,6 +495,10 @@ function renderCity() {
     $('b-city-maint').textContent = 'Automatické opravy: ' + (c.maintenance ? 'ZAPNUTO' : 'VYPNUTO');
     $('b-city-maint').classList.toggle('on', c.maintenance);
   }
+  $('city-art-quality').value = CITY_ART.quality;
+  $('city-art-hint').textContent = 'Aktivní grafika: ' +
+    (cityArtQuality() === 'low' ? 'úsporná' : 'detailní') +
+    '. Dekorace jsou sdílené v dávkách, hustota se přizpůsobí výkonu.';
   for (const select of document.querySelectorAll('[data-city-priority]')) {
     const val = String(c.priorities[select.dataset.cityPriority]);
     if (select.value !== val) select.value = val;
@@ -512,6 +532,12 @@ $('b-city-maint').onclick = () => {
 };
 for (const select of document.querySelectorAll('[data-city-priority]'))
   select.onchange = () => act(['city', select.dataset.cityPriority, Number(select.value)]);
+$('city-art-quality').onchange = () => {
+  if (cityArtSetQuality($('city-art-quality').value)) {
+    resize();
+    renderCity();
+  }
+};
 
 const OPT = { diff: 1, aggr: 2, real: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
@@ -557,8 +583,8 @@ function readLocal() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     // Clone a compatible older save without changing the original release.
-    if (!raw && VEK_RELEASE.id === '1.3.0') {
-      for (const previous of ['1.2.0', '1.1.0']) {
+    if (!raw && VEK_RELEASE.id === '1.4.0') {
+      for (const previous of ['1.3.0', '1.2.0', '1.1.0']) {
         const older = localStorage.getItem('vek-pokroku-save-' + previous);
         if (!older || older.length > 5000000) continue;
         try {
@@ -715,6 +741,7 @@ function frame(now) {
     let d = u.face - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); m.rotation.y += d * Math.min(1, dt * 12);
     m.rotation.x = u.working && u.def.cls !== 'siege' && u.def.cls !== 'cav' ? Math.max(0, Math.sin(t * 7 + u.id)) * 0.28 : 0;
   }
+  cityArtAnimate(t, dt);
   for (let i = markers.length - 1; i >= 0; i--) { const k = markers[i]; k.t -= dt; if (k.t <= 0) { scene.remove(k.m); markers.splice(i, 1); } else { k.m.scale.setScalar(0.4 + k.t * 1.6); k.m.material.opacity = k.t / 0.6; } }
   updateCamera();
   drawWorldUI(now);
@@ -726,6 +753,7 @@ function frame(now) {
 
 function boot() {
   initScene(view);
+  cityArtSetQuality(CITY_ART.quality);
   newGame(1);
   showSaveOffer();
   $('b-host').onclick = netHost; $('b-join').onclick = netJoin; $('p2p').hidden = !window.RTCPeerConnection; $('p-host').onclick = p2pHost; $('p-guest').onclick = p2pGuest; $('p-go').onclick = p2pGo; $('p-copy').onclick = p2pCopy; netBoot();

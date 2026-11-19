@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(process.env.GAME_SOURCE || path.join(__dirname, '..'));
 const fakeThree = {
-  Color: class {}, Matrix4: class { compose() { return this; } },
+  Color: class { multiplyScalar() { return this; } }, Matrix4: class { compose() { return this; } },
   Quaternion: class { setFromAxisAngle() { return this; } },
   Vector3: class { constructor(x,y,z) { this.x=x; this.y=y; this.z=z; } },
   PlaneGeometry: class { dispose() {} },
@@ -14,6 +14,7 @@ const fakeThree = {
   InstancedMesh: class {
     constructor(geometry,material,count) { Object.assign(this,{geometry,material,count,instanceMatrix:{needsUpdate:false}}); }
     setMatrixAt() {}
+    setColorAt() { this.instanceColor = {needsUpdate:false}; }
   },
   DoubleSide: 2,
 };

@@ -26,6 +26,284 @@ function mkTeam(id) {
   return { id, city: { auto: false, maintenance: true, priorities: { food: 3, wood: 2, stone: 1, ore: 1, gold: 0 }, morale: 85 }, color: TEAM_COLORS[id], res: { food: 200 * G.match.stocks, wood: 200 * G.match.stocks, stone: 100 * G.match.stocks, ore: 0, metal: 0, gold: 0, know: 0, grain: 0, flour: 0 }, tech: {}, busy: {}, era: 0, pop: 0, cap: 0, hit: null, hungry: false, starve: 0, smelt: 0, stats: { kills: 0, lost: 0, razed: 0, regrown: 0, tradeGold: 0, produced: {} } };
 }
 
+
+// ---------- 1.4: výtvarná vrstva osady (bez změny herních pravidel) ----------
+const CITY_ART = {
+  quality: 'auto', props: [], sites: new Map(), dirty: true,
+  epochStamp: '', siteGeo: null, siteMat: null, workerGeo: null, workerMat: null,
+  rotorGeo: null, rotorMat: null, visualAcc: 0, walkers: 0,
+};
+function cityArtQuality() {
+  return CITY_ART.quality === 'auto' ? (G.coarse ? 'low' : 'high') : CITY_ART.quality;
+}
+function cityArtPixelRatio(base) { return cityArtQuality() === 'low' ? Math.min(base, 1.1) : base; }
+function cityArtSetQuality(q) {
+  if (!['auto', 'low', 'high'].includes(q)) return false;
+  CITY_ART.quality = q; CITY_ART.dirty = true;
+  if (renderer) {
+    renderer.shadowMap.enabled = cityArtQuality() !== 'low';
+    renderer.shadowMap.needsUpdate = true;
+  }
+  return true;
+}
+function cityArtStage(b) {
+  if (b.done) return 'Hotovo';
+  const p = clamp(Number(b.prog) || 0, 0, 1);
+  return p < 0.2 ? 'Základy' : p < 0.55 ? 'Nosná konstrukce' : p < 0.85 ? 'Střecha' : 'Dokončovací práce';
+}
+function cityArtWorkPose(kind, t, id, working, moving) {
+  const phase = t * (working ? 7 : moving ? 9 : 1) + id * 2.17;
+  const w = working ? Math.sin(phase) * 0.8 : 0;
+  const stride = moving ? Math.sin(phase) * 0.55 : 0;
+  return { left: -w * 0.6 + stride, right: w - stride, tool: w * (kind === 'build' ? 1.15 : 0.85), bob: (moving ? Math.abs(Math.sin(phase)) * 0.08 : 0) };
+}
+function cityArtRemoveSite(b) {
+  const site = CITY_ART.sites.get(b.id);
+  if (site && site.group && scene) scene.remove(site.group);
+  CITY_ART.sites.delete(b.id);
+  CITY_ART.dirty = true;
+}
+function cityArtClear() {
+  if (scene) {
+    for (const prop of CITY_ART.props) {
+      scene.remove(prop);
+      prop.geometry.dispose();
+      prop.material.dispose();
+    }
+    for (const site of CITY_ART.sites.values()) scene.remove(site.group);
+  }
+  CITY_ART.props.length = 0; CITY_ART.sites.clear();
+  CITY_ART.dirty = true; CITY_ART.epochStamp = '';
+  CITY_ART.visualAcc = 0;
+}
+function cityArtScaffold(b) {
+  const group = new THREE.Group();
+  group.position.set(b.x, b.y, b.z);
+  if (!CITY_ART.siteGeo) CITY_ART.siteGeo = new THREE.BoxGeometry(1, 1, 1);
+  if (!CITY_ART.siteMat) CITY_ART.siteMat = new THREE.MeshLambertMaterial({ color: 0xa88b5d });
+  const posts = [], beams = [];
+  const r = Math.max(0.66, b.size * CS / 2 - 0.22);
+  for (const x of [-r,r]) for (const z of [-r,r]) {
+    const beam = new THREE.Mesh(CITY_ART.siteGeo, CITY_ART.siteMat);
+    beam.position.set(x, 1, z); beam.scale.set(0.16, 2, 0.16); group.add(beam); posts.push(beam);
+  }
+  for (const z of [-r,r]) {
+    const beam = new THREE.Mesh(CITY_ART.siteGeo, CITY_ART.siteMat);
+    beam.position.set(0, 1.2, z); beam.scale.set(r*2, 0.13, 0.13); group.add(beam); beams.push(beam);
+  }
+  for (const x of [-r,r]) {
+    const beam = new THREE.Mesh(CITY_ART.siteGeo, CITY_ART.siteMat);
+    beam.position.set(x, 1.2, 0); beam.scale.set(0.13, 0.13, r*2); group.add(beam); beams.push(beam);
+  }
+  const roof = new THREE.Mesh(CITY_ART.siteGeo, CITY_ART.siteMat);
+  roof.scale.set(r*2, 0.12, 0.18); roof.position.set(0, 3.7, 0); group.add(roof);
+  scene.add(group);
+  const site = { group, posts, beams, roof };
+  CITY_ART.sites.set(b.id, site);
+  return site;
+}
+function cityArtUpdateScaffolds() {
+  const low = cityArtQuality() === 'low';
+  const cap = low ? 12 : 36;
+  let count = 0;
+  for (const b of blds) {
+    if (b.dead || b.done || b.type === 'farm' || b.def.wall || !b.mesh.visible || count++ >= cap) {
+      if (CITY_ART.sites.has(b.id)) cityArtRemoveSite(b);
+      continue;
+    }
+    const site = CITY_ART.sites.get(b.id) || cityArtScaffold(b);
+    const p = clamp(b.prog || 0, 0, 1);
+    const height = 0.35 + p * 3.9;
+    for (const beam of site.posts) { beam.scale.y = height; beam.position.y = height / 2; }
+    for (const beam of site.beams) { beam.position.y = height * 0.85; beam.visible = p >= 0.20; }
+    site.roof.visible = p >= 0.55;
+    site.roof.position.y = height + 0.15;
+    site.group.visible = !!b.mesh.visible;
+  }
+  for (const [id, site] of CITY_ART.sites)
+    if (!blds.some(b => b.id === id && !b.dead && !b.done)) cityArtRemoveSite({id});
+}
+function cityArtDecorPlan(buildings, team, roads, quality) {
+  const roadSet = new Set(roads || []);
+  const out = [], low = quality === 'low';
+  const limit = low ? 55 : 145;
+  for (const b of buildings) {
+    if (out.length >= limit || b.team !== team || b.dead || !b.done || b.def.wall || !b.mesh) continue;
+    const half = b.size * CS / 2;
+    const spread = [
+      [b.x - half - 0.85, b.z], [b.x + half + 0.85, b.z],
+      [b.x, b.z - half - 0.85], [b.x, b.z + half + 0.85],
+    ];
+    const kind = b.type === 'house' ? 'fence' :
+      b.type === 'tc' ? 'hearth' :
+      b.type === 'store' || b.type === 'granary' ? 'crate' :
+      b.type === 'farm' || b.type === 'pasture' ? 'hay' :
+      b.type === 'market' || b.type === 'stable' ? 'cart' :
+      b.type === 'forester' || b.type === 'smithy' ? 'log' :
+      b.type === 'library' || b.type === 'healer' ? 'flower' : 'barrel';
+    for (let i = 0; i < (low ? 1 : 2); i++) {
+      const at = spread[(i + Math.floor(hash2(b.cx,b.cy,3)*4)) % 4];
+      const cx = cellOf(at[0]), cy = cellOf(at[1]);
+      if (!inMap(cx,cy) || !walk[cidx(cx,cy)] || resv[cidx(cx,cy)] ||
+          nodeAt[cidx(cx,cy)] >= 0 || roadSet.has(cidx(cx,cy))) continue;
+      out.push({ kind, x: at[0], z: at[1], rot: hash2(b.cx+i,b.cy,9)*6.283 });
+    }
+  }
+  return out;
+}
+function cityArtPropGeometry(kind) {
+  let p = [];
+  switch (kind) {
+    case 'fence': {
+      for (const x of [-0.65,0.65]) p.push(P(box(0.15,0.9,0.15), C.woodD,x,0.45,0));
+      p.push(P(box(1.42,0.14,0.14),C.wood,0,0.68,0));
+      p.push(P(box(1.42,0.1,0.1),C.woodD,0,0.32,0)); break;
+    }
+    case 'hearth': {
+      for (let i=0;i<7;i++) {const a=i*6.283/7;p.push(P(box(0.4,0.24,0.32),C.stoneD,Math.sin(a)*0.5,0.12,Math.cos(a)*0.5,0,a,0));}
+      p.push(P(cyl(0,0.26,0.75,5),0xf29c3a,0,0.54,0)); break;
+    }
+    case 'crate':
+      p=[P(box(0.85,0.78,0.86),C.wood,0,0.39,0)];
+      for(const y of [0.1,0.71])p.push(P(box(0.89,0.11,0.91),C.woodD,0,y,0));break;
+    case 'hay':
+      p=[P(cyl(0.63,0.62,0.92,7),C.straw,0,0.5,0,0,0,Math.PI/2),
+        P(box(0.08,0.09,1.05),C.woodD,0.2,0.65,0)];break;
+    case 'cart': {
+      p=[P(box(1.2,0.24,1.7),C.wood,0,0.72,0),P(box(1.1,0.66,1.6),C.woodD,0,1.09,0),
+         P(box(0.13,0.12,1.2),C.wood,0,0.65,1.35)];
+      for (const x of [-0.7,0.7]) for(const z of [-0.48,0.48])
+        p.push(P(cyl(0.33,0.33,0.12,8),C.woodD,x,0.36,z,0,0,Math.PI/2));
+      break;
+    }
+    case 'log': {
+      p=[P(cyl(0.26,0.26,1.25,6),C.woodD,-0.18,0.26,0,0,0,Math.PI/2),
+         P(cyl(0.23,0.23,1.0,6),C.wood,0.2,0.24,0.2,0,0,Math.PI/2)]; break;
+    }
+    case 'flower': {
+      p=[P(box(0.6,0.34,0.6),C.woodD,0,0.2,0)];
+      for (const x of [-0.18,0.17]) for (const z of [-0.15,0.16]) {
+        p.push(P(cyl(0.03,0.04,0.5,5),0x5e853e,x,0.65,z));
+        p.push(P(sph(0.12),x>0?0xcd9c6b:0xb3a1d0,x,0.92,z));
+      } break;
+    }
+    default:
+      p=[P(cyl(0.38,0.33,0.84,8),C.wood,0,0.42,0),
+         P(cyl(0.4,0.4,0.12,8),C.iron,0,0.16,0),
+         P(cyl(0.4,0.4,0.12,8),C.iron,0,0.69,0)];
+  }
+  return merge(p);
+}
+function cityArtRebuildProps() {
+  if (!scene || !terrain) return;
+  for (const mesh of CITY_ART.props) { scene.remove(mesh); mesh.geometry.dispose(); mesh.material.dispose(); }
+  CITY_ART.props.length = 0;
+  const plan = cityArtDecorPlan(blds, MY, cityRoadCells, cityArtQuality());
+  const kinds = [...new Set(plan.map(v=>v.kind))];
+  const matrix = new THREE.Matrix4(), quat = new THREE.Quaternion(), pos = new THREE.Vector3(),
+        scale = new THREE.Vector3(1,1,1), up = new THREE.Vector3(0,1,0);
+  for (const kind of kinds) {
+    const items = plan.filter(x=>x.kind===kind);
+    const mesh = new THREE.InstancedMesh(cityArtPropGeometry(kind),
+      new THREE.MeshLambertMaterial({vertexColors:true}),items.length);
+    for(let i=0;i<items.length;i++) {
+      const item=items[i];
+      quat.setFromAxisAngle(up,item.rot);
+      matrix.compose(pos.set(item.x,heightAt(item.x,item.z)+0.03,item.z),quat,scale);
+      mesh.setMatrixAt(i,matrix);
+    }
+    mesh.instanceMatrix.needsUpdate=true; mesh.frustumCulled=false; mesh.receiveShadow=true;
+    scene.add(mesh);CITY_ART.props.push(mesh);
+  }
+  CITY_ART.dirty=false;
+}
+function cityArtRotor(b) {
+  if (!CITY_ART.rotorGeo) CITY_ART.rotorGeo = new THREE.BoxGeometry(1,1,1);
+  if (!CITY_ART.rotorMat) CITY_ART.rotorMat = new THREE.MeshLambertMaterial({color:0xe6dfc9});
+  const g=new THREE.Group();
+  g.position.set(0,3.05,1.91);
+  for (let i=0;i<4;i++) {
+    const blade=new THREE.Mesh(CITY_ART.rotorGeo,CITY_ART.rotorMat);
+    blade.position.set(0,1.22,0);blade.scale.set(0.58,2.1,0.09);
+    const pivot=new THREE.Group();pivot.rotation.z=i*Math.PI/2;pivot.add(blade);g.add(pivot);
+  }
+  b.mesh.add(g);b.artRotor=g;
+}
+function cityArtSyncEpochs() {
+  if (!teams.length) return;
+  const stamp=teams.map(t=>t.era).join(':');
+  if (stamp===CITY_ART.epochStamp) return;
+  CITY_ART.epochStamp=stamp;
+  for (const b of blds) if (b.mesh && !b.dead) b.mesh.geometry=geoFor('b',b.type,b.team);
+  cityRoadDirty=true; CITY_ART.dirty=true;
+}
+function cityArtCreateWorker(u) {
+  if (u.art) return;
+  if (!CITY_ART.workerGeo) CITY_ART.workerGeo={
+    arm:new THREE.BoxGeometry(0.17,0.74,0.17),
+    handle:new THREE.BoxGeometry(0.09,0.8,0.09),
+    head:new THREE.BoxGeometry(0.47,0.17,0.18),
+    pack:new THREE.BoxGeometry(0.42,0.43,0.34),
+  };
+  if (!CITY_ART.workerMat) CITY_ART.workerMat={
+    arm:new THREE.MeshLambertMaterial({color:0xd4a478}),
+    handle:new THREE.MeshLambertMaterial({color:0x87633f}),
+    head:new THREE.MeshLambertMaterial({color:0x888f90}),
+    pack:new THREE.MeshLambertMaterial({color:0xc6ab6b}),
+  };
+  const arm=(x)=> {
+    const pivot=new THREE.Group();pivot.position.set(x,1.37,0.02);
+    const mesh=new THREE.Mesh(CITY_ART.workerGeo.arm,CITY_ART.workerMat.arm);
+    mesh.position.y=-0.36;pivot.add(mesh);u.mesh.add(pivot);return pivot;
+  };
+  const left=arm(-0.43),right=arm(0.43);
+  const tool=new THREE.Group();tool.position.set(0,-0.72,0.06);
+  const handle=new THREE.Mesh(CITY_ART.workerGeo.handle,CITY_ART.workerMat.handle);
+  handle.position.set(0,-0.34,0);tool.add(handle);
+  const head=new THREE.Mesh(CITY_ART.workerGeo.head,CITY_ART.workerMat.head);
+  head.position.set(0,-0.73,0);tool.add(head);
+  right.add(tool);
+  const pack=new THREE.Mesh(CITY_ART.workerGeo.pack,CITY_ART.workerMat.pack);
+  pack.position.set(0,1.1,-0.38);u.mesh.add(pack);
+  u.art={left,right,tool,pack};
+}
+function cityArtAnimate(now,dt) {
+  if (!scene || !terrain || !teams.length) return;
+  CITY_ART.visualAcc += dt;
+  if (CITY_ART.visualAcc >= 0.22) {
+    CITY_ART.visualAcc = 0;
+    cityArtSyncEpochs();
+    cityArtUpdateScaffolds();
+    cityArtSyncRotors();
+    if (CITY_ART.dirty) cityArtRebuildProps();
+  }
+  const low=cityArtQuality()==='low', range=low?52:94;
+  let count=0;
+  for (const u of units) {
+    if (u.dead || u.type!=='vil' || !u.mesh) continue;
+    const distance=Math.hypot(u.x-cam.x,u.z-cam.z);
+    if (!u.art && distance<range && count<(low?32:80)) cityArtCreateWorker(u);
+    if (!u.art) continue;
+    u.art.left.visible=u.art.right.visible=u.art.pack.visible=distance<range;
+    if (distance>=range) continue;
+    count++;
+    const kind=u.order&&u.order.type;
+    const pose=cityArtWorkPose(kind,now,u.id,u.working,u.moving);
+    u.art.left.rotation.x=pose.left;
+    u.art.right.rotation.x=pose.right;
+    u.art.tool.rotation.z=pose.tool;
+    u.art.tool.visible=!!u.working && ['build','gather','farm'].includes(kind);
+    u.art.pack.visible=(u.carry||0)>0.4;
+    if (kind==='farm') u.art.tool.rotation.z=0.25+pose.tool;
+  }
+  for (const b of blds) if (b.artRotor && b.done && !b.dead && b.enabled!==false && !G.paused)
+    b.artRotor.rotation.z-=dt*2.1*(G.speed||1);
+}
+function cityArtSyncRotors() {
+  for (const b of blds) if (b.type==='mill' && b.done && !b.dead && b.mesh && !b.artRotor)
+    cityArtRotor(b);
+}
+
 const CITY_KINDS = ['food', 'wood', 'stone', 'ore', 'gold'];
 const CITY_DEFAULT = Object.freeze({ food: 3, wood: 2, stone: 1, ore: 1, gold: 0 });
 function cityState(T) {
@@ -160,7 +438,7 @@ function cityRepair(b, T, dt) {
 }
 function updateCityRoads() {
   if (!cityRoadDirty || !scene || !terrain) return;
-  cityRoadDirty = false;
+  cityRoadDirty = false; CITY_ART.dirty = true;
   if (cityRoadMesh) {
     scene.remove(cityRoadMesh);
     cityRoadMesh.geometry.dispose();
@@ -186,8 +464,8 @@ function updateCityRoads() {
   PT = oldPT;
   if (!cityRoadCells.length) return;
   const mesh = new THREE.InstancedMesh(
-    new THREE.PlaneGeometry(CS * 0.88, CS * 0.88),
-    new THREE.MeshLambertMaterial({ color: 0xa99874, transparent: true, opacity: 0.86, depthWrite: false, side: THREE.DoubleSide }),
+    new THREE.PlaneGeometry(CS * 0.98, CS * 0.98),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.91, depthWrite: false, side: THREE.DoubleSide }),
     cityRoadCells.length
   );
   const matrix = new THREE.Matrix4(), rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
@@ -196,8 +474,13 @@ function updateCityRoads() {
     const x = cellC(cell % N), z = cellC((cell / N) | 0);
     matrix.compose(new THREE.Vector3(x, heightAt(x, z) + 0.09, z), rot, scale);
     mesh.setMatrixAt(i, matrix);
+    const era = teams[MY] ? teams[MY].era : 0;
+    const base = era >= 3 ? 0xbcb5a4 : era >= 2 ? 0xa99b81 : 0xa58a62;
+    const color = new THREE.Color(base).multiplyScalar(0.88 + hash2(cell % N, (cell / N)|0, 63) * 0.2);
+    mesh.setColorAt(i, color);
   });
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   mesh.frustumCulled = false;
   mesh.receiveShadow = true;
   cityRoadMesh = mesh;
@@ -387,7 +670,7 @@ function nearestNode(type, x, z, maxD) {
 }
 
 // ---------- entity ----------
-function geoFor(kind, type, team) { const k = kind + type + team; return geoCache[k] || (geoCache[k] = kind === 'u' ? unitGeo(type, TEAM_COLORS[team]) : buildingGeo(type, TEAM_COLORS[team])); }
+function geoFor(kind, type, team) { const era = kind === 'b' && teams[team] ? teams[team].era : 0; const k = kind + type + team + (kind === 'b' ? era : ''); return geoCache[k] || (geoCache[k] = kind === 'u' ? unitGeo(type, TEAM_COLORS[team]) : buildingGeo(type, TEAM_COLORS[team], era)); }
 function addUnit(team, type, x, z) {
   const def = UNITS[type];
   const u = { id: nextId++, isU: true, team, type, def, x, z, hp: def.hp, maxHp: def.hp, order: null, path: null, pi: 0, cd: 0, carry: 0, ctype: null, face: Math.random() * 6, moving: false, working: false, scan: Math.random() * 0.5, dead: false };
@@ -413,11 +696,11 @@ function placeBuilding(team, type, cx, cy, instant) {
   b.mesh = new THREE.Mesh(geoFor('b', type, team), type === 'farm' ? farmMat : bldMat);
   b.mesh.castShadow = type !== 'farm'; b.mesh.receiveShadow = true;
   b.mesh.position.set(b.x, b.y, b.z); b.mesh.scale.y = instant ? 1 : 0.12; scene.add(b.mesh);
-  blds.push(b); byId.set(b.id, b); cityRoadDirty = true;
+  blds.push(b); byId.set(b.id, b); cityRoadDirty = true; CITY_ART.dirty = true;
   return b;
 }
 function finishBuilding(b) {
-  b.done = true; b.prog = 1; b.mesh.scale.y = 1; cityRoadDirty = true;
+  b.done = true; b.prog = 1; b.mesh.scale.y = 1; cityRoadDirty = true; CITY_ART.dirty = true; cityArtRemoveSite(b);
   if (!b.def.line) say(b.team, b.def.name + ' – stavba dokončena.');
 }
 function killEnt(e, by) {
@@ -425,6 +708,7 @@ function killEnt(e, by) {
   const T = teams[e.team];
   if (e.isU) { T.pop--; T.stats.lost++; if (by) teams[by.team].stats.kills++; }
   else {
+    cityArtRemoveSite(e); CITY_ART.dirty = true;
     cityRoadDirty = true;
     for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; }
     for (const q of e.queue) { if (q.kind === 't') delete T.busy[q.id]; }
@@ -1128,6 +1412,7 @@ function endGame(loser, reason) { if (G.over) return; G.over = true; G.loser = l
 function resetWorld() {
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
   units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
+  cityArtClear();
   byId.clear(); nodeMeshes = {}; nextId = 1; cityRoadMesh = null; cityRoadCells = []; cityRoadDirty = true;
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
   Object.assign(G, { time: 0, over: false, loser: null, endReason: '', reveal: false, snow: 0, flood: 0, rain: 0 });

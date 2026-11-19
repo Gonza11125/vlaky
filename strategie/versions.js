@@ -18,5 +18,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.3.0",
     "description": "Živé město: správa obyvatel, pracovní priority, automatika a pěšiny; realistický režim doplňuje spokojenost, pochůzky a údržbu budov."
+  },
+  {
+    "id": "1.4.0",
+    "description": "Živé město II: nové architektonické detaily podle epoch, lešení a fáze stavby, animace práce, větrný mlýn, výbava osady, upravené pěšiny a grafické profily pro tablety."
   }
 ];

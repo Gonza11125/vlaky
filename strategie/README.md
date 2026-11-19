@@ -6,8 +6,40 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0** a **1.3.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0** a **1.4.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.4.0 – Živé město II
+
+Cílem této aktualizace je vizuální čitelnost a příjemnější život v osadě bez
+změn herní ekonomiky a rozdělení klasického/realistického režimu.
+
+- **Detailnější 3D budovy**: dveře, okna, podpěry, komíny, dílny, nářadí,
+  zásoby a skutečně odlišené typy staveb. Doplňky se rozvíjejí s epochami.
+- **Výstavba v několika etapách**: základ, konstrukce, střecha a dokončení.
+  Lešení se mění podle skutečného procenta rozestavěnosti a po dokončení zmizí.
+  V panelu budovy se zobrazuje fáze výstavby a počet stavitelů.
+- **Povolání stavitelů/opravářů**: u budovy lze jedním tlačítkem přiřadit až tři
+  nejbližší nečinné vesničany. Již přidělené úkoly zůstávají nedotčeny.
+- **Animovaní vesničané**: při chůzi, stavění, těžbě a práci na poli se pohybují
+  paže, nástroje a viditelně se přenáší nasbíraný materiál.
+- **Pohyblivý větrný mlýn**: při povolené výrobě a běžící hře se otáčí lopaty.
+- **Drobná výbava osady**: ploty, bedny, sudy, povozy, dřevo, seno, květiny,
+  ohniště, generované deterministicky do okolí hotových budov.
+- **Upravené pěšiny**: trochu přirozenější odstín, výplň a barevná proměna
+  podle epochy. Zůstávají čistě vizuální, neovlivňují průchodnost.
+- **Grafika a výkon**: v panelu Město je výběr Automaticky / Úsporná /
+  Detailní. Úsporný režim omezuje rozlišení vykreslování, stíny, detaily
+  blízkých obyvatel a počet dekorací. Scenérie využívá sdružené geometrie
+  a vykreslování instancí pro snížení počtu draw-callů.
+
+V obou režimech je stejný nový vizuální základ. Realistický režim nadále
+obsahuje spokojenost, materiálové opravy, chátrání a pochůzky obyvatel;
+klasický režim nic z toho nepřidává. Výběr grafiky nemění pravidla hry.
+
+**Uložení:** při první návštěvě lze vytvořit kopii platné místní uložené
+hry 1.3.0 (případně 1.2.0 nebo 1.1.0). Originál staré verze se nemění.
+Grafická výbava se odvozuje z herního stavu a nezvyšuje velikost uložení.
 
 ## Novinky ve 1.3.0 – Živé město
 

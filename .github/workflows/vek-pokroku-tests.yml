@@ -36,6 +36,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Test city management in Chromium
         run: python strategie/tests/city_browser.py
+      - name: Test Věk pokroku 1.4.0 graphics and construction
+        run: python strategie/tests/city_visuals_browser.py
       - name: Test game releases and save controls in Chromium
         run: python strategie/tests/browser_smoke.py
       - name: Test economy and two-player synchronization in Chromium

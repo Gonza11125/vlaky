@@ -294,7 +294,95 @@ function unitGeo(type, team) {
   return merge(p, team);
 }
 
-function buildingGeo(type, team) {
+
+// Verze 1.4: čitelné architektonické prvky podle typu stavby a epochy.
+// Všechny díly se slučují do jediné geometrie na typ/tým/epochu.
+function buildingDetails(type, w, p, era) {
+  const beam = (x, y, z, h = 1.6) => p.push(P(box(0.12, h, 0.12), C.woodD, x, y, z));
+  const shutter = (x, y, z) => {
+    p.push(P(box(0.52, 0.62, 0.08), 0x302c27, x, y, z));
+    p.push(P(box(0.12, 0.67, 0.11), C.woodD, x - 0.28, y, z + 0.02));
+    p.push(P(box(0.12, 0.67, 0.11), C.woodD, x + 0.28, y, z + 0.02));
+    p.push(P(box(0.56, 0.08, 0.13), C.stone, x, y - 0.38, z + 0.04));
+  };
+  if (type === 'house') {
+    for (const x of [-1.36, 1.36]) for (const z of [-1.17, 1.17]) beam(x, 0.86, z, 1.72);
+    for (const z of [-1.18, 1.18]) p.push(P(box(2.82, 0.13, 0.15), C.woodD, 0, 1.55, z));
+    shutter(-0.8, 1.02, 1.39);
+    p.push(P(box(0.12, 1.4, 0.12), C.woodD, 0.17, 0.7, 1.38));
+    p.push(P(box(0.17, 0.17, 0.17), C.iron, 0.6, 0.78, 1.42));
+    p.push(P(box(1.2, 0.11, 0.5), C.stoneD, 0.42, 0.06, 1.54));
+    for (const x of [-1.27, 1.27]) p.push(P(box(0.12, 0.12, 3.2), C.woodD, x, 1.77, 0));
+    p.push(P(box(0.43, 0.14, 0.43), C.stone, -0.9, 2.68, -0.4));
+  } else if (type === 'tc') {
+    for (const x of [-w / 2 + 0.52, w / 2 - 0.52]) for (const z of [-w / 2 + 0.52, w / 2 - 0.52])
+      p.push(P(box(0.48, 0.45, 0.48), C.stoneD, x, 0.44, z));
+    p.push(P(box(1.35, 0.24, 0.3), C.stone, -0.58, 1.95, w / 2 - 0.51));
+    for (const x of [-1.3, 0, 1.3]) shutter(x, 1.76, -w / 2 + 0.53);
+    p.push(P(box(2.45, 0.3, 0.25), C.woodD, 0, 2.9, w / 2 - 0.51));
+    p.push(P(box(0.18, 1.8, 0.18), C.woodD, w / 2 - 1.28, 4.6, w / 2 - 1.28));
+  } else if (['store','granary','stable'].includes(type)) {
+    for (const x of [-1.46, 1.46]) for (const z of [-1.33, 1.33]) beam(x, 0.86, z, 1.7);
+    for (const x of [-0.9, -0.2, 0.5]) {
+      p.push(P(box(0.52, 0.45, 0.48), C.woodD, x, 0.24, w / 2 - 0.35));
+      p.push(P(box(0.45, 0.08, 0.48), C.wood, x, 0.49, w / 2 - 0.35));
+    }
+    p.push(P(box(0.12, 1.45, 0.12), C.wood, 0, 0.73, 1.48));
+  } else if (['bakery','smithy','smelter'].includes(type)) {
+    for (const x of [-1.42, 1.42]) beam(x, 0.85, 1.16, 1.66);
+    p.push(P(box(2.92, 0.12, 0.12), C.woodD, 0, 1.57, 1.17));
+    p.push(P(box(0.7, 0.15, 0.45), C.stoneD, -0.82, 0.12, w / 2 - 0.23));
+    p.push(P(box(0.42, 0.4, 0.42), C.wood, 1.25, 0.22, w / 2 - 0.35));
+    p.push(P(cyl(0.33, 0.35, 0.1, 8), C.stone, 1.25, 0.5, w / 2 - 0.35));
+    if (type === 'bakery') shutter(0.72, 1.0, -1.4);
+  } else if (type === 'forester') {
+    p.push(P(box(3.3, 0.14, 0.2), C.woodD, 0, 1.5, 1.28));
+    for (const x of [-1.4, 1.4]) beam(x, 0.83, 1.25);
+    for (let i = 0; i < 3; i++) p.push(P(box(0.7, 0.16, 0.16), C.wood, -1 + i * 0.76, 0.2 + i * 0.28, 1.68));
+    shutter(-0.7, 1.08, -1.34);
+  } else if (type === 'library') {
+    for (const x of [-1.2, 1.2]) shutter(x, 1.45, -1.46);
+    p.push(P(box(3.25, 0.15, 0.2), C.stoneD, 0, 0.41, 1.5));
+    p.push(P(box(0.6, 0.8, 0.13), C.woodD, 0, 0.8, 1.45));
+    p.push(P(box(0.48, 0.26, 0.12), C.stone, 0, 1.35, 1.46));
+  } else if (type === 'mill') {
+    for (const y of [0.35, 1.1, 2.0, 2.9]) {
+      p.push(P(box(2.12, 0.1, 0.18), C.stoneD, 0, y, 0.94));
+      p.push(P(box(0.2, 0.1, 1.93), C.stoneD, 0.92, y, 0));
+    }
+    p.push(P(box(0.36, 0.48, 0.12), 0x252629, 0.75, 1.75, 1.05));
+  } else if (type === 'market') {
+    for (const x of [-2.1, 2.1]) for (const z of [-2.3, 2.3])
+      p.push(P(box(0.46, 0.46, 0.46), C.woodD, x, 0.3, z));
+    p.push(P(box(0.74, 0.58, 0.58), C.wood, 0, 0.33, 2.5));
+  } else if (type === 'farm') {
+    for (let i = 0; i < 7; i++) for (let j = 0; j < 6; j++) {
+      p.push(P(cyl(0.065, 0.11, 0.55, 4), (i + j) % 2 ? C.crop : C.grass,
+        -2.2 + j * 0.87, 0.43, -2.4 + i * 0.75));
+    }
+    p.push(P(box(1.1, 0.33, 0.55), C.wood, 2.0, 0.2, 2.35));
+  } else if (type === 'well') {
+    p.push(P(box(0.16, 0.18, 0.16), C.wood, 0, 1.25, 0.7));
+    p.push(P(cyl(0.16, 0.14, 0.4, 8), C.woodD, 0.42, 0.3, 1.1));
+  }
+  if (era >= 2 && ['house','tc','store','bakery','library','smithy','granary','healer'].includes(type)) {
+    for (const z of [-w / 2 + 0.38, w / 2 - 0.38])
+      p.push(P(box(w - 0.52, 0.23, 0.23), C.stoneD, 0, 0.16, z));
+    for (const x of [-w / 2 + 0.38, w / 2 - 0.38])
+      p.push(P(box(0.23, 0.23, w - 0.52), C.stoneD, x, 0.16, 0));
+  }
+  if (era >= 3 && ['house','tc','bakery','library','granary'].includes(type)) {
+    p.push(P(box(0.65, 0.28, 0.18), 0x8a9b9c, -w / 2 + 0.85, 1.9, w / 2 - 0.55));
+    p.push(P(box(0.18, 0.68, 0.18), C.iron, w / 2 - 0.52, 1.95, w / 2 - 0.55));
+  }
+  if (era >= 4 && ['tc','house','library','market','workshop'].includes(type)) {
+    for (const x of [-w / 2 + 0.65, w / 2 - 0.65])
+      p.push(P(cyl(0.11, 0.11, 1.2, 6), C.iron, x, 0.75, w / 2 - 0.18));
+  }
+  return p;
+}
+
+function buildingGeo(type, team, era = 0) {
   const s = BUILDINGS[type].size, w = s * CS;
   let p = [];
   switch (type) {
@@ -368,7 +456,8 @@ function buildingGeo(type, team) {
       break;
     case 'mill':
       p = [P(cyl(1.2, 1.5, 3.2, 8), C.stone, 0, 1.6, 0), P(cyl(0, 1.45, 1.3, 8), C.thatch, 0, 3.85, 0), P(box(0.7, 1.1, 0.1), C.woodD, 0, 0.55, 1.46), P(cyl(0.12, 0.12, 0.9, 6), C.woodD, 0, 3.0, 1.5, Math.PI / 2, 0, 0)];
-      for (let i = 0; i < 4; i++) p.push(P(box(0.5, 2.6, 0.06), C.white, Math.sin(i * Math.PI / 2 + 0.4) * 1.3, 3.0 + Math.cos(i * Math.PI / 2 + 0.4) * 1.3, 1.9, 0, 0, -(i * Math.PI / 2 + 0.4)));
+      // Lopaty větrného kola jsou nyní samostatně animované ve cityArtRotor (1.4).
+      p.push(P(cyl(0.23, 0.23, 0.3, 8), C.woodD, 0, 3.05, 1.82, Math.PI / 2, 0, 0));
       p.push(P(box(0.5, 0.4, 0.06), 'T', -0.9, 1.6, 1.25));
       break;
     case 'market':
@@ -406,7 +495,7 @@ function buildingGeo(type, team) {
       p.push(P(box(0.3, 0.7, 0.1), 0x2a2622, 0, 3.2, 0.81), ...flag(0, 0, 6.4));
       break;
   }
-  return merge(p, team);
+  return merge(buildingDetails(type, w, p, era), team);
 }
 
 function treeGeo(pine) {

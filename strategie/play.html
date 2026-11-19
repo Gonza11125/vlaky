@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku</title>
+<title>Věk pokroku – Živé město II</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -168,6 +168,13 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 .city-actions button { flex:1 1 195px; }
 .city-note { color:var(--dim); font-size:13px; }
 @media(max-width:480px) { .city-grid {grid-template-columns:repeat(2,minmax(0,1fr));} .city-priorities {grid-template-columns:1fr;} #s-city {font-size:11px;} }
+
+/* 1.4.0: vizuální postup výstavby a přepínač výkonu */
+.bar.construction { height:10px; margin:6px 0 7px; background:#354033; }
+.bar.construction i { background:linear-gradient(90deg,#aa7d4a,#d6b86c); }
+.city-quality-label { display:flex; flex-direction:column; gap:6px; max-width:350px; font-weight:600; }
+.city-quality-label select { font:inherit; background:var(--panel-2); color:var(--fg);
+  border:1px solid var(--line); border-radius:4px; padding:8px; max-width:100%; }
 </style>
 
 <div id="app">
@@ -212,11 +219,13 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
+      <p class="lead"><b>Živé město II:</b> nové detaily budov, fáze výstavby, pracovní animace, pěšiny a proměny epoch.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
       <h2>Jak to funguje</h2>
       <ul>
+        <li><b>Živá osada:</b> otevři Město (C), nastav automatiku práce, priority a grafiku. Vyber rozestavěnou budovu a přivolej volné stavitele.</li>
         <li><b>Lidé jedí pořád.</b> Pole rodí od jara do podzimu, v zimě se žije ze zásob a z pastvin. Hlad oslabí všechny.</li>
         <li><b>Kov se nesbírá, vyrábí se.</b> Vesničané těží rudu, huť ji s dřevem taví na kov.</li>
         <li><b>Technologie navazují.</b> Bez písma není knihovna, bez matematiky katapult, bez oceli rytíř.</li>
@@ -327,7 +336,17 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <p class="city-note">Volní obyvatelé chodí mezi domy a pracovišti. Stavby časem chátrají, ale samotné opotřebení je nezničí. Oprava potřebuje dřevo, u hradeb a věží kámen.</p>
         <div class="city-actions"><button class="pick" id="b-city-maint">Automatické opravy</button></div>
       </section>
-      <p class="city-note">Pěšiny se vizuálně vytvářejí mezi sídlem a dokončenými budovami. Nezvyšují rychlost pohybu a nespotřebovávají materiál.</p>
+      <h2>Grafika a výkon – Živé město II</h2>
+      <p class="city-note">V obou režimech jsou podrobnější budovy, lešení během stavby, animace práce, pohyblivá mlýnská kola a doplňky osady. Vizuální nastavení neovlivňuje ekonomiku ani obtížnost.</p>
+      <label class="city-quality-label" for="city-art-quality">Kvalita vykreslování
+        <select id="city-art-quality">
+          <option value="auto">Automaticky podle zařízení</option>
+          <option value="low">Úsporná (pro tablety)</option>
+          <option value="high">Detailní</option>
+        </select>
+      </label>
+      <p class="city-note" id="city-art-hint"></p>
+      <p class="city-note">Pěšiny se vizuálně vytvářejí mezi sídlem a dokončenými budovami a mění vzhled s epochou. Nezvyšují rychlost pohybu a nespotřebovávají materiál.</p>
     </div>
   </div>
 

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="cs">
+<meta charset="utf-8">
+<title>Věk pokroku – Živé město II</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Rozvržení: 3D mapa přes celou plochu, nahoře lišta zásob, dole mapka + výběr + rozkazy. Jeden tmavý vzhled (herní HUD). */
+:root {
+  color-scheme: dark;
+  --ink: #12181a; --panel: #1b2426; --panel-2: #243033; --line: #3b4b4d;
+  --fg: #ece7d8; --dim: #9fada8; --brass: #d7a84a; --good: #8fd08a; --bad: #ef7d66;
+  --food: #e0734f; --wood: #b98548; --stone: #b4b4aa; --ore: #cf7f35; --metal: #8fb7cf; --gold: #f0c63c; --know: #c7a5ee;
+  --display: 'Marcellus', 'Palatino Linotype', Georgia, serif;
+  --body: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
+  --gl: max(10px, env(safe-area-inset-left, 0px)); --gr: max(10px, env(safe-area-inset-right, 0px));
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--ink); color: var(--fg); font: 14px/1.35 var(--body); overflow: hidden; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+#app { position: relative; height: 100%; overflow: hidden; background: var(--ink); }
+#view, #hud { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#view { touch-action: none; cursor: default; }
+#hud { pointer-events: none; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; }
+#app { overscroll-behavior: none; touch-action: manipulation; }
+button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+
+#top { position: absolute; inset: 0 0 auto 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; padding: 6px var(--gr) 6px var(--gl);
+  background: linear-gradient(#141b1dF2, #141b1dD0); border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+#resbar { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.res { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.res b { font-weight: 400; color: var(--dim); font-size: 12px; }
+.res em { font-style: normal; font-weight: 700; min-width: 2.4em; }
+.res small { color: var(--dim); font-size: 11px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; transform: translateY(-1px) rotate(45deg); }
+.dot.food { background: var(--food); } .dot.wood { background: var(--wood); } .dot.stone { background: var(--stone); } .dot.ore { background: var(--ore); } .dot.metal { background: var(--metal); } .dot.gold { background: var(--gold); } .dot.know { background: var(--know); }
+.dot.grain { background: #d4bd6c; } .dot.flour { background: #e9dfc4; }
+#status { display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline; margin-left: auto; }
+#status .era { font-family: var(--display); color: var(--brass); letter-spacing: .03em; }
+#tools { display: flex; gap: 6px; }
+.tbtn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; min-height: 28px; }
+.tbtn:hover { border-color: var(--brass); }
+#s-ev { display: inline-flex; gap: 5px; flex-wrap: wrap; } .ev { font-weight: 600; font-size: 12px; color: #1b1608; background: var(--bad); border-radius: 3px; padding: 0 6px; }
+.warnp { color: var(--bad) !important; font-weight: 600; }
+.tbtn.warn { border-color: var(--brass); color: var(--brass); }
+
+#msgs { position: absolute; left: var(--gl); top: 84px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: min(440px, 70%); }
+.msg { background: #141b1dE0; border-left: 3px solid var(--dim); padding: 4px 9px; border-radius: 0 3px 3px 0; animation: fade 7s forwards; }
+.msg.good { border-color: var(--good); } .msg.bad { border-color: var(--bad); }
+@keyframes fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+#box { position: absolute; border: 1px solid #e8ffe0; background: #9fe08f22; pointer-events: none; }
+
+#bottom { position: absolute; inset: auto 0 0 0; display: grid; grid-template-columns: 172px minmax(0, 1fr) minmax(300px, 430px); gap: 8px; align-items: end;
+  padding: 0 var(--gr) calc(8px + env(safe-area-inset-bottom, 0px)) var(--gl); pointer-events: none; }
+#bottom > * { pointer-events: auto; }
+#mini { width: 172px; height: 172px; background: var(--ink); border: 1px solid var(--line); border-radius: 4px; touch-action: none; cursor: crosshair; }
+#info, #cmd { background: #1b2426EE; border: 1px solid var(--line); border-top: 2px solid var(--brass); border-radius: 4px; height: 150px; }
+#info { padding: 8px 12px; overflow: auto; min-width: 0; }
+#info h2 { font: 400 18px/1.2 var(--display); margin: 0 0 2px; letter-spacing: .02em; }
+#info p { margin: 2px 0; color: var(--dim); }
+#info .stat { color: var(--fg); }
+.bar { height: 6px; background: #0008; border-radius: 3px; overflow: hidden; margin: 5px 0; max-width: 260px; }
+.bar > i { display: block; height: 100%; background: var(--good); }
+.bar.q > i { background: var(--brass); }
+.qrow { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.qitem { background: var(--panel-2); border: 1px solid var(--line); border-radius: 3px; padding: 1px 7px; font-size: 12px; }
+#cmd { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 48px; gap: 4px; padding: 6px; overflow-y: auto; align-content: start; }
+.cbtn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 1px; min-width: 0; line-height: 1.15; text-align: center; }
+.cbtn:hover { border-color: var(--brass); background: #2c3b3e; }
+.cbtn .n { font-weight: 600; font-size: 12.5px; max-width: 100%; overflow-wrap: anywhere; }
+.cbtn .c { font-size: 11px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cbtn .c .dot { width: 6px; height: 6px; margin: 0 2px 0 4px; }
+.cbtn.cant { opacity: .5; }
+.cbtn.tech { border-style: dashed; }
+.cbtn.on { border-color: var(--brass); color: var(--brass); }
+#tip { position: absolute; right: var(--gr); bottom: calc(170px + env(safe-area-inset-bottom, 0px)); width: min(430px, calc(100% - 20px)); background: #141b1dF5; border: 1px solid var(--brass); border-radius: 4px; padding: 8px 12px; pointer-events: none; }
+#tip h3 { font: 400 16px var(--display); margin: 0 0 2px; color: var(--brass); }
+#tip p { margin: 2px 0; }
+#tip .c .dot { margin: 0 3px 0 8px; } #tip .c .dot:first-child { margin-left: 0; }
+#place { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(176px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; }
+#place button { padding: 9px 18px; border-radius: 4px; border: 1px solid var(--brass); background: var(--panel); font-weight: 600; }
+#place .ok { background: var(--brass); color: #1b1608; }
+
+.overlay { position: absolute; inset: 0; background: #0d1213CC; display: flex; align-items: center; justify-content: center; padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); overflow: auto; }
+.card { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--brass); border-radius: 6px; padding: 22px 26px; max-width: 640px; width: 100%; max-height: 100%; overflow: auto; -webkit-user-select: text; user-select: text; }
+.card h1 { font: 400 clamp(30px, 6vw, 44px)/1.05 var(--display); margin: 0 0 6px; letter-spacing: .02em; text-wrap: balance; }
+.card .lead { color: var(--dim); margin: 0 0 14px; max-width: 60ch; }
+.card h2 { font: 400 17px var(--display); color: var(--brass); margin: 16px 0 6px; letter-spacing: .04em; }
+.card ul { margin: 0; padding-left: 18px; color: var(--dim); }
+.card li { margin: 3px 0; } .card li b { color: var(--fg); font-weight: 600; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.pick { padding: 8px 16px; border-radius: 4px; border: 1px solid var(--line); background: var(--panel-2); }
+.pick.on { border-color: var(--brass); color: var(--brass); }
+details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color: var(--brass); font-family: var(--display); font-size: 17px; letter-spacing: .04em; padding: 4px 0; }
+#net-code { width: 5.5em; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 600 15px var(--body); letter-spacing: .2em; text-transform: uppercase; -webkit-user-select: text; user-select: text; }
+.pick:disabled { opacity: .45; cursor: default; }
+#p2p { margin: 12px 0 0; max-width: 62ch; } #p2p summary { cursor: pointer; color: var(--brass); font-size: 14px; font-weight: 600; padding: 4px 0; }
+#p-text { display: block; width: 100%; box-sizing: border-box; min-height: 70px; margin-top: 8px; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
+#p-status.ok { color: var(--good); } #p-status.bad { color: var(--bad); }
+.hint { color: var(--dim); font-size: 12.5px; margin: 6px 0 0; max-width: 62ch; }
+.go.alt { background: var(--panel-2); color: var(--brass); border: 1px solid var(--brass); }
+#touchbar { display: none; position: absolute; left: var(--gl); bottom: calc(100% + 6px); flex-direction: column; gap: 6px; }
+#touchbar button { background: #1b2426EE; border: 1px solid var(--line); border-radius: 4px; padding: 0 12px; min-height: 40px; font-weight: 600; text-align: left; }
+#touchbar button.on { border-color: var(--brass); color: var(--brass); }
+@media (pointer: coarse), (max-width: 760px) { #touchbar { display: flex; } .tbtn { min-height: 36px; padding: 3px 11px; } }
+.go { padding: 11px 28px; border-radius: 4px; border: 0; background: var(--brass); color: #1b1608; font-weight: 700; font-size: 16px; margin-top: 18px; }
+.card.wide { max-width: 900px; }
+.tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.tech { border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; }
+.tech h4 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
+.tech p { margin: 3px 0 0; color: var(--dim); font-size: 12.5px; }
+.tech .st { font-weight: 400; font-size: 12px; color: var(--dim); white-space: nowrap; }
+.tech.done { border-color: var(--good); } .tech.done .st { color: var(--good); }
+.tech.avail .st { color: var(--brass); }
+.tech.lock { opacity: .6; }
+
+@media (max-width: 760px) {
+  body { font-size: 13px; }
+  #top { gap: 2px 10px; padding-top: 4px; padding-bottom: 4px; }
+  #resbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px 2px; width: 100%; }
+  #resbar .res { flex-direction: column; align-items: center; gap: 0; line-height: 1.15; } #resbar .dot { display: none; } #resbar .res b { font-size: 10px; letter-spacing: .02em; }
+  .res em { min-width: 0; } .res small { display: none; }
+  #tools { width: 100%; gap: 5px; } #tools .tbtn { flex: 1 1 auto; padding: 3px 4px; white-space: nowrap; }
+  #status { margin-left: 0; gap: 0 10px; }
+  #msgs { top: 96px; }
+  #bottom { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  #mini { position: absolute; right: var(--gr); bottom: calc(100% + 6px); width: 108px; height: 108px; }
+  #info { height: auto; max-height: 74px; padding: 5px 10px; } #info h2 { font-size: 15px; display: inline; margin-right: 8px; } #info p { display: inline; margin-right: 8px; }
+  #info .bar { margin: 3px 0; }
+  #cmd { height: auto; display: flex; overflow-x: auto; overflow-y: hidden; padding: 5px; }
+  .cbtn { flex: 0 0 108px; height: 56px; }
+  #tip { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); left: var(--gl); right: var(--gr); width: auto; }
+  #place { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-height: 520px) and (min-width: 761px) {
+  #top { padding-top: 3px; padding-bottom: 3px; gap: 2px 10px; } .res b { display: none; } .res small { display: none; }
+  #resbar { gap: 0 8px; } .res em { min-width: 0; } #status { gap: 0 8px; } #status .era { display: none; } #tools { gap: 4px; } #tools .tbtn { min-height: 30px; padding: 2px 8px; font-size: 12px; }
+  #touchbar { flex-direction: row; } #touchbar button { min-height: 34px; padding: 0 10px; font-size: 12px; }
+  #bottom { grid-template-columns: 112px minmax(0, 1fr) minmax(0, 1.4fr); gap: 6px; }
+  #mini { width: 112px; height: 112px; } #info, #cmd { height: 108px; } #info { padding: 5px 10px; } #info h2 { font-size: 15px; }
+  #cmd { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  #tip, #place { bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { .msg { animation-duration: 7s; animation-timing-function: step-end; } }
+.match-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 10px 0; }
+.match-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--dim); }
+.match-grid select, .match-grid input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--ink); color: var(--fg); font: inherit; }
+.match-grid :focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+#s-objective { flex-basis: 100%; color: var(--dim); font-size: 12px; }
+#end-stats { color: var(--dim); margin: 12px 0; }
+@media (max-width: 420px) { .match-grid { grid-template-columns: 1fr; } }
+
+/* Věk pokroku 1.3.0 – plánování živého města */
+#s-city { color: var(--good); font-size: 12px; white-space: nowrap; }
+#s-city.attention { color: var(--bad); font-weight: 700; }
+#city-panel .card { max-width: 740px; }
+.city-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:12px 0; }
+.city-stat { background:#12191acc; border:1px solid var(--line); border-radius:5px; padding:9px; }
+.city-stat strong { display:block; color:var(--brass); font-size:22px; font-variant-numeric:tabular-nums; }
+.city-stat span { color:var(--dim); font-size:12px; }
+.city-priorities { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.city-priorities label { display:flex; flex-direction:column; gap:4px; color:var(--fg); }
+.city-priorities select { font:inherit; border-radius:4px; border:1px solid var(--line); padding:8px; background:var(--panel-2); color:var(--fg); width:100%; }
+.city-actions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 4px; }
+.city-actions button { flex:1 1 195px; }
+.city-note { color:var(--dim); font-size:13px; }
+@media(max-width:480px) { .city-grid {grid-template-columns:repeat(2,minmax(0,1fr));} .city-priorities {grid-template-columns:1fr;} #s-city {font-size:11px;} }
+
+/* 1.4.0: vizuální postup výstavby a přepínač výkonu */
+.bar.construction { height:10px; margin:6px 0 7px; background:#354033; }
+.bar.construction i { background:linear-gradient(90deg,#aa7d4a,#d6b86c); }
+.city-quality-label { display:flex; flex-direction:column; gap:6px; max-width:350px; font-weight:600; }
+.city-quality-label select { font:inherit; background:var(--panel-2); color:var(--fg);
+  border:1px solid var(--line); border-radius:4px; padding:8px; max-width:100%; }
+</style>
+
+<div id="app">
+  <canvas id="view"></canvas>
+  <canvas id="hud"></canvas>
+
+  <div id="top">
+    <div id="resbar"></div>
+    <div id="status">
+      <span class="res"><b>Lidé</b><em id="s-pop">0/0</em></span>
+      <span class="era" id="s-era">Doba kamenná</span>
+      <span id="s-time">Rok 1 · Jaro</span>
+      <span id="s-city" title="Přehled obyvatel a práce">Osada</span>
+      <span id="s-ev"></span>
+    </div>
+    <div id="tools">
+      <button class="tbtn" id="b-idle" title="Najít nečinného vesničana (klávesa tečka)">Nečinní 0</button>
+      <button class="tbtn" id="b-tech">Technologie</button>
+      <button class="tbtn" id="b-city" title="Správa osady (C)">Město</button>
+      <button class="tbtn" id="b-help" title="Nápověda (F1)">Nápověda</button>
+      <button class="tbtn" id="b-menu" title="Herní nabídka">Menu</button>
+      <button class="tbtn" id="b-speed" title="Rychlost hry">1×</button>
+      <button class="tbtn" id="b-pause" title="Pauza (mezerník)">Pauza</button>
+      <button class="tbtn" id="b-save" title="Uloží hru">Uložit</button>
+      <button class="tbtn" id="b-export" title="Stáhne hru do souboru">Soubor</button>
+    </div>
+    <span id="s-objective"></span>
+  </div>
+
+  <div id="msgs"></div>
+  <div id="box" hidden></div>
+  <div id="tip" hidden></div>
+  <div id="place" hidden><button class="ok" id="b-place-ok">Postavit zde</button><button id="b-place-no">Zrušit</button></div>
+
+  <div id="bottom">
+    <div id="touchbar"><button id="t-box">Výběr tažením</button><button id="t-army">Celé vojsko</button><button id="t-none">Zrušit výběr</button></div>
+    <canvas id="mini" width="172" height="172"></canvas>
+    <div id="info"></div>
+    <div id="cmd"></div>
+  </div>
+
+  <div class="overlay" id="start">
+    <div class="card">
+      <h1>Věk pokroku</h1>
+      <p class="lead"><b>Živé město II:</b> nové detaily budov, fáze výstavby, pracovní animace, pěšiny a proměny epoch.</p>
+      <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
+      <details class="how">
+        <summary>Jak se hraje a ovládá</summary>
+      <h2>Jak to funguje</h2>
+      <ul>
+        <li><b>Živá osada:</b> otevři Město (C), nastav automatiku práce, priority a grafiku. Vyber rozestavěnou budovu a přivolej volné stavitele.</li>
+        <li><b>Lidé jedí pořád.</b> Pole rodí od jara do podzimu, v zimě se žije ze zásob a z pastvin. Hlad oslabí všechny.</li>
+        <li><b>Kov se nesbírá, vyrábí se.</b> Vesničané těží rudu, huť ji s dřevem taví na kov.</li>
+        <li><b>Technologie navazují.</b> Bez písma není knihovna, bez matematiky katapult, bez oceli rytíř.</li>
+        <li><b>Mapu neznáš.</b> Vidíš jen okolí svých lidí a budov. Nepřítele, zlato i zvěř musíš najít, osadu si ohradíš palisádou a branou.</li>
+        <li><b>Zlato a trh.</b> Zlato se těží, nebo ho získáš prodejem přebytků na Tržišti. Platí se jím pokročilé jednotky a pozdější epochy.</li>
+        <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
+        <li><b>Obnova lesa.</b> Lesovna obnovuje vytěžené stromy ve svém okolí. Dřevo dál potřebuje dřevorubce a cestu do skladu.</li>
+        <li><b>Obchodní cesty.</b> Postav dvě Tržiště alespoň 24 metrů od sebe a vycvič Karavanu. Trasu najde sama, nebo ji vyber a ukaž na cílové Tržiště. Zlato získáš až po návratu; cestu musíš chránit.</li>
+        <li><b>Cíl:</b> zbořit nepřátelské Sídlo dřív, než on zboří tvoje.</li>
+      </ul>
+      <h2>Ovládání</h2>
+      <ul>
+        <li><b>Myš:</b> levým vybíráš (tažením víc jednotek), pravým dáváš rozkaz. Kolečko přibližuje, prostřední tlačítko posouvá mapu.</li>
+        <li><b>Klávesy:</b> WASD nebo šipky posun, Q a E otáčení, mezerník pauza, tečka nečinný vesničan, H domů, Ctrl + číslo uloží skupinu a číslo ji vyvolá.</li>
+        <li><b>Dotyk:</b> ťuknutím vybereš, dalším ťuknutím dáš rozkaz (jdi, sbírej, stav, útoč). Tažením posouváš mapu, dvěma prsty přibližuješ. Víc jednotek vybereš tlačítkem Výběr tažením, dvojím ťuknutím vybereš všechny stejného druhu.</li>
+      </ul>
+      </details>
+      <details class="how" id="match-settings">
+        <summary>Mapa a pravidla partie</summary>
+        <div class="match-grid">
+          <label>Typ mapy<select id="match-map"><option value="balanced">Vyvážená krajina</option><option value="forest">Lesnatá krajina</option><option value="highlands">Hornatá krajina</option></select></label>
+          <label>Suroviny na mapě<select id="match-resources"><option value="0.6">Málo</option><option value="1" selected>Běžně</option><option value="1.8">Hodně</option></select></label>
+          <label>Počáteční zásoby<select id="match-stocks"><option value="0.75">Skromné</option><option value="1" selected>Běžné</option><option value="2">Bohaté</option></select></label>
+          <label>Cíl hry<select id="match-goal"><option value="conquest">Dobytí</option><option value="survival">Přežití</option><option value="development">Rozvoj osady</option></select></label>
+          <label>Délka přežití<select id="match-years" disabled><option value="3">3 roky</option><option value="5" selected>5 let</option><option value="10">10 let</option></select></label>
+          <label>Ochrana před útoky<select id="match-peace"><option value="0">Žádná</option><option value="120">2 minuty</option><option value="300">5 minut</option><option value="600">10 minut</option></select></label>
+          <label>Číslo mapy (nepovinné)<input id="match-seed" type="number" min="0" max="4294967295" step="1" placeholder="Náhodná mapa"></label>
+        </div>
+        <p class="hint" id="match-description"></p>
+        <p class="hint">Ztráta vlastního Sídla znamená porážku v každém režimu. Časy se počítají v herním čase; jeden rok trvá čtyři minuty při rychlosti 1×.</p>
+      </details>
+      <h2>Obtížnost</h2>
+      <div class="row opts" data-k="diff">
+        <button class="pick" data-d="0">Lehká</button><button class="pick on" data-d="1">Střední</button><button class="pick" data-d="2">Těžká</button>
+      </div>
+      <h2>Agrese soupeře</h2>
+      <div class="row opts" data-k="aggr">
+        <button class="pick" data-d="0">Mírumilovný</button><button class="pick" data-d="1">Opatrný</button><button class="pick on" data-d="2">Běžný</button><button class="pick" data-d="3">Útočný</button>
+      </div>
+      <p class="hint">Mírumilovný soupeř sám nikdy nezaútočí, jen se brání. Hodí se, když chceš hlavně budovat.</p>
+      <h2>Režim</h2>
+      <div class="row opts" data-k="real">
+        <button class="pick on" data-d="0">Klasický</button><button class="pick" data-d="1">Realistický</button>
+      </div>
+      <p class="hint">V obou režimech funguje správa osady, pracovní priority, automatické přidělování práce a pěšiny. Jen realistický režim přidává spokojenost obyvatel, chátrání staveb a náklady na opravy. Realistický režim má bohatší grafiku s počasím a denním světlem a přidává pohromy: povodně, nemoci, požáry, sucho, mráz a kažení zásob. K nim patří nové stavby a objevy, kterými se dá bránit.</p>
+      <h2>Hra proti člověku po síti</h2>
+      <div class="row" style="align-items:center">
+        <button class="pick" id="b-host" disabled>Založit hru</button>
+        <label for="net-code" class="hint" style="margin:0">nebo kód soupeře:</label>
+        <input id="net-code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
+        <button class="pick" id="b-join" disabled>Připojit se</button>
+      </div>
+      <p class="hint" id="net-status">Zjišťuji, jestli je síť dostupná…</p>
+      <details id="p2p">
+        <summary>Nejde to přes Claude? Spojit se napřímo přes zprávu</summary>
+        <p class="hint">Funguje i přes veřejný odkaz a bez přihlášení, nejlíp když jste na stejné Wi-Fi. 1) Jeden klikne na <b>Vytvořit pozvánku</b> a pošle text druhému (WhatsApp, SMS). 2) Druhý klikne na <b>Mám pozvánku</b>, vloží ji, klikne na <b>Odpovědět</b> a pošle svůj text zpátky. 3) První ho vloží a klikne na <b>Spojit</b>.</p>
+        <div class="row"><button class="pick" id="p-host">Vytvořit pozvánku</button><button class="pick" id="p-guest">Mám pozvánku</button></div>
+        <textarea id="p-text" hidden spellcheck="false" autocomplete="off" placeholder="Sem vlož text od soupeře"></textarea>
+        <div class="row" id="p-btns" hidden><button class="pick" id="p-copy">Kopírovat / poslat</button><button class="pick on" id="p-go">Spojit</button></div>
+        <p class="hint" id="p-status"></p>
+      </details>
+      <div class="row" style="align-items:center"><button class="go" id="b-start">Začít novou hru</button><button class="go alt" id="b-continue" hidden>Pokračovat v uložené hře</button><button class="go alt" id="b-import">Nahrát hru ze souboru</button></div>
+      <p class="hint"><a href="https://claude.ai/artifact/TcDtKN79igJbRfaMwddkCi" target="_blank" rel="noopener" style="color:var(--brass)">Budovatelská hra Starosta ↗</a> – moderní město, ekonomika a krize bez spěchu.</p>
+      <p class="lead" id="s-savenote" style="margin:10px 0 0;font-size:12.5px">Hledám uloženou hru…</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="end" hidden>
+    <div class="card">
+      <h1 id="end-title">Vítězství</h1>
+      <p class="lead" id="end-text"></p>
+      <p id="end-goal"></p>
+      <div id="end-stats"></div>
+      <button class="go" id="b-again">Nová hra</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="city-panel" hidden role="dialog" aria-modal="true" aria-labelledby="city-title">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin:0 0 10px">
+        <h1 id="city-title">Správa osady</h1>
+        <button class="pick" id="b-city-close">Zavřít</button>
+      </div>
+      <p class="lead" id="city-mode">Přehled obyvatel a organizace práce.</p>
+      <div class="city-grid" aria-live="polite">
+        <div class="city-stat"><strong id="city-pop">0</strong><span>Vesničanů</span></div>
+        <div class="city-stat"><strong id="city-idle">0</strong><span>Nečinných</span></div>
+        <div class="city-stat"><strong id="city-gather">0</strong><span>Sběr a těžba</span></div>
+        <div class="city-stat"><strong id="city-farm">0</strong><span>Na polích</span></div>
+        <div class="city-stat"><strong id="city-build">0</strong><span>Stavba a opravy</span></div>
+        <div class="city-stat"><strong id="city-damage">0</strong><span>Nedokončené / poškozené</span></div>
+      </div>
+      <h2>Automatické přidělování práce</h2>
+      <p class="city-note">Automatika přiděluje úkoly pouze nečinným vesničanům. Ručně zadané rozkazy nikdy nepřepisuje.</p>
+      <div class="city-actions"><button class="pick" id="b-city-auto">Zapnout automatiku</button></div>
+      <h2>Priority surovin</h2>
+      <p class="city-note">Vypnuto / nízká / běžná / vysoká. Při nedostatku zásob se priorita příslušné suroviny zvýší automaticky.</p>
+      <div class="city-priorities">
+        <label>Jídlo <select data-city-priority="food"><option value="0">Vypnuto</option><option value="1">Nízká</option><option value="2">Běžná</option><option value="3">Vysoká</option></select></label>
+        <label>Dřevo <select data-city-priority="wood"><option value="0">Vypnuto</option><option value="1">Nízká</option><option value="2">Běžná</option><option value="3">Vysoká</option></select></label>
+        <label>Kámen <select data-city-priority="stone"><option value="0">Vypnuto</option><option value="1">Nízká</option><option value="2">Běžná</option><option value="3">Vysoká</option></select></label>
+        <label>Ruda <select data-city-priority="ore"><option value="0">Vypnuto</option><option value="1">Nízká</option><option value="2">Běžná</option><option value="3">Vysoká</option></select></label>
+        <label>Zlato <select data-city-priority="gold"><option value="0">Vypnuto</option><option value="1">Nízká</option><option value="2">Běžná</option><option value="3">Vysoká</option></select></label>
+      </div>
+      <section id="city-real" hidden>
+        <h2>Realistický režim: spokojenost a údržba</h2>
+        <p>Spokojenost: <b id="city-morale">–</b>. Ovlivňuje ji hlad, zásoby jídla, zranění, poškozené budovy a pohromy. Mírně ovlivňuje produktivitu pracovníků.</p>
+        <p class="city-note">Volní obyvatelé chodí mezi domy a pracovišti. Stavby časem chátrají, ale samotné opotřebení je nezničí. Oprava potřebuje dřevo, u hradeb a věží kámen.</p>
+        <div class="city-actions"><button class="pick" id="b-city-maint">Automatické opravy</button></div>
+      </section>
+      <h2>Grafika a výkon – Živé město II</h2>
+      <p class="city-note">V obou režimech jsou podrobnější budovy, lešení během stavby, animace práce, pohyblivá mlýnská kola a doplňky osady. Vizuální nastavení neovlivňuje ekonomiku ani obtížnost.</p>
+      <label class="city-quality-label" for="city-art-quality">Kvalita vykreslování
+        <select id="city-art-quality">
+          <option value="auto">Automaticky podle zařízení</option>
+          <option value="low">Úsporná (pro tablety)</option>
+          <option value="high">Detailní</option>
+        </select>
+      </label>
+      <p class="city-note" id="city-art-hint"></p>
+      <p class="city-note">Pěšiny se vizuálně vytvářejí mezi sídlem a dokončenými budovami a mění vzhled s epochou. Nezvyšují rychlost pohybu a nespotřebovávají materiál.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="pause-menu" hidden role="dialog" aria-modal="true" aria-labelledby="pause-title">
+    <div class="card">
+      <h1 id="pause-title">Herní nabídka</h1>
+      <p class="lead">Můžeš pokračovat nebo se vrátit k nastavení nové partie. Ve hře proti počítači se postup před návratem uloží do prohlížeče.</p>
+      <div class="row" style="gap:12px;flex-wrap:wrap">
+        <button class="go" id="b-resume">Pokračovat ve hře</button>
+        <button class="go alt" id="b-return">Zpět do hlavní nabídky</button>
+      </div>
+      <p class="hint">Odchod ze síťové partie ukončí spojení se soupeřem; síťovou hru nelze uložit.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="help" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h1 id="help-title">Jak hrát Věk pokroku</h1>
+        <button class="pick" id="b-help-close">Zavřít</button>
+      </div>
+      <p class="lead">Rozvíjej osadu, přežij zimu a rozhodni partii cílem zvoleným v úvodní nabídce.</p>
+      <h2>První kroky</h2>
+      <ol>
+        <li>Vyber vesničany a zajisti jídlo (keře, ryby, zvěř) a dřevo.</li>
+        <li>Postav potřebné stavby, získej zásoby na zimu a vyzkoumej zemědělství.</li>
+        <li>Pro obilí používej mlýn a pekárnu; lesovna pouze obnovuje stromy, dřevo musí někdo vytěžit.</li>
+        <li>Pro obchod postav dvě propojená tržiště nejméně 24 metrů od sebe a vyškol karavanu.</li>
+      </ol>
+      <h2>Ovládání</h2>
+      <p>Levé kliknutí: výběr. Pravé kliknutí: příkaz. Tažení: označení jednotek. WASD nebo šipky: posun mapy. Q/E: otočení. H: návrat k sídlu. Tečka: nečinný vesničan. Čísla 1–9: skupiny jednotek, Ctrl + číslo: uložit skupinu.</p>
+      <p>Mezerník: pauza v sólo hře. F1: nápověda. Escape: zavřít nabídku nebo zrušit výběr. Na mobilu použij spodní lištu výběru a klepni na příkaz vybrané jednotky.</p>
+      <button class="go" id="b-help-done">Rozumím, pokračovat</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="techs" hidden>
+    <div class="card wide">
+      <div class="row" style="justify-content:space-between;align-items:baseline;margin:0">
+        <h1 style="font-size:28px">Technologie</h1>
+        <button class="pick" id="b-tech-close">Zavřít</button>
+      </div>
+      <p class="lead">Zkoumá se v budovách: vyber Sídlo, Knihovnu nebo Kovárnu. Každý objev stojí vědění a čas.</p>
+      <div id="tech-list"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../../versions.js"></script>
+<script src="../../version-picker.js" data-version="1.4.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="data.js"></script>
+<script src="world.js"></script>
+<script src="game.js"></script>
+<script src="net.js"></script>
+<script src="ui.js"></script>
