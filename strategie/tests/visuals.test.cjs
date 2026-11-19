@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const root = path.resolve(__dirname, '..');
 function runGame() {
-  const mockThree = { Color: class {} };
+  const mockThree = { Color: class {}, Matrix4: class {}, Quaternion: class {}, Vector3: class {} };
   const ctx = vm.createContext({ THREE: mockThree, console, btoa: s => Buffer.from(s, 'binary').toString('base64'), atob: s => Buffer.from(s, 'base64').toString('binary') });
   for (const file of ['data.js', 'world.js', 'game.js'])
     vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), ctx);
@@ -61,6 +61,6 @@ test('construction and environment metadata never enters serialized gameplay sta
 });
 test('unit geometry cache records era for buildings but not units', () => {
   const code=fs.readFileSync(path.join(root,'game.js'),'utf8');
-  assert.match(code,/kind === 'b' \? teams\[team\]\.era/);
+  assert.match(code,/const era = kind === 'b' && teams\[team\] \? teams\[team\]\.era : 0/);
   assert.match(code,/buildingGeo\(type, TEAM_COLORS\[team\], era\)/);
 });
