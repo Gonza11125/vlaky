@@ -81,3 +81,15 @@ test('journal discovery follows explored cells without showing unknown places',(
  assert.equal(run("frontierSummary(0).seen"),1);
  assert.equal(run("frontierSummary(0).visited"),0);
 });
+test('1.7.1: computer opponent scouts unvisited sites with a rider first',()=>{
+ const run=simulation();
+ run("G.match.map='river';G.diff=1;makeWorld(17417);teams.push(mkTeam(0),mkTeam(1));teams[0].tcx=10;teams[0].tcz=200;FRONTIER.sites=frontierLayout(17417);G.time=50");
+ run("const mk=(id,type,x,z)=>{const u={id,isU:true,team:1,type,def:UNITS[type],x,z,hp:50,dead:false,order:null};byId.set(id,u);units.push(u);return u};const vil=mk(901,'vil',150,40),rider=mk(902,'rider',150,42);const mine=[vil,rider]");
+ run("frontierAiScout(mine)");
+ assert.equal(run("AI.scout"),0,'too early on medium difficulty');
+ run("G.time=200;frontierAiScout(mine);AI.scoutNext=0;frontierAiScout(mine)");
+ assert.equal(run("AI.scout===rider.id"),true);
+ assert.equal(run("!!(rider.order&&rider.order.scout)"),true);
+ run("FRONTIER.sites.forEach(s=>s.visited|=2);AI.scoutNext=0;frontierAiScout(mine)");
+ assert.equal(run("AI.scout"),0);
+});

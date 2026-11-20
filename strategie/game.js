@@ -1427,7 +1427,7 @@ function execCmd(team, c) {
 function act(c) { if (G.mode === 'guest') netCmd(c); else execCmd(MY, c); }
 
 // ---------- protivník ----------
-const AI = { acc: 0, attackAt: 0, wave: 0, launch: -999 };
+const AI = { acc: 0, attackAt: 0, wave: 0, launch: -999, scout: 0, scoutNext: 0 };
 const AI_TECH = ['agri', 'husbandry', 'era1', 'pottery', 'herbs', 'writing', 'bronze', 'wheel', 'currency', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'plow', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
 function findSpot(type, ax, ay, margin) {
   const s = BUILDINGS[type].size;
@@ -1451,7 +1451,7 @@ function aiBuild(type, ax, ay) {
 }
 function aiTick() {
   const T = teams[1], tc = blds.find(b => b.team === 1 && b.type === 'tc' && !b.dead); if (!tc) return;
-  const mine = units.filter(u => u.team === 1), vils = mine.filter(u => u.type === 'vil'), army = mine.filter(isSoldier);
+  const mine = units.filter(u => u.team === 1), vils = mine.filter(u => u.type === 'vil' && u.id !== AI.scout), army = mine.filter(u => isSoldier(u) && u.id !== AI.scout);
   const my = blds.filter(b => b.team === 1 && !b.dead), cnt = t => my.reduce((a, b) => a + (b.type === t ? 1 : 0), 0);
   const winter = season() === 3, D = G.diff;
   const vilTarget = Math.min([16, 22, 28][D], 9 + T.era * 5 + Math.floor(G.time / 90));
@@ -1548,6 +1548,7 @@ function aiTick() {
       else if (Math.hypot(u.x - home.x, u.z - home.z) > 14) orderMove(u, home.x + (Math.random() - 0.5) * 10, home.z + (Math.random() - 0.5) * 10, true);
     }
   }
+  if (typeof frontierAiScout === 'function') frontierAiScout(mine);
 }
 function aiTarget(from) { let best = null, bd = 1e9; for (const b of blds) { if (b.team !== 0 || b.dead || b.def.wall) continue; const d = Math.hypot(b.x - from.x, b.z - from.z) * (b.type === 'tc' ? 0.8 : 1); if (d < bd) { bd = d; best = b; } } return best; }
 
@@ -1589,7 +1590,7 @@ function resetWorld() {
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
   Object.assign(G, { time: 0, over: false, loser: null, endReason: '', reveal: false, snow: 0, flood: 0, rain: 0 });
   Object.assign(EV, { season: -1, acc: 0, floodAt: 0, floodT: -1, floodMax: 0, drought: false, frost: false });
-  Object.assign(AI, { acc: 0, wave: 0, launch: -999 });
+  Object.assign(AI, { acc: 0, wave: 0, launch: -999, scout: 0, scoutNext: 0 });
   Object.assign(PRICE, { food: 30, wood: 30, stone: 45, metal: 90 });
 }
 function applyLook() {

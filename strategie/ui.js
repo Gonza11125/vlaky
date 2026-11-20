@@ -771,6 +771,11 @@ function selectedMatch() {
 function matchFormValid() { return $('match-seed').reportValidity(); }
 function describeMatch() { const match = selectedMatch(); $('match-years').disabled = match.goal !== 'survival'; $('match-description').textContent = goalDescription(match); }
 $('match-settings').addEventListener('change', describeMatch); describeMatch();
+// 1.7.1: typ mapy je vidět hned na úvodní obrazovce a drží se v souladu s výběrem v pravidlech partie.
+const MAP_HINTS = { balanced: 'Louky, lesy i kopce v rovnováze.', forest: 'Hodně dřeva, méně volného místa na stavby.', highlands: 'Kopce, kámen a ruda; méně rovných luk.', river: 'Řeka přes celou mapu, přejít ji jde jen po třech mostech. Suroviny na obou březích.' };
+function syncMapPicks() { const v = $('match-map').value; for (const b of $('map-picks').children) b.classList.toggle('on', b.dataset.map === v); $('map-hint').textContent = MAP_HINTS[v] + ' Další volby partie najdeš v sekci Mapa a pravidla partie.'; }
+$('map-picks').onclick = e => { const b = e.target.closest('[data-map]'); if (!b) return; $('match-map').value = b.dataset.map; syncMapPicks(); describeMatch(); };
+$('match-map').addEventListener('change', syncMapPicks); syncMapPicks();
 function applyOpts() { if (!matchFormValid()) return false; G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; G.match = selectedMatch(); return true; }
 $('b-start').onclick = () => { if (!applyOpts()) return; netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
 $('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = false; G.paused = true; };
@@ -806,8 +811,12 @@ function readLocal() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     // Clone a compatible older save without changing the original release.
-    if (!raw && VEK_RELEASE.id === '1.7.0') {
-      for (const previous of ['1.6.0', '1.5.0', '1.4.0', '1.3.0', '1.2.0', '1.1.0']) {
+    if (!raw && /^\d+\.\d+\.\d+$/.test(VEK_RELEASE.id)) {
+      // Od 1.7.1 platí pro každé vydání: převezmi nejnovější starší kompatibilní uložení (od 1.1.0).
+      const num = id => id.split('.').map(Number), older = (a, b) => { const x = num(a), y = num(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
+      const reg = typeof window !== 'undefined' && Array.isArray(window.VEK_RELEASES) ? window.VEK_RELEASES.map(r => r.id) : ['1.7.1', '1.7.0', '1.6.0', '1.5.0', '1.4.0', '1.3.0', '1.2.0', '1.1.0'];
+      const known = reg.filter(id => !older(id, '1.1.0') && older(id, VEK_RELEASE.id)).sort((a, b) => older(a, b) ? 1 : -1);
+      for (const previous of known) {
         const older = localStorage.getItem('vek-pokroku-save-' + previous);
         if (!older || older.length > 5000000) continue;
         try {

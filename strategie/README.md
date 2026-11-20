@@ -6,8 +6,15 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0** a **1.7.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0** a **1.7.1**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.7.1 – Soupeř na průzkumu
+
+Počítačový soupeř posílá zvěda k nenavštíveným neutrálním lokalitám a bere
+jejich odměny; podle obtížnosti začíná později nebo dřív a mezi místy odpočívá.
+Typ mapy se vybírá tlačítky přímo na úvodní obrazovce. Nové vydání převezme
+nejnovější kompatibilní místní uložení z kterékoli starší verze.
 
 ## Novinky ve 1.7.0 – Nový svět
 

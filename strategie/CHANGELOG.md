@@ -1,5 +1,12 @@
 # Vydání Věku pokroku
 
+## 1.7.1 – Soupeř na průzkumu
+
+- **Počítačový soupeř zkoumá svět:** posílá jednoho zvěda (nejraději jezdce, jinak lehkého vojáka, ve větší osadě i vesničana) k nenavštíveným neutrálním lokalitám a sbírá jejich odměny. Začíná podle obtížnosti po 4, 3 nebo necelých 2 minutách a mezi místy odpočívá, takže hráč má šanci být první. Místa u hráčova Sídla nechává na konec.
+- **Volba mapy hned na úvodní obrazovce:** Vyvážená, Lesnatá, Hornatá a Říční údolí s mosty jako tlačítka s krátkým popisem; zbytek pravidel zůstává v sekci Mapa a pravidla partie.
+- **Převzetí uložené hry:** nové vydání převezme nejnovější kompatibilní místní uložení z kterékoli starší verze (od 1.1.0), originál zůstává beze změny.
+- Nový test průzkumu soupeře.
+
 ## 1.7.0 – Nový svět
 
 - **Říční údolí:** nový volitelný typ mapy, deterministické koryto řeky a tři dřevěné mosty. Řeka skutečně blokuje cestu; mosty jsou průchozí a vyznačené v minimapě. Na mostech nelze stavět budovy.

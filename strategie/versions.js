@@ -34,5 +34,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.7.0",
     "description": "Nový svět: říční mapa se třemi průchozími mosty, bohatší surovinové oblasti, šest neutrálních lokalit s průzkumnými odměnami, mapa objevů a výpravy jednotek."
+  },
+  {
+    "id": "1.7.1",
+    "description": "Soupeř na průzkumu: počítač posílá zvěda k neutrálním lokalitám, volba mapy na úvodní obrazovce."
   }
 ];

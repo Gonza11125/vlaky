@@ -1,5 +1,5 @@
 'use strict';
-// Věk pokroku 1.7.0 – říční přechody a objevitelné neutrální lokality.
+// Věk pokroku 1.7 – říční přechody a objevitelné neutrální lokality; od 1.7.1 je zkoumá i počítačový soupeř.
 // Žádný přístup k síti; stav odměn je určován simulací hostitele.
 const FRONTIER = {
   sites: [], bridges: [], groups: [], acc: 0, redraw: true, legacy: false,
@@ -191,4 +191,33 @@ function frontierSummary(team){
   const sites=FRONTIER.sites;
   return {total:sites.length,seen:sites.filter(frontierWasSeen).length,
     visited:sites.filter(s=>!!(s.visited&(1<<team))).length};
+}
+// 1.7.1: počítačový soupeř posílá jednoho zvěda k nenavštíveným lokalitám.
+// Přednost má jezdec, pak lehký voják; vesničana pošle až ve větší osadě.
+// Místa u hráčova Sídla odkládá na konec, aby zvěd nevběhl rovnou do obrany.
+function frontierAiScout(mine){
+  if(!FRONTIER.sites.length||G.time<(AI.scoutNext||0)||G.time<[260,170,100][G.diff])return;
+  const todo=FRONTIER.sites.filter(s=>!(s.visited&2));
+  let u=byId.get(AI.scout);
+  if(!todo.length){if(u&&!u.dead&&u.order&&u.order.scout)orderStop(u);AI.scout=0;return;}
+  if(!u||u.dead||u.team!==1){
+    const free=v=>!v.dead&&(!v.order||v.order.type==='move'||v.order.type==='amove');
+    const army=mine.filter(v=>isSoldier(v)&&v.def.cls!=='siege'&&free(v));
+    const vils=mine.filter(v=>v.type==='vil');
+    u=army.find(v=>v.def.cls==='cav')||army.find(v=>v.def.cls==='inf'||v.def.cls==='arch')||
+      (vils.length>=[14,11,8][G.diff]?vils.find(v=>!v.order||v.order.type==='gather'):null);
+    if(!u){AI.scoutNext=G.time+15;return;}
+    AI.scout=u.id;
+  }
+  if(u.order&&u.order.scout)return;
+  // po návštěvě si zvěd odpočine; lehký soupeř chodí pomaleji
+  if(AI.scoutRest!==u.id+':'+todo.length){AI.scoutRest=u.id+':'+todo.length;AI.scoutNext=G.time+[50,30,14][G.diff];return;}
+  const foe=teams[0];let best=null,bd=1e9;
+  for(const s of todo){
+    const d=Math.hypot(s.x-u.x,s.z-u.z)+(foe&&Math.hypot(s.x-foe.tcx,s.z-foe.tcz)<34?120:0);
+    if(d<bd){bd=d;best=s;}
+  }
+  orderMove(u,best.x+1.2,best.z+1.2,false);
+  if(u.order)u.order.scout=1;
+  AI.scoutNext=G.time+3;
 }
