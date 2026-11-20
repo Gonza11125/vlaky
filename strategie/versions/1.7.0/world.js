@@ -17,6 +17,7 @@ const STARTS = [{ cx: 24, cy: N - 26 }, { cx: N - 26, cy: 24 }];
 // 1.7.0 – průchodné říční přechody. Maska se odvozuje pouze od seedu mapy.
 const RIVER_CROSSINGS = [24, 55, 86];
 const bridgeMask = new Uint8Array(N*N);
+const bridgeApproachMask = new Uint8Array(N*N);
 function riverCenter(y,seed){
   return N*0.5 + 5.1*Math.sin(y*0.067 + seed*0.00013)
     + 2.2*Math.sin(y*0.139 + seed*0.00007);
@@ -28,13 +29,15 @@ function riverCarve(x,y,seed) {
   return t; // 1 uprostřed řeky, 0 na břehu
 }
 function bridgeCells(seed) {
-  bridgeMask.fill(0);
+  bridgeMask.fill(0);bridgeApproachMask.fill(0);
   if(G.match.map!=='river')return;
   for(const cy of RIVER_CROSSINGS){
     for(let y=cy;y<=cy+1;y++){
       const middle=riverCenter(y+0.5,seed);
-      for(let x=Math.max(2,Math.floor(middle-7));x<=Math.min(N-3,Math.ceil(middle+7));x++)
-        bridgeMask[cidx(x,y)]=1;
+      for(let x=Math.max(2,Math.floor(middle-12));x<=Math.min(N-3,Math.ceil(middle+12));x++){
+        bridgeApproachMask[cidx(x,y)]=1;
+        if(x>=Math.floor(middle-7)&&x<=Math.ceil(middle+7))bridgeMask[cidx(x,y)]=1;
+      }
     }
   }
 }
@@ -71,7 +74,7 @@ function cellH(cx, cy) { return (hgt[cy * NV + cx] + hgt[cy * NV + cx + 1] + hgt
 function calcWalk(cx, cy) {
   const a = hgt[cy * NV + cx], b = hgt[cy * NV + cx + 1], c = hgt[(cy + 1) * NV + cx], d = hgt[(cy + 1) * NV + cx + 1];
   const mn = Math.min(a, b, c, d), mx = Math.max(a, b, c, d);
-  walk[cidx(cx, cy)] = bridgeMask[cidx(cx,cy)] || ((a + b + c + d) / 4 > 0.3 && mx - mn < 1.7) ? 1 : 0;
+  walk[cidx(cx, cy)] = bridgeApproachMask[cidx(cx,cy)] || ((a + b + c + d) / 4 > 0.3 && mx - mn < 1.7) ? 1 : 0;
 }
 
 function genHeights(seed) {
