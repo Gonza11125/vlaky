@@ -1555,6 +1555,7 @@ function aiTarget(from) { let best = null, bd = 1e9; for (const b of blds) { if 
 function simStep(dt) {
   G.time += dt;
   for (const u of units) if (!u.dead) updateUnit(u, dt);
+  if(typeof frontierTick==='function')frontierTick(dt);
   separate();
   PT = -1; for (const a of animals) if (!a.dead) updateAnimal(a, dt);
   for (let i = animals.length - 1; i >= 0; i--) if (animals[i].dead) animals.splice(i, 1);
@@ -1580,6 +1581,7 @@ function endGame(loser, reason) { if (G.over) return; G.over = true; G.loser = l
 
 function resetWorld() {
   atmoReset();
+  if(typeof frontierReset==='function')frontierReset();
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
   units.length = blds.length = projs.length = puffs.length = animals.length = teams.length = 0;
   cityArtClear();
@@ -1607,6 +1609,7 @@ function newGame(diff, sv) {
   applyLook();
   G.seed = makeWorld(sv ? sv.seed : G.match.seed); G.baseNodes = nodes.length;
   buildTerrain();
+  if(typeof frontierBuild==='function')frontierBuild(G.seed,!!(sv&&!Array.isArray(sv.frontier)));
   if (sv) { loadState(sv); return; }
   buildNodes();
   STARTS.forEach((s, t) => {
@@ -1652,6 +1655,7 @@ function saveState() {
     v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match },
     AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, EV: Object.assign({}, EV), flood: G.flood, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
     teams: teams.map(T => ({ city: cityState(T), economy: economyState(T), res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
+    frontier: typeof frontierSave==='function'?frontierSave():[],
     amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),
     meat: nodes.slice(G.baseNodes).map(n => [n.cx, n.cy, r1(n.x), r1(n.z), Math.round(n.amt), r1(n.v)]),
     blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, fire: b.fire || 0, crop: b.crop, enabled: b.enabled, priority: b.priority, target: b.target, workT: b.workT, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
@@ -1662,6 +1666,7 @@ function saveState() {
 function loadState(sv) {
   Object.assign(G, sv.G); Object.assign(AI, sv.AI); Object.assign(PRICE, sv.PRICE); if (sv.EV) Object.assign(EV, sv.EV); G.flood = sv.flood || 0;
   const bits = atob(sv.explored); for (let i = 0; i < N * N; i++) explored[i] = (bits.charCodeAt(i >> 3) >> (i & 7)) & 1;
+  if(typeof frontierLoad==='function')frontierLoad(sv.frontier);
   sv.teams.forEach((t,i)=>{Object.assign(teams[i],t);cityState(teams[i]);economyState(teams[i]);});
   sv.amt.forEach((a, i) => { const n = nodes[i]; if (!n) return; n.amt = a; if (a <= 0) nodeAt[cidx(n.cx, n.cy)] = -1; });
   buildNodes();

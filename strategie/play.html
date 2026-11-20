@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku – Atmosféra a svět</title>
+<title>Věk pokroku – Nový svět</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -212,6 +212,22 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 .atmo-settings select {background:var(--panel-2);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:8px;max-width:100%;}
 .atmo-settings input[type="range"] { width:min(210px,100%);accent-color:#d7a84a; }
 @media(max-width:480px){.atmo-settings{grid-template-columns:1fr;}#s-atmo{font-size:11px;}}
+
+/* 1.7.0 – přehled objevených míst. Rozložení zůstává dotykově použitelné. */
+.world-card { max-height:min(90dvh,860px);overflow-y:auto;box-sizing:border-box; }
+.world-summary { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0; }
+.world-summary div { border:1px solid var(--line);border-radius:5px;background:var(--panel-2);padding:10px; }
+.world-summary strong { display:block;color:var(--brass);font-size:22px;font-variant-numeric:tabular-nums; }
+.world-summary span { display:block;font-size:12px;color:var(--dim); }
+.world-sites { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:10px 0 14px; }
+.world-site { background:var(--panel-2);padding:12px;border:1px solid var(--line);border-radius:6px; }
+.world-site h3 { color:var(--brass);font:400 18px var(--display);margin:0 0 4px; }
+.world-site p { margin:5px 0;color:var(--dim);font-size:13px; }
+.world-site .row { margin-top:9px; }
+.world-site .pick { padding:6px 12px;min-height:35px; }
+.world-site.unknown { opacity:0.68; }
+.world-site.complete { border-color:#5f826d; }
+@media(max-width:680px) { .world-sites { grid-template-columns:1fr; }.world-summary { gap:4px; }.world-card{max-height:90dvh;} }
 </style>
 
 <div id="app">
@@ -232,6 +248,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <button class="tbtn" id="b-idle" title="Najít nečinného vesničana (klávesa tečka)">Nečinní 0</button>
       <button class="tbtn" id="b-tech">Technologie</button>
       <button class="tbtn" id="b-city" title="Správa osady (C)">Město</button>
+      <button class="tbtn" id="b-world" title="Průzkum nového světa (M)">Svět</button>
       <button class="tbtn" id="b-sound" title="Zapnout nebo vypnout ambientní zvuk">Zvuk</button>
       <button class="tbtn" id="b-economy" title="Hospodářství a výrobní řetězce (K)">Ekonomika</button>
       <button class="tbtn" id="b-help" title="Nápověda (F1)">Nápověda</button>
@@ -259,7 +276,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
-      <p class="lead"><b>Atmosféra a svět:</b> den a noc, světlo v oknech, počasí, zvuky přírody a výkonové nastavení scény.</p>
+      <p class="lead"><b>Nový svět:</b> říční údolí s mosty, průzkumné výpravy, neutrální osady a zapomenutá naleziště.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
@@ -271,6 +288,8 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Technologie navazují.</b> Bez písma není knihovna, bez matematiky katapult, bez oceli rytíř.</li>
         <li><b>Mapu neznáš.</b> Vidíš jen okolí svých lidí a budov. Nepřítele, zlato i zvěř musíš najít, osadu si ohradíš palisádou a branou.</li>
         <li><b>Zlato a trh.</b> Zlato se těží, nebo ho získáš prodejem přebytků na Tržišti. Platí se jím pokročilé jednotky a pozdější epochy.</li>
+        <li><b>Průzkum (M):</b> objevuj neutrální místa, vyšli k nim jednotku a při první návštěvě získej jednorázovou odměnu. Neznámá místa nejsou na mapě dopředu odhalená.</li>
+        <li><b>Říční údolí:</b> zvol při zakládání partie novou mapu. Řeka zablokuje průchod kromě tří mostů a suroviny jsou rozložené na obou březích.</li>
         <li><b>Svět kolem tebe:</b> během každé partie se střídá den a noc. Za soumraku se ve městě rozsvěcují světla. Zvuk spustíš tlačítkem Zvuk, vzhled i výkon měníš v panelu Město.</li>
         <li><b>Hospodářství:</b> tlačítkem Ekonomika (K) zobrazíš toky surovin, rezervy, výrobny a jejich výkon. V realistickém režimu obsazuj mlýny, pekárny a hutě řemeslníky.</li>
         <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
@@ -288,7 +307,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <details class="how" id="match-settings">
         <summary>Mapa a pravidla partie</summary>
         <div class="match-grid">
-          <label>Typ mapy<select id="match-map"><option value="balanced">Vyvážená krajina</option><option value="forest">Lesnatá krajina</option><option value="highlands">Hornatá krajina</option></select></label>
+          <label>Typ mapy<select id="match-map"><option value="balanced">Vyvážená krajina</option><option value="forest">Lesnatá krajina</option><option value="highlands">Hornatá krajina</option><option value="river">Říční údolí (mosty)</option></select></label>
           <label>Suroviny na mapě<select id="match-resources"><option value="0.6">Málo</option><option value="1" selected>Běžně</option><option value="1.8">Hodně</option></select></label>
           <label>Počáteční zásoby<select id="match-stocks"><option value="0.75">Skromné</option><option value="1" selected>Běžné</option><option value="2">Bohaté</option></select></label>
           <label>Cíl hry<select id="match-goal"><option value="conquest">Dobytí</option><option value="survival">Přežití</option><option value="development">Rozvoj osady</option></select></label>
@@ -372,6 +391,21 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
           <tbody id="economy-lines"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+
+  <div class="overlay" id="world-panel" hidden role="dialog" aria-modal="true" aria-labelledby="world-title">
+    <div class="card wide world-card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h1 id="world-title">Nový svět · průzkum</h1>
+        <button class="pick" id="b-world-close">Zavřít</button>
+      </div>
+      <p class="lead">Za hranicí osady se nacházejí neutrální lokality. Po objevení je můžeš navštívit vybranou jednotkou a získat jednorázové zásoby nebo vědění.</p>
+      <div id="world-summary" class="world-summary"></div>
+      <p id="world-map-note" class="city-note"></p>
+      <div id="world-sites" class="world-sites"></div>
+      <p class="city-note">Neodhalená místa neprozrazují polohu. Odměnu získá každý tým nejvýš jednou za jedno místo. Neutrální osady zatím nemají vlastní umělou inteligenci.</p>
     </div>
   </div>
 
@@ -495,5 +529,6 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 <script src="world.js"></script>
 <script src="game.js"></script>
 <script src="atmosphere.js"></script>
+<script src="frontier.js"></script>
 <script src="net.js"></script>
 <script src="ui.js"></script>

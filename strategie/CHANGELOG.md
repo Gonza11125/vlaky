@@ -1,5 +1,16 @@
 # Vydání Věku pokroku
 
+## 1.7.0 – Nový svět
+
+- **Říční údolí:** nový volitelný typ mapy, deterministické koryto řeky a tři dřevěné mosty. Řeka skutečně blokuje cestu; mosty jsou průchozí a vyznačené v minimapě. Na mostech nelze stavět budovy.
+- **Bohatší oblasti surovin:** na obou březích řeky jsou rozšířené shluky kamene, rudy a keřů; počáteční osady zůstávají se spravedlivými zdroji.
+- **Neutrální lokality:** až šest míst na každé nově založené mapě (neutrální osada, staré ruiny, hláska, lom, tábor a opuštěná kovárna). Každé místo je nejdřív skryté mlhou války.
+- **Skutečný průzkum:** odměna připadá hráči až po příchodu jeho jednotky, nejvýš jednou na místo a tým. Odměny zahrnují jídlo, dřevo, kámen, zlato, vědění a kov. Nejde o automatickou odměnu za pouhé objevení.
+- **Svět (klávesa M):** nový panel objevených lokalit, průběh průzkumu, odměny, tlačítka Ukázat na mapě a Vyslat jednotku. Neobjevená místa neprozrazují souřadnice.
+- **Zobrazení a 3D:** konstrukce dřevěných mostů, opuštěné domy, zříceniny, tábory a další drobné modely. V minimapě se po odkrytí zobrazí značky lokalit.
+- **Multiplayer a uložení:** hostitel počítá odměny, stav návštěv se synchronizuje a ukládá. Po převodu starší uložené partie se nové lokality nevkládají mezi existující budovy; plnou mapu 1.7.0 získáš při založení nové partie.
+- **Testy:** determinismus generování, dosažitelnost mostů, jednorázovost odměn, mlha války, ukládání a prohlížečové testy v obou režimech.
+
 ## 1.6.0 – Atmosféra a svět
 
 - **Denní cyklus:** skutečné střídání svítání, dne, soumraku a noci po 120 herních sekundách. Mění se barva oblohy a mlhy, slunce a celkové osvětlení; vypínatelné v Městě.

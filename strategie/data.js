@@ -22,7 +22,7 @@ const SEASON_LEN = 60;            // sekund na roční období
 const FARM_SEASON = [0.8, 1.0, 1.3, 0];
 const TEAM_COLORS = [0x2f6fd0, 0xc8402f];
 
-const MAP_TYPES = { balanced: 'Vyvážená krajina', forest: 'Lesnatá krajina', highlands: 'Hornatá krajina' };
+const MAP_TYPES = { balanced: 'Vyvážená krajina', forest: 'Lesnatá krajina', highlands: 'Hornatá krajina', river: 'Říční údolí' };
 const MATCH_DEFAULTS = { map: 'balanced', resources: 1, stocks: 1, goal: 'conquest', years: 5, peace: 0, seed: null };
 function matchOptions(value) {
   const v = value || {}, choose = (key, allowed) => allowed.includes(v[key]) ? v[key] : MATCH_DEFAULTS[key];

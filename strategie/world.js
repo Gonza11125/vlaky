@@ -14,6 +14,33 @@ const nodes = [];
 const herds = [];
 const STARTS = [{ cx: 24, cy: N - 26 }, { cx: N - 26, cy: 24 }];
 
+// 1.7.0 – průchodné říční přechody. Maska se odvozuje pouze od seedu mapy.
+const RIVER_CROSSINGS = [24, 55, 86];
+const bridgeMask = new Uint8Array(N*N);
+function riverCenter(y,seed){
+  return N*0.5 + 5.1*Math.sin(y*0.067 + seed*0.00013)
+    + 2.2*Math.sin(y*0.139 + seed*0.00007);
+}
+function riverWidth(y){return 2.6+0.28*Math.sin(y*0.113);}
+function riverCarve(x,y,seed) {
+  const dx=Math.abs(x-riverCenter(y,seed));
+  const t=1-sstep(riverWidth(y),riverWidth(y)+2.1,dx);
+  return t; // 1 uprostřed řeky, 0 na břehu
+}
+function bridgeCells(seed) {
+  bridgeMask.fill(0);
+  if(G.match.map!=='river')return;
+  for(const cy of RIVER_CROSSINGS){
+    for(let y=cy;y<=cy+1;y++){
+      const middle=riverCenter(y+0.5,seed);
+      for(let x=Math.max(2,Math.floor(middle-7));x<=Math.min(N-3,Math.ceil(middle+7));x++)
+        bridgeMask[cidx(x,y)]=1;
+    }
+  }
+}
+function bridgeAt(x,z){return !!bridgeMask[cidx(cellOf(x),cellOf(z))];}
+
+
 let _seed = 1;
 function srand(s) { _seed = s >>> 0; }
 function rnd() { _seed = (_seed + 0x6D2B79F5) | 0; let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
@@ -34,6 +61,7 @@ const cellOf = v => clamp(Math.floor(v / CS), 0, N - 1);
 const cellC = c => (c + 0.5) * CS;
 
 function heightAt(x, z) {
+  if(bridgeAt(x,z))return 1.35;
   const fx = clamp(x / CS, 0, N - 0.001), fz = clamp(z / CS, 0, N - 0.001);
   const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j;
   const a = hgt[j * NV + i], b = hgt[j * NV + i + 1], c = hgt[(j + 1) * NV + i], d = hgt[(j + 1) * NV + i + 1];
@@ -43,10 +71,11 @@ function cellH(cx, cy) { return (hgt[cy * NV + cx] + hgt[cy * NV + cx + 1] + hgt
 function calcWalk(cx, cy) {
   const a = hgt[cy * NV + cx], b = hgt[cy * NV + cx + 1], c = hgt[(cy + 1) * NV + cx], d = hgt[(cy + 1) * NV + cx + 1];
   const mn = Math.min(a, b, c, d), mx = Math.max(a, b, c, d);
-  walk[cidx(cx, cy)] = ((a + b + c + d) / 4 > 0.3 && mx - mn < 1.7) ? 1 : 0;
+  walk[cidx(cx, cy)] = bridgeMask[cidx(cx,cy)] || ((a + b + c + d) / 4 > 0.3 && mx - mn < 1.7) ? 1 : 0;
 }
 
 function genHeights(seed) {
+  bridgeCells(seed);
   for (let j = 0; j < NV; j++) for (let i = 0; i < NV; i++) {
     let h = (fbm(i / N * 4.2, j / N * 4.2, seed) - 0.4) * 15;
     const ridge = fbm(i / N * 9, j / N * 9, seed + 99);
@@ -56,6 +85,14 @@ function genHeights(seed) {
     for (const s of STARTS) { const d = Math.hypot(i - s.cx - 1.5, j - s.cy - 1.5); h = lerp(h, 1.3, sstep(17, 9, d)); }
     const e = Math.min(i, j, N - i, N - j);
     if (e < 7) h = lerp(-3.5, h, sstep(0, 7, e));
+    if(G.match.map==='river'){
+      const carve=riverCarve(i,j,seed);
+      // V korytě je skutečná voda; most je samostatná průchodná plocha.
+      h=lerp(h,-1.65,carve);
+      const dx=Math.abs(i-riverCenter(j,seed));
+      const bank=(1-sstep(4.8,8.5,dx))*(1-carve);
+      h=lerp(h,1.15,bank*0.62);
+    }
     hgt[j * NV + i] = h;
   }
   let w = 0;
@@ -66,7 +103,7 @@ function genHeights(seed) {
 function addNode(type, cx, cy, force) {
   if (!inMap(cx, cy)) return null;
   const i = cidx(cx, cy);
-  if ((!walk[i] && !force) || nodeAt[i] >= 0 || resv[i]) return null;
+  if (bridgeMask[i] || ((!walk[i] && !force) || nodeAt[i] >= 0 || resv[i])) return null;
   const n = { id: nodes.length, isNode: true, type, def: NODE_DEF[type], cx, cy, x: cellC(cx) + (rnd() - 0.5) * 0.8, z: cellC(cy) + (rnd() - 0.5) * 0.8, amt: Math.round(NODE_DEF[type].amt * G.match.resources), inst: -1, v: rnd() };
   if (type === 'fish') { n.x = cellC(cx); n.z = cellC(cy); }
   nodes.push(n); nodeAt[i] = n.id; return n;
@@ -114,6 +151,15 @@ function genNodes(seed) {
     cluster('gold', x4, y4, 3, 2); cluster('gold', N - x4, N - y4, 3, 2);
     const x5 = 12 + Math.floor(rnd() * (N - 24)), y5 = 12 + Math.floor(rnd() * (N - 24));
     herds.push({ cx: x5, cy: y5, n: 4 }, { cx: N - x5, cy: N - y5, n: 4 });
+  }
+  // Nová říční mapa nabízí bohaté surovinové lokality na obou březích.
+  if(G.match.map==='river'){
+    for(const cy of [17,40,71,97]){
+      const c=Math.round(riverCenter(cy,seed));
+      cluster('stone',c-11,cy,6,3);cluster('stone',c+11,cy,6,3);
+      cluster('ore',c-13,cy+4,5,2);cluster('ore',c+13,cy-4,5,2);
+      cluster('bush',c-9,cy+6,7,3);cluster('bush',c+9,cy-6,7,3);
+    }
   }
   // ryby: mělčina hned u břehu
   for (let cy = 2; cy < N - 2; cy++) for (let cx = 2; cx < N - 2; cx++) {
@@ -207,6 +253,8 @@ function makeWorld(fixed) {
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) calcWalk(x, y);
   }
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); PT = -1;
+  // Mosty zůstávají průchozí, ale nesmí se přes ně stavět ani měnit terén.
+  for(let i=0;i<bridgeMask.length;i++)if(bridgeMask[i])resv[i]=1;
   genNodes(seed);
   return requested;
 }

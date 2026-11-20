@@ -30,5 +30,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.6.0",
     "description": "Atmosféra a svět: svítání, den, soumrak a noc, světla města, dynamická oblačnost, déšť a sníh, volitelný syntetický zvuk větru a ptáků, adaptivní množství částic a nastavení grafiky."
+  },
+  {
+    "id": "1.7.0",
+    "description": "Nový svět: říční mapa se třemi průchozími mosty, bohatší surovinové oblasti, šest neutrálních lokalit s průzkumnými odměnami, mapa objevů a výpravy jednotek."
   }
 ];

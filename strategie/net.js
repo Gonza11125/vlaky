@@ -250,6 +250,7 @@ function applyState(d) {
   const cn = teams[MY].n = {}; for (const b of blds) if (b.team === MY) { if (b.done) cn[b.type] = (cn[b.type] || 0) + 1; b.queue = []; }
   for (const q of d.q || []) { const b = byId.get(q[0]); if (b && b.isB) b.queue = q[1].map(x => ({ kind: x[0], id: x[1], t: x[2], total: x[3] })); }
   if (d.pr) Object.assign(PRICE, d.pr);
+  if(Array.isArray(d.frontier))frontierLoad(d.frontier);
   NET.pend = NET.pend.filter(p => p[0] > d.ack);
   for (const m of d.m || []) { if (m[0] === '!') alertAttack(m[1], m[2], !!m[3]); else msg(String(m[0]).slice(0, 200), m[1] === 'good' || m[1] === 'bad' ? m[1] : ''); }
   (d.T || []).forEach((s, i) => { if (teams[i] && s.stats) teams[i].stats = s.stats; });
@@ -284,6 +285,7 @@ function hostTick() {
     t: 's', time: r1(G.time), fl: r1(G.flood || 0), rn: G.rain || 0, dr: EV.drought ? 1 : 0, fr: EV.frost ? 1 : 0, ack: NET.ack, over: G.over ? G.loser : -2, reason: G.endReason,
     T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, city: { auto: cityState(T).auto, maintenance: cityState(T).maintenance, priorities: cityState(T).priorities, morale: cityState(T).morale, reserves: cityState(T).reserves }, economy: economyState(T), stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
     q: blds.filter(b => b.team === 1 && b.queue.length).slice(0, 12).map(b => [b.id, b.queue.map(q => [q.kind, q.id, r1(q.t), q.total])]),
+    frontier: frontierSave(),
     pr: { food: Math.round(PRICE.food), wood: Math.round(PRICE.wood), stone: Math.round(PRICE.stone), metal: Math.round(PRICE.metal) }, m: NET.out.splice(0, 5),
   });
   if (i % 10 === 6) netSend({ t: 'n', li: Math.max(0, NET.log.length - 50), log: NET.log.slice(-50), an: animals.map(a => [a.id, Math.round(a.x * 10), Math.round(a.z * 10)]) });

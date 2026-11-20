@@ -52,6 +52,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn('atmosphere.js', release.game_files_for_html(
             (self.root / 'versions' / '1.0.1' / 'index.html').read_text()))
 
+    def test_new_frontier_module_is_published_only_when_referenced(self):
+        latest = self.root / 'versions' / '1.7.0'
+        self.assertIn('frontier.js', release.game_files_for_html(
+            (latest / 'index.html').read_text(encoding='utf-8')))
+        self.assertTrue((latest / 'frontier.js').is_file())
+        old = self.root / 'versions' / '1.6.0'
+        self.assertNotIn('frontier.js', release.game_files_for_html(
+            (old / 'index.html').read_text(encoding='utf-8')))
+
     def test_version_numbers_compare_numerically(self):
         major = max(release.version_tuple(r['id'])[0] for r in release.read_releases(self.root)) + 1
         release.publish(self.root, str(major) + '.0.9')

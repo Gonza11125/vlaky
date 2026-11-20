@@ -6,8 +6,27 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0** a **1.6.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0** a **1.7.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.7.0 – Nový svět
+
+Nová volitelná mapa **Říční údolí** má skutečné koryto řeky, které brání
+pohybu jednotek, a **tři průchozí dřevěné mosty**. Voda ani mosty nejsou
+pouze dekorace; hledání cest respektuje říční překážku. Suroviny jsou
+obohacené na obou březích.
+
+Na nově založené mapě je až **šest nezávislých neutrálních lokalit**
+(osada, ruiny, hláska, lom, poutnický tábor, kovárna). V mapě se ukážou
+až po prozkoumání území. Po první návštěvě jednotkou získá každý tým
+jednorázovou odměnu. Neutrální místa **nemají autonomní obyvatele ani
+diplomatický systém**. Panel **Svět (M)** ukazuje postup objevování,
+odměny a umožní poslat průzkumníka do odhalené lokality.
+
+Průzkum, jednorázové odměny a stav návštěv se ukládají a synchronizují.
+Při převodu partie ze starší verze zůstávají původní budovy chráněné:
+neutrální objekty se nepřidávají do již osídlené mapy. Všechna původní
+herní pravidla fungují v klasickém i realistickém režimu.
 
 ## Novinky ve 1.6.0 – Atmosféra a svět
 

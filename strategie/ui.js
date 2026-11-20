@@ -238,13 +238,15 @@ $('b-place-no').onclick = cancelPlacing;
 addEventListener('keydown', e => {
   if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) || document.querySelector('#version-dialog[open]')) return;
   keys[e.code] = true;
+  if (e.code === 'Escape' && !$('world-panel').hidden) { closeWorld(); return; }
   if (e.code === 'Escape' && !$('economy-panel').hidden) { closeEconomy(); return; }
   if (e.code === 'Escape' && !$('city-panel').hidden) { closeCity(); return; }
   if (e.code === 'KeyC') { e.preventDefault(); if ($('city-panel').hidden) openCity(); else closeCity(); }
   if (e.code === 'KeyK') { e.preventDefault(); if ($('economy-panel').hidden) openEconomy(); else closeEconomy(); }
+  if (e.code === 'KeyM') { e.preventDefault(); if ($('world-panel').hidden) openWorld(); else closeWorld(); }
   if (e.code === 'Escape') { if (!$('help').hidden) closeHelp(); else if (!$('pause-menu').hidden) closeMenu(); else if (!$('techs').hidden) $('techs').hidden = true; else if (placing) cancelPlacing(); else setSel([]); }
   if (e.code === 'F1') { e.preventDefault(); if ($('help').hidden) openHelp(); else closeHelp(); }
-  if (e.code === 'Space' && $('city-panel').hidden && $('economy-panel').hidden && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
+  if (e.code === 'Space' && $('world-panel').hidden && $('city-panel').hidden && $('economy-panel').hidden && $('help').hidden && $('pause-menu').hidden) { e.preventDefault(); togglePause(); }
   if (e.code === 'Period') idleVil();
   if (e.code === 'KeyH') { cam.x = ME().tcx; cam.z = ME().tcz; }
   if (e.code.startsWith('Arrow')) e.preventDefault();
@@ -260,6 +262,7 @@ function drawMiniBase() {
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const k = (j * NV + i) * 3, o = (j * N + i) * 4; let r = col[k], g = col[k + 1], b = col[k + 2];
     if (cellH(i, j) < 0.1) { r = 0.25; g = 0.45; b = 0.57; }
+    if (bridgeMask[cidx(i,j)]) {r=0.60;g=0.46;b=0.27;}
     const nid = nodeAt[cidx(i, j)]; if (nid >= 0) { const t = nodes[nid].type; if (t === 'tree') { r *= 0.62; g *= 0.72; b *= 0.6; } else if (t === 'stone') { r = g = b = 0.72; } else if (t === 'ore') { r = 0.8; g = 0.5; b = 0.2; } }
     const fk = !explored[cidx(i, j)] ? 0.06 : vis[cidx(i, j)] ? 1 : 0.6;
     img.data[o] = r * 255 * fk; img.data[o + 1] = g * 255 * fk; img.data[o + 2] = b * 255 * fk; img.data[o + 3] = 255;
@@ -272,6 +275,11 @@ function drawMini() {
   if (cityRoadCells.length) {
     mctx.fillStyle = '#b3a080';
     for (const cell of cityRoadCells) mctx.fillRect(cellC(cell % N) * k - 0.7, cellC((cell / N) | 0) * k - 0.7, 1.4, 1.4);
+  }
+  for(const site of FRONTIER.sites)if(frontierWasSeen(site)){
+    const visited=!!(site.visited&(1<<MY));
+    mctx.fillStyle=visited?'#8cb6a3':'#ffd46c';
+    mctx.fillRect(site.x*k-2,site.z*k-2,4,4);
   }
   for (const b of blds) { if (!b.mesh.visible) continue; mctx.fillStyle = b.team ? '#ff5a45' : '#58a6ff'; const s = Math.max(3, b.size * CS * k); mctx.fillRect(b.x * k - s / 2, b.z * k - s / 2, s, s); }
   for (const u of units) { if (!u.mesh.visible) continue; mctx.fillStyle = u.team ? '#ff8a7a' : '#bfe0ff'; mctx.fillRect(u.x * k - 1, u.z * k - 1, 2.2, 2.2); }
@@ -372,9 +380,10 @@ function refreshUI() {
   $('s-pop').textContent = T.pop + '/' + T.cap;
   const cityCount = cityCensus(MY), cityData = cityState(T);
   const cityWarning = T.hungry || cityCount.unfinished > 0 || (G.real && (cityCount.damaged > 0 || cityData.morale < 40));
-  $('s-city').textContent = 'Osada · ' + cityCount.idle + ' volní' + (G.real ? ' · ' + Math.round(cityData.morale) + '% pohoda' : '');
+  $('s-city').textContent = 'Osada · ' + cityCount.idle + ' volní' + (G.real ? ' · ' + Math.round(cityData.morale) + '% pohoda' : '') + ' · průzkum '+frontierSummary(MY).visited+'/'+FRONTIER.sites.length;
   $('s-city').classList.toggle('attention', cityWarning);
   if (!$('city-panel').hidden) renderCity();
+  if (!$('world-panel').hidden) renderWorld();
   $('s-era').textContent = ERAS[T.era];
   $('s-time').textContent = 'Rok ' + year() + ' · ' + SEASONS[season()];
   $('s-atmo').textContent = ATMOS.enabled?atmoClock(G.time).label:'Stálý den';
@@ -444,7 +453,7 @@ $('b-idle').onclick = idleVil;
 $('b-pause').onclick = togglePause;
 $('b-speed').onclick = () => { if (G.mode !== 'ai') { msg('Ve hře po síti se rychlost nemění.'); return; } G.speed = G.speed >= 3 ? 1 : G.speed + 1; $('b-speed').textContent = G.speed + '×'; };
 $('b-tech').onclick = () => {
-  if(!$('economy-panel').hidden)return;
+  if(!$('economy-panel').hidden||!$('world-panel').hidden)return;
   const T = ME(); let h = '';
   ERAS.forEach((era, i) => {
     h += '<h2>' + era + '</h2><div class="tgrid">';
@@ -465,7 +474,7 @@ function restorePause(wasPaused) {
   $('b-pause').classList.toggle('warn', wasPaused);
 }
 function openMenu() {
-  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden || !$('city-panel').hidden || !$('economy-panel').hidden) return;
+  if (!$('start').hidden || G.over || !$('pause-menu').hidden || !$('help').hidden || !$('city-panel').hidden || !$('economy-panel').hidden || !$('world-panel').hidden) return;
   menuWasPaused = G.paused;
   if (G.mode === 'ai') restorePause(true);
   $('b-return').textContent = G.mode === 'ai' ? 'Uložit a zpět do nabídky' : 'Odpojit a zpět do nabídky';
@@ -479,7 +488,7 @@ function closeMenu(restore = true) {
   $('b-menu').focus();
 }
 function openHelp() {
-  if (!$('help').hidden || !$('pause-menu').hidden || !$('city-panel').hidden || !$('economy-panel').hidden) return;
+  if (!$('help').hidden || !$('pause-menu').hidden || !$('city-panel').hidden || !$('economy-panel').hidden || !$('world-panel').hidden) return;
   helpWasPaused = G.paused;
   if (G.mode === 'ai' && $('start').hidden) restorePause(true);
   $('help').hidden = false;
@@ -548,7 +557,7 @@ function renderCity() {
 }
 function openCity() {
   if (!$('start').hidden || G.over || !$('city-panel').hidden ||
-      !$('help').hidden || !$('pause-menu').hidden || !$('techs').hidden || !$('economy-panel').hidden) return;
+      !$('help').hidden || !$('pause-menu').hidden || !$('techs').hidden || !$('economy-panel').hidden || !$('world-panel').hidden) return;
   cityWasPaused = G.paused;
   if (G.mode === 'ai') restorePause(true);
   $('city-panel').hidden = false;
@@ -581,6 +590,60 @@ $('city-art-quality').onchange = () => {
   }
 };
 
+
+
+// 1.7 Nový svět: průzkumná kniha, objevy a povely pro expedice
+let worldWasPaused=false;
+function renderWorld(){
+  const r=frontierSummary(MY);
+  $('world-summary').innerHTML='<div><strong>'+r.seen+' / '+r.total+'</strong><span>Objevená místa</span></div>'+
+    '<div><strong>'+r.visited+' / '+r.total+'</strong><span>Navštívená místa</span></div>'+
+    '<div><strong>'+(r.total-r.seen)+'</strong><span>Neznámé lokality</span></div>';
+  $('world-map-note').textContent=G.match.map==='river'
+    ? 'Říční údolí: oba břehy spojují tři dřevěné mosty, které lze použít pro přesun jednotek.'
+    : 'Neutrální místa jsou i na této mapě. Souvislou řeku a tři mosty vyzkoušíš v mapě Říční údolí.';
+  $('world-sites').innerHTML=FRONTIER.sites.map(site=>{
+    if(!frontierWasSeen(site))return '<article class="world-site unknown"><h3>Neznámá lokalita</h3><p>Vyšli průzkumníky do dosud neodhaleného území.</p></article>';
+    const visited=!!(site.visited&(1<<MY));
+    const prizes=Object.entries(site.reward).map(([key,v])=>v+' '+RES_NAME[key].toLowerCase()).join(', ');
+    return '<article class="world-site '+(visited?'complete':'')+'"><h3>'+site.name+'</h3>'+
+      '<p>'+site.desc+'</p><p><b>'+(visited?'Navštíveno':'Objeveno, čeká na průzkumníka')+'</b></p>'+
+      '<p>Odměna za první návštěvu: '+prizes+'</p><div class="row">'+
+      '<button class="pick" data-frontier-jump="'+site.id+'">Ukázat na mapě</button>'+
+      (!visited?'<button class="pick" data-frontier-go="'+site.id+'">Vyslat jednotku</button>':'')+
+      '</div></article>';
+  }).join('')||'<p>Na převedené starší partii nejsou neutrální místa; najdeš je po založení nové hry.</p>';
+}
+function openWorld(){
+  if(!$('start').hidden||G.over||!$('world-panel').hidden||
+     !$('city-panel').hidden||!$('economy-panel').hidden||!$('help').hidden||
+     !$('pause-menu').hidden||!$('techs').hidden)return;
+  worldWasPaused=G.paused;
+  if(G.mode==='ai')restorePause(true);
+  $('world-panel').hidden=false;renderWorld();$('b-world-close').focus();
+}
+function closeWorld(){
+  if($('world-panel').hidden)return;
+  $('world-panel').hidden=true;restorePause(worldWasPaused);$('b-world').focus();
+}
+$('b-world').onclick=openWorld;
+$('b-world-close').onclick=closeWorld;
+$('world-sites').onclick=e=>{
+  const button=e.target.closest('[data-frontier-jump],[data-frontier-go]');
+  if(!button)return;
+  const go=button.dataset.frontierGo!==undefined;
+  const id=Number(go?button.dataset.frontierGo:button.dataset.frontierJump);
+  const site=FRONTIER.sites[id];
+  if(!site||!frontierWasSeen(site))return;
+  cam.x=site.x;cam.z=site.z;closeWorld();
+  if(go){
+    let worker=ownUnits().find(u=>u.type!=='caravan');
+    if(!worker)worker=units.filter(u=>u.team===MY&&!u.dead&&u.type!=='caravan')
+      .sort((a,b)=>Math.hypot(a.x-site.x,a.z-site.z)-Math.hypot(b.x-site.x,b.z-site.z))[0];
+    if(worker){act(['move',[worker.id],site.x,site.z]);msg('Výprava míří k místu '+site.name+'.','good');}
+    else msg('Potřebuješ alespoň jednu vlastní jednotku.','bad');
+  }
+};
 
 // ---------- 1.5: interaktivní hospodářství ----------
 let economyWasPaused=false,economyShownAt=0,economyPointerInside=false;
@@ -640,7 +703,7 @@ function renderEconomy() {
 }
 function openEconomy() {
   if(!$('start').hidden||G.over||!$('economy-panel').hidden||
-     !$('city-panel').hidden||!$('help').hidden||!$('pause-menu').hidden||!$('techs').hidden)return;
+     !$('city-panel').hidden||!$('help').hidden||!$('pause-menu').hidden||!$('techs').hidden||!$('world-panel').hidden)return;
   economyWasPaused=G.paused;
   if(G.mode==='ai')restorePause(true);
   $('economy-panel').hidden=false;
@@ -743,8 +806,8 @@ function readLocal() {
   try {
     let raw = localStorage.getItem(SAVE_KEY);
     // Clone a compatible older save without changing the original release.
-    if (!raw && VEK_RELEASE.id === '1.6.0') {
-      for (const previous of ['1.5.0', '1.4.0', '1.3.0', '1.2.0', '1.1.0']) {
+    if (!raw && VEK_RELEASE.id === '1.7.0') {
+      for (const previous of ['1.6.0', '1.5.0', '1.4.0', '1.3.0', '1.2.0', '1.1.0']) {
         const older = localStorage.getItem('vek-pokroku-save-' + previous);
         if (!older || older.length > 5000000) continue;
         try {
@@ -894,6 +957,7 @@ function frame(now) {
     m.rotation.x = u.working && u.def.cls !== 'siege' && u.def.cls !== 'cav' ? Math.max(0, Math.sin(t * 7 + u.id)) * 0.28 : 0;
   }
   cityArtAnimate(t, dt);
+  frontierFrame();
   for (let i = markers.length - 1; i >= 0; i--) { const k = markers[i]; k.t -= dt; if (k.t <= 0) { scene.remove(k.m); markers.splice(i, 1); } else { k.m.scale.setScalar(0.4 + k.t * 1.6); k.m.material.opacity = k.t / 0.6; } }
   updateCamera();
   atmoFrame(now,dt,t);
