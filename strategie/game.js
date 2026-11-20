@@ -399,7 +399,7 @@ function industryTick(b,dt) {
   const recipe=ECON_RECIPES[b.type];if(!recipe||!(dt>0)||industryStatus(b)!=='Vyrábí')return 0;
   const T=teams[b.team],c=cityState(T),out=Object.keys(recipe.output)[0];
   const bonus=G.real?professionBonus(b.crafter,'craft')*industryLogistics(b)*(0.8+c.morale/500):1;
-  const tech=b.type==='smelter'?(T.tech.iron?1.5:1)*(T.tech.blast?2:1):1;
+  const tech=(b.type==='smelter'?(T.tech.iron?1.5:1)*(T.tech.blast?2:1):1)*(T.tech.guilds?1.25:1);
   let cycles=recipe.rate*dt*ECON_PRIORITY_SCALE[b.priority]*tech*bonus;
   for(const key in recipe.input)
     cycles=Math.min(cycles,Math.max(0,T.res[key]-(c.reserves[key]||0))/recipe.input[key]);
@@ -725,8 +725,10 @@ function updateFog() {
   if (G.reveal) { for (let i = 0; i < N * N; i++) { vis[i] = 1; if (!explored[i]) { explored[i] = 1; const id = nodeAt[i]; if (id >= 0) showNode(nodes[id]); } } }
   else {
     vis.fill(0);
-    for (const u of units) if (u.team === MY) reveal(cellOf(u.x), cellOf(u.z), SIGHT[u.def.cls]);
+    const extra = teams[MY] && teams[MY].tech.scouting ? 2 : 0;
+    for (const u of units) if (u.team === MY) reveal(cellOf(u.x), cellOf(u.z), SIGHT[u.def.cls] + extra);
     for (const b of blds) if (b.team === MY) reveal(cellOf(b.x), cellOf(b.z), !b.done ? 2 + b.size : b.type === 'tower' ? 10 : b.type === 'tc' ? 9 : b.def.wall ? 3 : 4 + b.size);
+    if (typeof frontierVision === 'function') frontierVision(MY);
   }
   let ch = false;
   for (let i = 0; i < N * N; i++) { const t = vis[i] ? 0 : explored[i] ? 125 : 255, c = fogCur[i]; if (c !== t) { const v = c + clamp(t - c, -50, 50); fogCur[i] = v; fogData[i * 4 + 3] = v; ch = true; } }
@@ -897,7 +899,7 @@ function pathToB(u, b) {
   const r = findPath(cellOf(u.x), cellOf(u.z), b.cx, b.cy, b.cx + b.size - 1, b.cy + b.size - 1, 1);
   setPath(u, r.cells, null); return r.ok;
 }
-function speedOf(u) { let s = u.def.speed; if (u.type === 'vil' && teams[u.team].tech.wheel) s *= 1.1; if (teams[u.team].hungry) s *= 0.8; if (u.sick > 0) s *= 0.8; if (G.flood > 0.2 && heightAt(u.x, u.z) < G.flood - 0.1) s *= 0.5; return s; }
+function speedOf(u) { let s = u.def.speed; if (teams[u.team].tech.roads) s *= 1.08; if (u.type === 'vil' && teams[u.team].tech.wheel) s *= 1.1; if (teams[u.team].hungry) s *= 0.8; if (u.sick > 0) s *= 0.8; if (G.flood > 0.2 && heightAt(u.x, u.z) < G.flood - 0.1) s *= 0.5; return s; }
 function follow(u, dt) {
   if (!u.path || u.pi >= u.path.length) { u.path = null; return true; }
   let step = speedOf(u) * dt;
@@ -1004,6 +1006,8 @@ function gatherRate(u, n) {
   const T = teams[u.team]; let r = n.def.rate;
   if (n.type !== 'bush' && T.tech.btools) r *= 1.2;
   if (n.type === 'bush' && season() === 3) r *= 0.5;
+  if (n.type === 'fish' && T.tech.fishing) r *= 1.3;
+  if (n.type === 'meat' && T.tech.traps) r *= 1.3;
   if (T.hungry) r *= 0.6;
   if (u.sick > 0) r *= 0.5;
   if (u.team === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff];
@@ -1282,7 +1286,7 @@ function econ(T, dt) {
   let cap = 0, past = 0, mill = 0, mkt = 0; const cn = T.n = {};
   for (const b of blds) if (b.team === T.id && b.done) { cn[b.type] = (cn[b.type] || 0) + 1; cap += b.def.pop || 0; if (b.type === 'pasture') past++; else if (b.type === 'mill') mill++; else if (b.type === 'market') mkt++; }
   T.cap = Math.min(MAXPOP, cap); T.mill = mill > 0;
-  const earnedGold=Math.min(mkt,2)*0.15*dt;
+  const earnedGold=Math.min(mkt,2)*0.15*(T.tech.banking?1.6:1)*dt;
   const earnedKnow=knowRate(T)*dt;
   const earnedFood=past*(season()===3?0.16:0.24)*dt;
   gainResource(T,'gold',earnedGold);economyRecord(T,'gold',earnedGold);
@@ -1421,6 +1425,8 @@ function execCmd(team, c) {
     case 'unq': { const b = B(c[1]); if (b) cancelQueue(b, b.queue.length - 1); break; }
     case 'raze': { const b = B(c[1]); if (b && b.type !== 'tc') { if (!b.done) refund(T, b.def.cost, 0.75); killEnt(b, null); } break; }
     case 'trade': { if (!(c[1] in PRICE) || !blds.some(b => b.team === team && b.type === 'market' && b.done)) break; const e = trade(T, c[1], !!c[2]); if (e) say(team, e, 'bad'); break; }
+    case 'ally': { if (typeof frontierAlly === 'function') { const e = frontierAlly(team, c[1]); if (e) say(team, e, 'bad'); } break; }
+    case 'merchant': { if (typeof frontierMerchant === 'function') { const e = frontierMerchant(team, c[1]); if (e) say(team, e, 'bad'); } break; }
     case 'rally': { const b = B(c[1]); if (b) b.rally = { x: +c[2], z: +c[3], node: c[4] >= 0 ? nodes[c[4]] || null : null }; break; }
   }
 }
@@ -1428,7 +1434,7 @@ function act(c) { if (G.mode === 'guest') netCmd(c); else execCmd(MY, c); }
 
 // ---------- protivník ----------
 const AI = { acc: 0, attackAt: 0, wave: 0, launch: -999, scout: 0, scoutNext: 0 };
-const AI_TECH = ['agri', 'husbandry', 'era1', 'pottery', 'herbs', 'writing', 'bronze', 'wheel', 'currency', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'plow', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
+const AI_TECH = ['agri', 'husbandry', 'scouting', 'era1', 'pottery', 'fishing', 'herbs', 'writing', 'cartography', 'bronze', 'wheel', 'currency', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'diplomacy', 'plow', 'roads', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'guilds', 'banking', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
 function findSpot(type, ax, ay, margin) {
   const s = BUILDINGS[type].size;
   for (let r = 3; r < 22; r++) {

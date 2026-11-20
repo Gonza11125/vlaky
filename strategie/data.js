@@ -121,6 +121,12 @@ const TECHS = {
                desc: 'Ochočené ovce a kozy. Odemyká Pastvinu, která živí i v zimě.' },
   herbs:     { name: 'Bylinkářství', era: 0, at: 'tc', real: true, cost: { know: 20 }, time: 20,
                desc: 'Odvary a obklady. Nemoc ubírá o polovinu méně životů. Odemyká Ošetřovnu.' },
+  scouting:  { name: 'Stopaři', era: 0, at: 'tc', cost: { know: 20, food: 30 }, time: 20,
+               desc: 'Zkušení stopaři čtou krajinu. Všechny jednotky vidí o 2 pole dál.' },
+  fishing:   { name: 'Rybářské sítě', era: 0, at: 'tc', cost: { know: 15, wood: 30 }, time: 18,
+               desc: 'Pletené sítě a vrše. Rybaření +30 %.' },
+  traps:     { name: 'Lovecké pasti', era: 0, at: 'tc', cost: { know: 15, wood: 20 }, time: 18,
+               desc: 'Oka, jámy a ohrady. Zpracování ulovené zvěře +30 %.' },
   era1:      { name: 'Doba bronzová', era: 0, at: 'tc', setsEra: 1, req: ['agri'], cost: { know: 50, food: 150 }, time: 40,
                desc: 'Usedlý život a přebytky úrody uživí řemeslníky. Postup do další epochy.' },
 
@@ -142,6 +148,8 @@ const TECHS = {
                desc: 'Sekery, krumpáče a dláta z kovu. Těžba dřeva, kamene a rudy +20 %.' },
   bweap:     { name: 'Kovové hroty', era: 1, at: 'smithy', cost: { know: 35, metal: 40 }, time: 25,
                desc: 'Kopí a meče s litým ostřím. Útok pěchoty a jízdy +2.' },
+  cartography:{ name: 'Kartografie', era: 1, at: 'tc', req: ['writing'], cost: { know: 45, wood: 30 }, time: 25,
+               desc: 'Mapy od obchodníků a poutníků. Odhalí polohu všech neutrálních lokalit.' },
   era2:      { name: 'Doba železná', era: 1, at: 'tc', setsEra: 2, req: ['bronze', 'writing'], cost: { know: 130, food: 300, metal: 60, gold: 40 }, time: 50,
                desc: 'Železná ruda je všude, jen ji umět vytavit. Postup do další epochy.' },
 
@@ -155,6 +163,10 @@ const TECHS = {
                desc: 'Páka, kladka a torzní pružina. Odemyká Dílnu a Katapult.' },
   medicine:  { name: 'Medicína', era: 2, at: 'library', real: true, cost: { know: 90 }, time: 35,
                desc: 'Lékaři popisují příznaky a oddělují nemocné. Nemoc trvá o polovinu kratší dobu.' },
+  diplomacy: { name: 'Diplomacie', era: 2, at: 'library', cost: { know: 90, gold: 40 }, time: 35,
+               desc: 'Vyslanci a psané smlouvy. Spojenectví s osadami o 40 % levnější, držené lokality vynášejí o čtvrtinu víc.' },
+  roads:     { name: 'Dlážděné cesty', era: 2, at: 'tc', req: ['masonry'], cost: { know: 70, stone: 120 }, time: 35,
+               desc: 'Kamenné cesty mezi osadou a poli. Všechny jednotky se pohybují o 8 % rychleji.' },
   era3:      { name: 'Středověk', era: 2, at: 'tc', setsEra: 3, req: ['iron', 'math'], cost: { know: 260, food: 500, metal: 150, gold: 120 }, time: 60,
                desc: 'Postup do další epochy.' },
 
@@ -170,6 +182,10 @@ const TECHS = {
                desc: 'Učenci se sdružují a přou. Vědění +40 %.' },
   sanitation:{ name: 'Kanalizace', era: 3, at: 'tc', real: true, cost: { know: 120, stone: 150 }, time: 40,
                desc: 'Stoky odvádějí splašky od studní. Nákaza propuká mnohem vzácněji.' },
+  guilds:    { name: 'Cechy', era: 3, at: 'tc', cost: { know: 130, gold: 60 }, time: 40,
+               desc: 'Mistři, tovaryši a učni. Mlýn, Pekárna a Huť vyrábějí o 25 % rychleji.' },
+  banking:   { name: 'Bankovnictví', era: 3, at: 'market', req: ['currency'], cost: { know: 120, gold: 100 }, time: 40,
+               desc: 'Směnky a úvěry pro kupce. Tržiště vynášejí o 60 % víc zlata.' },
   era4:      { name: 'Novověk', era: 3, at: 'tc', setsEra: 4, req: ['steel', 'university'], cost: { know: 500, food: 700, metal: 300, gold: 250 }, time: 70,
                desc: 'Postup do poslední epochy.' },
 

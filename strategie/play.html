@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku – Nový svět</title>
+<title>Věk pokroku – Živý svět</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -227,6 +227,10 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 .world-site .pick { padding:6px 12px;min-height:35px; }
 .world-site.unknown { opacity:0.68; }
 .world-site.complete { border-color:#5f826d; }
+.world-site.mine { border-color:#2f6fd0;box-shadow:inset 0 0 0 1px #2f6fd055; } .world-site.theirs { border-color:#c8402f; }
+.world-bar { height:7px;border-radius:4px;background:var(--ink);overflow:hidden;margin:4px 0; } .world-bar i { display:block;height:100%; }
+.world-events { display:grid;gap:8px;margin:8px 0; } .world-event { background:var(--panel-2);border:1px solid var(--brass);border-radius:6px;padding:10px 12px; }
+.world-event p { margin:4px 0;color:var(--fg);font-size:13.5px; } .world-event.bad { border-color:#c8402f; }
 @media(max-width:680px) { .world-sites { grid-template-columns:1fr; }.world-summary { gap:4px; }.world-card{max-height:90dvh;} }
 </style>
 
@@ -276,7 +280,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
-      <p class="lead"><b>Nový svět:</b> říční údolí s mosty, průzkumné výpravy, neutrální osady a zapomenutá naleziště.</p>
+      <p class="lead"><b>Živý svět:</b> lokality, které jde obsadit, spojenectví s osadami, obchodníci, lapkové a nové výzkumy.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
@@ -290,6 +294,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Zlato a trh.</b> Zlato se těží, nebo ho získáš prodejem přebytků na Tržišti. Platí se jím pokročilé jednotky a pozdější epochy.</li>
         <li><b>Průzkum (M):</b> objevuj neutrální místa, vyšli k nim jednotku a při první návštěvě získej jednorázovou odměnu. Neznámá místa nejsou na mapě dopředu odhalená.</li>
         <li><b>Říční údolí:</b> zvol při zakládání partie novou mapu. Řeka zablokuje průchod kromě tří mostů a suroviny jsou rozložené na obou březích.</li>
+        <li><b>Lokality a události (1.8):</b> navštívenou lokalitu obsadíš, když u ní tvoje jednotky vydrží bez soupeře (osadu a tábor jen vojáci), nebo s osadou uzavřeš spojenectví v panelu Svět (M). Držitel dostává každou sezónu suroviny, z hlásky vidí daleko. Občas přijede obchodník s nabídkou, přijdou uprchlíci nebo zaútočí lapkové z ruin.</li>
         <li><b>Svět kolem tebe:</b> během každé partie se střídá den a noc. Za soumraku se ve městě rozsvěcují světla. Zvuk spustíš tlačítkem Zvuk, vzhled i výkon měníš v panelu Město.</li>
         <li><b>Hospodářství:</b> tlačítkem Ekonomika (K) zobrazíš toky surovin, rezervy, výrobny a jejich výkon. V realistickém režimu obsazuj mlýny, pekárny a hutě řemeslníky.</li>
         <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
@@ -403,12 +408,13 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="world-panel" hidden role="dialog" aria-modal="true" aria-labelledby="world-title">
     <div class="card wide world-card">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
-        <h1 id="world-title">Nový svět · průzkum</h1>
+        <h1 id="world-title">Svět · lokality a události</h1>
         <button class="pick" id="b-world-close">Zavřít</button>
       </div>
-      <p class="lead">Za hranicí osady se nacházejí neutrální lokality. Po objevení je můžeš navštívit vybranou jednotkou a získat jednorázové zásoby nebo vědění.</p>
+      <p class="lead">Za hranicí osady jsou neutrální lokality. První návštěva přinese jednorázovou odměnu. Lokalitu pak můžeš obsadit jednotkami (osadu jen vojáky) nebo s osadou uzavřít spojenectví; kdo ji drží, dostává každou sezónu příjem. Svět žije i sám: přijíždějí obchodníci, uprchlíci a z ruin vyrážejí lapkové.</p>
       <div id="world-summary" class="world-summary"></div>
       <p id="world-map-note" class="city-note"></p>
+      <div id="world-events" class="world-events"></div>
       <div id="world-sites" class="world-sites"></div>
       <p class="city-note">Neodhalená místa neprozrazují polohu. Odměnu získá každý tým nejvýš jednou za jedno místo. Neutrální osady zatím nemají vlastní umělou inteligenci.</p>
     </div>

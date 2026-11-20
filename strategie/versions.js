@@ -38,5 +38,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.7.1",
     "description": "Soupeř na průzkumu: počítač posílá zvěda k neutrálním lokalitám, volba mapy na úvodní obrazovce."
+  },
+  {
+    "id": "1.8.0",
+    "description": "Živý svět: obsazování lokalit, spojenectví s osadami, obchodníci, uprchlíci a lapkové, 8 nových výzkumů."
   }
 ];

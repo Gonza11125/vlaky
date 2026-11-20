@@ -1,5 +1,15 @@
 # Vydání Věku pokroku
 
+## 1.8.0 – Živý svět
+
+- **Lokality, které jde držet:** navštívenou lokalitu obsadíš, když u ní tvoje jednotky vydrží 9 s bez soupeře; osadu a poutnický tábor jen vojáci (16 s). Když jsou u místa oba, nikdo nepostupuje. Držitel dostává každou sezónu příjem: osada jídlo a dřevo, tábor jídlo a dřevo, lom kámen, kovárna kov, ruiny vědění, hláska zlato a daleký výhled. Nad drženou lokalitou vlaje vlajka v barvě týmu a minimapa ji obarví.
+- **Spojenectví s osadami:** v panelu Svět (M) se dá s navštívenou osadou nebo táborem uzavřít spojenectví za zlato a jídlo; soupeřovo spojenectví jde přeplatit za dvojnásobek.
+- **Události ve světě:** putující obchodník s nabídkou na 75 sekund, uprchlíci, kteří se přidají k osadě, a lapkové z ruin. Lapky odrazí aspoň 3 vojáci (plus jeden za každou epochu) nebo věže u Sídla, jinak vyplení 12 % jídla, dřeva a zlata.
+- **8 nových výzkumů:** Stopaři (dohled +2), Rybářské sítě a Lovecké pasti (+30 %), Kartografie (odhalí lokality), Diplomacie (levnější spojenectví, vyšší příjem), Dlážděné cesty (rychlost +8 %), Cechy (výroba +25 %) a Bankovnictví (zlato z tržišť +60 %).
+- **Soupeř:** obsazuje lokality zvědem nebo vojákem, kupuje spojenectví, přijímá výhodné nabídky obchodníka a zkoumá nové technologie.
+- **Síť a uložení:** držení, postup obsazování a události se ukládají i synchronizují; starší vydání nový formát bezpečně přeskočí.
+- Nové testy obsazování, spojenectví, příjmu a ukládání.
+
 ## 1.7.1 – Soupeř na průzkumu
 
 - **Počítačový soupeř zkoumá svět:** posílá jednoho zvěda (nejraději jezdce, jinak lehkého vojáka, ve větší osadě i vesničana) k nenavštíveným neutrálním lokalitám a sbírá jejich odměny. Začíná podle obtížnosti po 4, 3 nebo necelých 2 minutách a mezi místy odpočívá, takže hráč má šanci být první. Místa u hráčova Sídla nechává na konec.

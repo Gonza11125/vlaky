@@ -277,8 +277,8 @@ function drawMini() {
     for (const cell of cityRoadCells) mctx.fillRect(cellC(cell % N) * k - 0.7, cellC((cell / N) | 0) * k - 0.7, 1.4, 1.4);
   }
   for(const site of FRONTIER.sites)if(frontierWasSeen(site)){
-    const visited=!!(site.visited&(1<<MY));
-    mctx.fillStyle=visited?'#8cb6a3':'#ffd46c';
+    const visited=!!(site.visited&(1<<MY)),own=site.owner;
+    mctx.fillStyle=own===0?'#58a6ff':own===1?'#ff5a45':visited?'#8cb6a3':'#ffd46c';
     mctx.fillRect(site.x*k-2,site.z*k-2,4,4);
   }
   for (const b of blds) { if (!b.mesh.visible) continue; mctx.fillStyle = b.team ? '#ff5a45' : '#58a6ff'; const s = Math.max(3, b.size * CS * k); mctx.fillRect(b.x * k - s / 2, b.z * k - s / 2, s, s); }
@@ -380,7 +380,7 @@ function refreshUI() {
   $('s-pop').textContent = T.pop + '/' + T.cap;
   const cityCount = cityCensus(MY), cityData = cityState(T);
   const cityWarning = T.hungry || cityCount.unfinished > 0 || (G.real && (cityCount.damaged > 0 || cityData.morale < 40));
-  $('s-city').textContent = 'Osada · ' + cityCount.idle + ' volní' + (G.real ? ' · ' + Math.round(cityData.morale) + '% pohoda' : '') + ' · průzkum '+frontierSummary(MY).visited+'/'+FRONTIER.sites.length;
+  $('s-city').textContent = 'Osada · ' + cityCount.idle + ' volní' + (G.real ? ' · ' + Math.round(cityData.morale) + '% pohoda' : '') + ' · průzkum '+frontierSummary(MY).visited+'/'+FRONTIER.sites.length+(FRONTIER.sites.some(s=>s.owner===MY)?' · drží '+FRONTIER.sites.filter(s=>s.owner===MY).length:'');
   $('s-city').classList.toggle('attention', cityWarning);
   if (!$('city-panel').hidden) renderCity();
   if (!$('world-panel').hidden) renderWorld();
@@ -602,15 +602,29 @@ function renderWorld(){
   $('world-map-note').textContent=G.match.map==='river'
     ? 'Říční údolí: oba břehy spojují tři dřevěné mosty, které lze použít pro přesun jednotek.'
     : 'Neutrální místa jsou i na této mapě. Souvislou řeku a tři mosty vyzkoušíš v mapě Říční údolí.';
+  // 1.8: události (obchodník, lapkové, uprchlíci)
+  const evs=(FRONTIER.events||[]).filter(e=>e.team===MY&&(e.type!=='merchant'||(!e.done&&G.time<=e.until))&&(e.type!=='raid'||!e.done||G.time<=e.until+25));
+  $('world-events').innerHTML=evs.map(e=>{
+    if(e.type==='merchant')return '<div class="world-event"><p><b>Putující obchodník</b> · odjede za '+Math.max(0,Math.ceil(e.until-G.time))+' s</p><p>Nabízí '+frontierList(e.get)+' za '+frontierList(e.give)+'.</p><div class="row"><button class="pick" data-merchant="'+e.id+'">Přijmout obchod</button></div></div>';
+    if(e.type==='raid')return '<div class="world-event bad"><p><b>Lapkové</b> · '+(e.done?(e.won?'odraženi':'vyplenili osadu'):'dorazí za '+Math.max(0,Math.ceil(e.at-G.time))+' s')+'</p><p>Na obranu potřebuješ u Sídla aspoň '+(3+teams[MY].era)+' vojáky (věž se počítá za dva).</p></div>';
+    return '<div class="world-event"><p><b>Uprchlíci</b> · k osadě se přidali 2 noví vesničané.</p></div>';
+  }).join('');
   $('world-sites').innerHTML=FRONTIER.sites.map(site=>{
     if(!frontierWasSeen(site))return '<article class="world-site unknown"><h3>Neznámá lokalita</h3><p>Vyšli průzkumníky do dosud neodhaleného území.</p></article>';
-    const visited=!!(site.visited&(1<<MY));
-    const prizes=Object.entries(site.reward).map(([key,v])=>v+' '+RES_NAME[key].toLowerCase()).join(', ');
-    return '<article class="world-site '+(visited?'complete':'')+'"><h3>'+site.name+'</h3>'+
-      '<p>'+site.desc+'</p><p><b>'+(visited?'Navštíveno':'Objeveno, čeká na průzkumníka')+'</b></p>'+
-      '<p>Odměna za první návštěvu: '+prizes+'</p><div class="row">'+
+    frontierSiteState(site);
+    const visited=!!(site.visited&(1<<MY)),settle=FRONTIER_SETTLE(site.kind),own=site.owner;
+    const prizes=frontierList(site.reward),income=frontierList(frontierIncome(site,MY));
+    const ownTxt=own===MY?'Patří tobě':own>=0?'Drží ji soupeř':'Nikomu nepatří';
+    const bars=[0,1].filter(t=>site.prog[t]>0.01).map(t=>'<p>'+(t===MY?'Obsazuješ':'Soupeř obsazuje')+' · '+Math.round(site.prog[t]*100)+' %</p><div class="world-bar"><i style="width:'+Math.round(site.prog[t]*100)+'%;background:'+(t?'#c8402f':'#2f6fd0')+'"></i></div>').join('');
+    const cost=frontierAllyCost(MY,site);
+    const ally=settle&&visited&&own!==MY?'<button class="pick" data-ally="'+site.id+'">'+(own>=0?'Přeplatit spojenectví':'Uzavřít spojenectví')+' ('+frontierList(cost)+')</button>':'';
+    return '<article class="world-site '+(own===MY?'mine':own>=0?'theirs':visited?'complete':'')+'"><h3>'+site.name+'</h3>'+
+      '<p>'+site.desc+'</p><p><b>'+ownTxt+'</b> · '+(visited?'navštíveno':'čeká na průzkumníka')+'</p>'+bars+
+      (visited?'':'<p>Odměna za první návštěvu: '+prizes+'</p>')+
+      '<p>Kdo ji drží, dostává každou sezónu: '+income+(site.kind==='tower'?' a vidí daleko do okolí':'')+'.</p>'+
+      '<p>'+(settle?'Získáš ji spojenectvím, nebo když u ní tvoji vojáci vydrží 16 s bez soupeře.':'Obsadíš ji, když u ní tvoje jednotky vydrží 9 s bez soupeře.')+'</p><div class="row">'+
       '<button class="pick" data-frontier-jump="'+site.id+'">Ukázat na mapě</button>'+
-      (!visited?'<button class="pick" data-frontier-go="'+site.id+'">Vyslat jednotku</button>':'')+
+      '<button class="pick" data-frontier-go="'+site.id+'">'+(visited?'Vyslat jednotky':'Vyslat jednotku')+'</button>'+ally+
       '</div></article>';
   }).join('')||'<p>Na převedené starší partii nejsou neutrální místa; najdeš je po založení nové hry.</p>';
 }
@@ -628,7 +642,10 @@ function closeWorld(){
 }
 $('b-world').onclick=openWorld;
 $('b-world-close').onclick=closeWorld;
+$('world-events').onclick=e=>{const b=e.target.closest('[data-merchant]');if(b){act(['merchant',Number(b.dataset.merchant)]);setTimeout(renderWorld,60);}};
 $('world-sites').onclick=e=>{
+  const allyB=e.target.closest('[data-ally]');
+  if(allyB){act(['ally',Number(allyB.dataset.ally)]);setTimeout(renderWorld,60);return;}
   const button=e.target.closest('[data-frontier-jump],[data-frontier-go]');
   if(!button)return;
   const go=button.dataset.frontierGo!==undefined;
@@ -637,11 +654,16 @@ $('world-sites').onclick=e=>{
   if(!site||!frontierWasSeen(site))return;
   cam.x=site.x;cam.z=site.z;closeWorld();
   if(go){
-    let worker=ownUnits().find(u=>u.type!=='caravan');
-    if(!worker)worker=units.filter(u=>u.team===MY&&!u.dead&&u.type!=='caravan')
-      .sort((a,b)=>Math.hypot(a.x-site.x,a.z-site.z)-Math.hypot(b.x-site.x,b.z-site.z))[0];
-    if(worker){act(['move',[worker.id],site.x,site.z]);msg('Výprava míří k místu '+site.name+'.','good');}
-    else msg('Potřebuješ alespoň jednu vlastní jednotku.','bad');
+    // vybrané jednotky jdou všechny; bez výběru jde nejbližší (k osadě nejbližší voják, osady obsazují jen vojáci)
+    let group=ownUnits().filter(u=>u.type!=='caravan');
+    if(!group.length){
+      const wantSoldier=FRONTIER_SETTLE(site.kind)&&(site.visited&(1<<MY));
+      const pool=units.filter(u=>u.team===MY&&!u.dead&&u.type!=='caravan'&&(!wantSoldier||isSoldier(u)));
+      const best=pool.sort((a,b)=>Math.hypot(a.x-site.x,a.z-site.z)-Math.hypot(b.x-site.x,b.z-site.z))[0];
+      group=best?[best]:[];
+    }
+    if(group.length){act(['move',group.map(u=>u.id),site.x,site.z]);msg((group.length>1?'Výprava ('+group.length+')':'Výprava')+' míří k místu '+site.name+'.','good');}
+    else msg(FRONTIER_SETTLE(site.kind)?'Osadu obsadí jen vojáci. Vycvič nějaké, nebo uzavři spojenectví.':'Potřebuješ alespoň jednu vlastní jednotku.','bad');
   }
 };
 

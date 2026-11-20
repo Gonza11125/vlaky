@@ -93,3 +93,47 @@ test('1.7.1: computer opponent scouts unvisited sites with a rider first',()=>{
  run("FRONTIER.sites.forEach(s=>s.visited|=2);AI.scoutNext=0;frontierAiScout(mine)");
  assert.equal(run("AI.scout"),0);
 });
+function world18(run){
+ run("G.match.map='river';G.diff=1;makeWorld(17417);teams.push(mkTeam(0),mkTeam(1));FRONTIER.sites=frontierLayout(17417);G.time=10");
+ run("var mk=(id,team,type,x,z)=>{const u={id,isU:true,team,type,def:UNITS[type],x,z,hp:50,dead:false,order:null};byId.set(id,u);units.push(u);return u}");
+}
+test('1.8: sites are captured by presence; settlements only by soldiers',()=>{
+ const run=simulation();world18(run);
+ run("var q=FRONTIER.sites.find(s=>s.kind==='quarry'),v=FRONTIER.sites.find(s=>s.kind==='village');mk(1,0,'vil',q.x,q.z);mk(2,0,'vil',v.x,v.z)");
+ for(let i=0;i<40;i++)run("frontierTick(0.33)");
+ assert.equal(run("q.owner"),0);
+ assert.equal(run("v.owner"),-1,'villagers cannot take a settlement');
+ run("mk(3,1,'spear',q.x+1,q.z)");
+ for(let i=0;i<40;i++)run("frontierTick(0.33)");
+ assert.equal(run("q.owner"),0,'contested site does not change hands');
+ run("byId.get(1).dead=true");
+ for(let i=0;i<40;i++)run("frontierTick(0.33)");
+ assert.equal(run("q.owner"),1);
+});
+test('1.8: alliances cost resources, diplomacy discounts, owners earn each season',()=>{
+ const run=simulation();world18(run);
+ run("var v=FRONTIER.sites.find(s=>s.kind==='village');teams[0].res.gold=200;teams[0].res.food=300");
+ assert.match(run("frontierAlly(0,v.id)"),/navštívit/);
+ run("v.visited=1");
+ assert.equal(run("frontierAlly(0,v.id)"),null);
+ assert.equal(run("v.owner"),0);
+ assert.equal(run("teams[0].res.gold"),160);
+ run("teams[1].tech.diplomacy=true;v.visited=3");
+ assert.equal(run("JSON.stringify(frontierAllyCost(1,v))"),JSON.stringify({gold:48,food:72}));
+ run("const f0=teams[0].res.food");
+ for(let i=0;i<190;i++)run("frontierTick(0.33)");
+ assert.equal(run("teams[0].res.food-f0"),40);
+});
+test('1.8: ownership and events survive save and load',()=>{
+ const run=simulation();world18(run);
+ run("FRONTIER.sites[2].owner=1;FRONTIER.sites[2].prog=[0.5,0];FRONTIER.events=[{id:7,type:'merchant',team:0,give:{gold:50},get:{food:150},until:99,done:false}];FRONTIER.evNext=444");
+ run("const saved=JSON.parse(JSON.stringify(frontierSave()));frontierReset();FRONTIER.sites=frontierLayout(17417);frontierLoad(saved)");
+ assert.equal(run("FRONTIER.sites[2].owner"),1);
+ assert.equal(run("FRONTIER.sites[2].prog[0]"),0.5);
+ assert.equal(run("FRONTIER.events[0].get.food"),150);
+ assert.equal(run("FRONTIER.evNext"),444);
+ run("teams[0].res.gold=100;const f=teams[0].res.food");
+ assert.equal(run("frontierMerchant(0,7)"),null);
+ assert.equal(run("teams[0].res.food-f"),150);
+ assert.match(run("frontierMerchant(0,7)"),/odjel/);
+});
