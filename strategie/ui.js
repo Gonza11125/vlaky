@@ -25,6 +25,7 @@ function showEnd(win) {
   $('end-text').textContent = G.endReason + ' Hra trvala ' + m + ' min (rok ' + year() + '), dosáhl jsi epochy ' + ERAS[ME().era] + '.';
   $('end-goal').textContent = goalDescription(G.match);
   $('end-stats').textContent = 'Porážení nepřátelé: ' + s.kills + ' · Zbořené budovy: ' + s.razed + ' · Vlastní ztráty: ' + s.lost + ' · Obnovené stromy: ' + (s.regrown || 0) + ' · Zlato z karavan: ' + (s.tradeGold || 0) + '. Vyrobeno a doneseno: ' + RES.map(r => RES_NAME[r] + ' ' + Math.floor((s.produced || {})[r] || 0)).join(', ') + '.';
+  if (typeof campaignEnd === 'function') campaignEnd(win);
   $('end').hidden = false; G.reveal = true; if (G.mode === 'ai') clearSave(); showSaveOffer();
 }
 function costHTML(cost) { return Object.keys(cost || {}).map(k => '<i class="dot ' + k + '"></i>' + cost[k]).join(''); }
@@ -394,7 +395,8 @@ function refreshUI() {
   $('s-era').textContent = ERAS[T.era];
   $('s-time').textContent = 'Rok ' + year() + ' · ' + SEASONS[season()];
   $('s-atmo').textContent = ATMOS.enabled?atmoClock(G.time).label:'Stálý den';
-  $('s-objective').textContent = goalDescription(G.match) + (peaceActive() ? ' Ochrana: ještě ' + Math.ceil((G.match.peace - G.time) / 60) + ' min.' : '') + (G.match.goal === 'survival' ? ' Zbývá ' + Math.max(0, Math.ceil((G.match.years * SEASON_LEN * 4 - G.time) / 60)) + ' min.' : '') + ' Mapa: ' + G.seed;
+  if (typeof campaignMission === 'function' && campaignMission()) $('s-objective').textContent = 'Mise: ' + campaignMission().goal + ' · ' + campaignMission().progress() + (peaceActive() ? ' · ochrana ještě ' + Math.ceil((G.match.peace - G.time) / 60) + ' min' : '');
+  else $('s-objective').textContent = goalDescription(G.match) + (peaceActive() ? ' Ochrana: ještě ' + Math.ceil((G.match.peace - G.time) / 60) + ' min.' : '') + (G.match.goal === 'survival' ? ' Zbývá ' + Math.max(0, Math.ceil((G.match.years * SEASON_LEN * 4 - G.time) / 60)) + ' min.' : '') + ' Mapa: ' + G.seed;
   let evs = '';
   if (G.real) {
     const sick = units.filter(u => u.team === MY && u.sick > 0).length, fires = blds.filter(b => b.team === MY && b.fire > 0).length;
@@ -806,8 +808,17 @@ function syncMapPicks() { const v = $('match-map').value; for (const b of $('map
 $('map-picks').onclick = e => { const b = e.target.closest('[data-map]'); if (!b) return; $('match-map').value = b.dataset.map; syncMapPicks(); describeMatch(); };
 $('match-map').addEventListener('change', syncMapPicks); syncMapPicks();
 function applyOpts() { if (!matchFormValid()) return false; G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; G.match = selectedMatch(); return true; }
-$('b-start').onclick = () => { if (!applyOpts()) return; netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
-$('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = false; G.paused = true; };
+$('b-start').onclick = () => { if (!applyOpts()) return; G.campaign = null; netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
+$('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; G.campaign = null; startFresh(); $('start').hidden = false; G.paused = true; if (typeof renderCampaign === 'function') renderCampaign(); };
+// 2.0: spuštění mise z úvodní obrazovky i z konce partie
+function playMission(id) {
+  if (typeof campaignStart !== 'function' || !campaignStart(id)) return;
+  netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh();
+  $('end').hidden = true; $('start').hidden = true; G.paused = false;
+  const m = campaignMission(); msg('Mise ' + (CAMPAIGN.indexOf(m) + 1) + ': ' + m.title + '. ' + m.goal, 'good');
+}
+for (const id of ['campaign-list', 'end-campaign']) { const el = $(id); if (el) el.addEventListener('click', e => { const b = e.target.closest('[data-camp]'); if (b) playMission(b.dataset.camp); }); }
+if (typeof renderCampaign === 'function') renderCampaign();
 
 // ---------- uložení: účet na Claude (pro přihlášené, na všech zařízeních), prohlížeč a soubor ----------
 const SAVE_KEY = VEK_RELEASE.saveKey;
@@ -902,7 +913,7 @@ function continueSave(given) {
   const sv = given && given.teams ? given : readSave(); if (!sv) return;
   if (!saveValid(sv)) { msg('Uložená hra je neúplná nebo poškozená.', 'bad'); return; }
   if (!saveMatchesVersion(sv)) { msg('Tahle uložená hra patří do verze ' + saveVersion(sv) + '. Nejdřív na ni přepni v nabídce Verze hry.', 'bad'); return; }
-  G.mode = 'ai'; MY = 0;
+  G.mode = 'ai'; MY = 0; G.campaign = null;
   resetView();
   try { newGame(0, sv); } catch (e) { startFresh(); msg('Uloženou hru se nepodařilo načíst, začíná nová.', 'bad'); $('start').hidden = true; G.paused = false; return; }
   if (sv.cam) Object.assign(cam, sv.cam);
@@ -997,6 +1008,7 @@ function frame(now) {
   cityArtAnimate(t, dt);
   frontierFrame();
   if (typeof lookFrame === 'function') lookFrame(dt);
+  if (typeof campaignFrame === 'function') campaignFrame();
   for (let i = markers.length - 1; i >= 0; i--) { const k = markers[i]; k.t -= dt; if (k.t <= 0) { scene.remove(k.m); markers.splice(i, 1); } else { k.m.scale.setScalar(0.4 + k.t * 1.6); k.m.material.opacity = k.t / 0.6; } }
   updateCamera();
   atmoFrame(now,dt,t);

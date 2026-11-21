@@ -50,5 +50,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.10.0",
     "description": "Nový vzhled: bohatší krajina s trávou a květinami, plnější stromy, vlnící se voda a podrobné neutrální lokality."
+  },
+  {
+    "id": "2.0.0",
+    "description": "Kampaň: šest misí s vlastními cíli, 12 odznaků a graf průběhu partie."
   }
 ];

@@ -1,5 +1,13 @@
 # Vydání Věku pokroku
 
+## 2.0.0 – Kampaň
+
+- **Kampaň o šesti misích:** Pazourek a oheň (přečkej první zimu), Věk bronzu (doba bronzová do 14 minut), Mosty přes řeku (drž 3 lokality), Obrana údolí (vydrž 10 minut proti útočnému soupeři), Hedvábná stezka (250 zlata z karavan) a Poslední bitva (dobytí na těžkou). Každá mise má vlastní mapu, soupeře a ochranu; další se odemkne po splnění předchozí. Pamatuje se nejlepší čas.
+- **Cíl a postup mise** v horní liště, na konci tlačítka Další mise a Zkusit znovu.
+- **12 odznaků** za úspěchy ve všech partiích (první vítězství, vítězství na těžkou, doba železná, novověk, velká osada, stálá armáda, vojevůdce, kupec, diplomat, pán údolí, ochránce, kronikář). Přehled na úvodní obrazovce, nové odznaky na konci partie.
+- **Graf průběhu partie** na konci hry: obyvatelé a vojsko tvoje i soupeřovo v čase. Průběh se ukládá s partií.
+- Postup kampaně a odznaky jsou společné pro všechna vydání od 2.0 v tomto prohlížeči. Nový modul `campaign.js`, testy misí a odznaků.
+
 ## 1.10.0 – Nový vzhled
 
 - **Krajina:** velké skvrny světlejší a sušší louky, kamenité svahy podle sklonu, mokrý písek u vody a tmavší hlubiny; jemná textura trávy v obou režimech.

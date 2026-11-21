@@ -163,6 +163,7 @@ function netJoin() {
   netStatus('Hledám hru ' + code + '…'); netRemember(true);
 }
 function hostStart() {
+  G.campaign = null;
   if (!applyOpts()) return; G.mode = 'host'; MY = 0; G.speed = 1; el('b-speed').textContent = '1×';
   startFresh(); NET.started = true; NET.log = []; NET.out = []; NET.shots = []; NET.ack = 0; netRemember(false);
   el('start').hidden = true; G.paused = false;

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku – Nový vzhled</title>
+<title>Věk pokroku 2.0 – Kampaň</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -97,6 +97,14 @@ button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color: var(--brass); font-family: var(--display); font-size: 17px; letter-spacing: .04em; padding: 4px 0; }
 #net-code { width: 5.5em; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 600 15px var(--body); letter-spacing: .2em; text-transform: uppercase; -webkit-user-select: text; user-select: text; }
 .pick:disabled { opacity: .45; cursor: default; }
+.camp-list { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0; }
+.camp { position:relative;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:10px 12px 12px; }
+.camp h3 { margin:0 0 2px 26px;color:var(--brass);font:400 17px var(--display); } .camp p { margin:4px 0;font-size:12.5px;color:var(--dim); }
+.camp .camp-era { margin-left:26px;color:var(--fg); } .camp .camp-n { position:absolute;left:10px;top:10px;width:20px;height:20px;border-radius:50%;background:var(--brass);color:#1b2426;font-weight:700;text-align:center;line-height:20px;font-size:12px; }
+.camp.done { border-color:#5f826d; } .camp.locked { opacity:.55; } .camp .pick { margin-top:6px;min-height:36px;padding:6px 12px; }
+.badges { display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px; } .badge { font-size:12px;padding:4px 8px;border-radius:12px;border:1px solid var(--line);color:var(--dim); } .badge.got { border-color:var(--brass);color:var(--fg); }
+#end-chart { display:block;width:100%;max-width:640px;height:auto;margin:10px 0;background:var(--ink);border:1px solid var(--line);border-radius:6px; }
+@media(max-width:720px) { .camp-list { grid-template-columns:1fr; } }
 #p2p { margin: 12px 0 0; max-width: 62ch; } #p2p summary { cursor: pointer; color: var(--brass); font-size: 14px; font-weight: 600; padding: 4px 0; }
 #p-text { display: block; width: 100%; box-sizing: border-box; min-height: 70px; margin-top: 8px; padding: 8px 10px; border-radius: 4px; border: 1px solid var(--line); background: var(--ink); color: var(--fg); font: 12px/1.35 ui-monospace, Menlo, Consolas, monospace; word-break: break-all; resize: vertical; -webkit-user-select: text; user-select: text; }
 #p-status.ok { color: var(--good); } #p-status.bad { color: var(--bad); }
@@ -280,7 +288,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
-      <p class="lead"><b>Nový vzhled:</b> bohatší krajina s trávou a květinami, plnější stromy, vlnící se voda a podrobné neutrální lokality.</p>
+      <p class="lead"><b>Věk pokroku 2.0:</b> kampaň o šesti misích, odznaky a graf průběhu každé partie.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
@@ -296,6 +304,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Říční údolí:</b> zvol při zakládání partie novou mapu. Řeka zablokuje průchod kromě tří mostů a suroviny jsou rozložené na obou březích.</li>
         <li><b>Lokality a události (1.8):</b> navštívenou lokalitu obsadíš, když u ní tvoje jednotky vydrží bez soupeře (osadu a tábor jen vojáci), nebo s osadou uzavřeš spojenectví v panelu Svět (M). Držitel dostává každou sezónu suroviny, z hlásky vidí daleko. Občas přijede obchodník s nabídkou, přijdou uprchlíci nebo zaútočí lapkové z ruin.</li>
         <li><b>Vojsko (1.9):</b> Zvěd (Sídlo), Prakovník, Sekerník na stavby, Pikenýr proti jízdě, Válečný vůz proti střelcům, Jízdní lučištník, Dragoun a Beranidlo na brány. Vybraným vojákům nastavíš postoj: útočný, obranný nebo držet pozici. Na mosty jde postavit palisádu, hradbu, bránu nebo věž.</li>
+        <li><b>Kampaň (2.0):</b> šest misí s vlastní mapou, soupeřem a cílem; další se odemkne po splnění předchozí. Průběh mise je v horní liště. Za úspěchy ve všech partiích sbíráš odznaky a na konci partie vidíš graf obyvatel a vojska.</li>
         <li><b>Svět kolem tebe:</b> během každé partie se střídá den a noc. Za soumraku se ve městě rozsvěcují světla. Zvuk spustíš tlačítkem Zvuk, vzhled i výkon měníš v panelu Město.</li>
         <li><b>Hospodářství:</b> tlačítkem Ekonomika (K) zobrazíš toky surovin, rezervy, výrobny a jejich výkon. V realistickém režimu obsazuj mlýny, pekárny a hutě řemeslníky.</li>
         <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
@@ -310,6 +319,13 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Dotyk:</b> ťuknutím vybereš, dalším ťuknutím dáš rozkaz (jdi, sbírej, stav, útoč). Tažením posouváš mapu, dvěma prsty přibližuješ. Víc jednotek vybereš tlačítkem Výběr tažením, dvojím ťuknutím vybereš všechny stejného druhu.</li>
       </ul>
       </details>
+      <details class="how" id="campaign-box" open>
+        <summary>Kampaň a odznaky</summary>
+        <p class="hint">Šest misí od doby kamenné po poslední bitvu. Každá má vlastní mapu, soupeře a cíl; další se odemkne po splnění předchozí. Odznaky sbíráš ve všech partiích.</p>
+        <div id="campaign-list" class="camp-list"></div>
+        <div id="badge-list"></div>
+      </details>
+      <h2>Volná hra</h2>
       <h2>Mapa</h2>
       <div class="row" id="map-picks">
         <button class="pick on" data-map="balanced">Vyvážená</button><button class="pick" data-map="forest">Lesnatá</button><button class="pick" data-map="highlands">Hornatá</button><button class="pick" data-map="river">Říční údolí s mosty</button>
@@ -371,6 +387,8 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <p class="lead" id="end-text"></p>
       <p id="end-goal"></p>
       <div id="end-stats"></div>
+      <canvas id="end-chart" width="640" height="170" hidden aria-label="Průběh partie: obyvatelé a vojsko"></canvas>
+      <div id="end-campaign"></div>
       <button class="go" id="b-again">Nová hra</button>
     </div>
   </div>
@@ -543,5 +561,6 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 <script src="atmosphere.js"></script>
 <script src="frontier.js"></script>
 <script src="look.js"></script>
+<script src="campaign.js"></script>
 <script src="net.js"></script>
 <script src="ui.js"></script>

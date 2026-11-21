@@ -82,12 +82,12 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
 
     def test_existing_unregistered_directory_cannot_be_overwritten(self):
-        target = self.root / 'versions' / '2.0.0'
+        target = self.root / 'versions' / '9.0.0'
         target.mkdir()
         (target / 'keep.txt').write_text('keep')
         before = self.snapshot()
         with self.assertRaises(ValueError):
-            release.publish(self.root, '2.0.0')
+            release.publish(self.root, '9.0.0')
         self.assertEqual(self.snapshot(), before)
 
     def test_web_build_contains_every_release_and_no_development_files(self):

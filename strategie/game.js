@@ -1611,6 +1611,7 @@ function simStep(dt) {
   for (let i = units.length - 1; i >= 0; i--) if (units[i].dead) units.splice(i, 1);
   for (let i = blds.length - 1; i >= 0; i--) if (blds[i].dead) blds.splice(i, 1);
   checkVictory();
+  if (typeof campaignTick === 'function') campaignTick(dt);
 }
 function checkVictory() {
   if (G.over) return;
@@ -1630,7 +1631,7 @@ function resetWorld() {
   cityArtClear();
   byId.clear(); nodeMeshes = {}; nextId = 1; cityRoadMesh = null; cityRoadCells = []; cityRoadDirty = true;
   occ.fill(0); resv.fill(0); bAt.fill(0); gateT.fill(0); explored.fill(0); vis.fill(0); fogCur.fill(255);
-  Object.assign(G, { time: 0, over: false, loser: null, endReason: '', reveal: false, snow: 0, flood: 0, rain: 0 });
+  Object.assign(G, { time: 0, over: false, loser: null, endReason: '', reveal: false, snow: 0, flood: 0, rain: 0, hist: [] });
   Object.assign(EV, { season: -1, acc: 0, floodAt: 0, floodT: -1, floodMax: 0, drought: false, frost: false });
   Object.assign(AI, { acc: 0, wave: 0, launch: -999, scout: 0, scoutNext: 0 });
   Object.assign(PRICE, { food: 30, wood: 30, stone: 45, metal: 90 });
@@ -1696,7 +1697,7 @@ function saveState() {
   for (let i = 0; i < N * N; i++) if (explored[i]) bytes[i >> 3] |= 1 << (i & 7);
   for (let i = 0; i < bytes.length; i++) bits += String.fromCharCode(bytes[i]);
   return {
-    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match },
+    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match, campaign: G.campaign || null, hist: Array.isArray(G.hist) ? G.hist : [] },
     AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, EV: Object.assign({}, EV), flood: G.flood, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
     teams: teams.map(T => ({ city: cityState(T), economy: economyState(T), res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
     frontier: typeof frontierSave==='function'?frontierSave():[],
