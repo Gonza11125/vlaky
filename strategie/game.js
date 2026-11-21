@@ -658,8 +658,8 @@ function initScene(canvas) {
   scene.add(sun, sun.target);
   unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   sickMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x9ad36a });
-  const gc = document.createElement('canvas'); gc.width = gc.height = 128; const gx = gc.getContext('2d'), gi = gx.createImageData(128, 128);
-  for (let i = 0; i < 128 * 128; i++) { const x = i % 128, y = (i / 128) | 0, v = 205 + (fbm(x / 9, y / 9, 11) - 0.5) * 60 + (hash2(x, y, 4) - 0.5) * 46; gi.data[i * 4] = v; gi.data[i * 4 + 1] = v + 4; gi.data[i * 4 + 2] = v - 6; gi.data[i * 4 + 3] = 255; }
+  const gc = document.createElement('canvas'); gc.width = gc.height = 256; const gx = gc.getContext('2d'), gi = gx.createImageData(256, 256);
+  for (let i = 0; i < 256 * 256; i++) { const x = i % 256, y = (i / 256) | 0, blade = Math.max(0, Math.sin(x * 1.9 + hash2(x >> 2, y >> 3, 7) * 9) - 0.6) * 30, v = 236 + (fbm(x / 14, y / 14, 11) - 0.5) * 34 + (hash2(x, y, 4) - 0.5) * 26 - blade; gi.data[i * 4] = v - 2; gi.data[i * 4 + 1] = v + 3; gi.data[i * 4 + 2] = v - 8; gi.data[i * 4 + 3] = 255; }
   gx.putImageData(gi, 0, 0); grainTex = new THREE.CanvasTexture(gc); grainTex.wrapS = grainTex.wrapT = THREE.RepeatWrapping;
   const wp = new Float32Array(1600 * 3); for (let i = 0; i < 1600; i++) { wp[i * 3] = (Math.random() - 0.5) * 100; wp[i * 3 + 1] = Math.random() * 45; wp[i * 3 + 2] = (Math.random() - 0.5) * 100; }
   const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.BufferAttribute(wp, 3));
@@ -671,15 +671,20 @@ function initScene(canvas) {
 
 function terrainColor(i, j, out) {
   const h = hgt[j * NV + i], n = hash2(i, j, 5), cx = clamp(i, 0, N - 1), cy = clamp(j, 0, N - 1);
-  if (h < -0.6) out.setHex(0x6f8173);
-  else if (h < 0.45) out.setHex(0xcdbd8c).lerp(_col.setHex(0x6f8173), sstep(0.2, -0.6, h));
-  else if (h > 6) out.setHex(0x8c8576).lerp(_col.setHex(0xa7a196), n);
+  // 1.10: sklon podle sousedních výšek, velké skvrny louky a sušší místa, mokrý písek u vody
+  const hv = (x, y) => hgt[clamp(y, 0, NV - 1) * NV + clamp(x, 0, NV - 1)];
+  const slope = Math.max(Math.abs(hv(i + 1, j) - hv(i - 1, j)), Math.abs(hv(i, j + 1) - hv(i, j - 1))) / 2;
+  if (h < -0.6) out.setHex(0x4f6d66).lerp(_col.setHex(0x3d5a5c), sstep(-0.6, -2.2, h));
+  else if (h < 0.45) { out.setHex(0xd2c291).lerp(_col.setHex(0x9b8f68), sstep(0.18, -0.05, h) * 0.7).lerp(_col.setHex(0x5e7a6e), sstep(-0.05, -0.6, h)); out.multiplyScalar(0.95 + n * 0.08); }
+  else if (h > 6) out.setHex(0x8c8576).lerp(_col.setHex(0xa7a196), n).lerp(_col.setHex(0xe9ece9), sstep(8.5, 10.5, h) * 0.6);
   else {
-    out.setHex(0x71a04c).lerp(_col.setHex(0x5e8a40), fbm(i / 9, j / 9, 3));
+    const big = fbm(i / 24, j / 24, 31), mid = fbm(i / 9, j / 9, 3);
+    out.setHex(0x74a34d).lerp(_col.setHex(0x5a8a3e), mid).lerp(_col.setHex(0x8eb25a), sstep(0.55, 0.75, big) * 0.55);
+    if (big < 0.36) out.lerp(_col.setHex(0xa6a560), sstep(0.36, 0.22, big) * 0.45);   // sušší louky
     out.lerp(_col.setHex(0xcdbd8c), sstep(1.0, 0.45, h) * 0.8);
-    out.lerp(_col.setHex(0x8c8576), sstep(4.6, 6, h));
-    if (forest[cidx(cx, cy)]) out.lerp(_col.setHex(0x3f6a34), 0.45);
-    out.multiplyScalar(0.94 + n * 0.1);
+    out.lerp(_col.setHex(0x8c8576), Math.max(sstep(4.6, 6, h), sstep(0.75, 1.6, slope) * 0.85));   // skalnaté svahy
+    if (forest[cidx(cx, cy)]) out.lerp(_col.setHex(0x3a6131), 0.5);
+    out.multiplyScalar(0.93 + n * 0.12);
   }
 }
 function buildTerrain() {
@@ -699,7 +704,7 @@ function buildTerrain() {
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
   terrainBase = col.slice();
-  terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: G.real ? grainTex : null }));
+  terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, map: grainTex }));   // 1.10: jemná textura trávy v obou režimech
   terrain.receiveShadow = true; scene.add(terrain);
   waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(WORLD * 5, WORLD * 5), new THREE.MeshPhongMaterial({ color: 0x3f7391, transparent: true, opacity: 0.84, shininess: 80, specular: 0x99bbcc }));
   waterMesh.rotation.x = -Math.PI / 2; waterMesh.position.set(WORLD / 2, 0, WORLD / 2); waterMesh.renderOrder = 1; scene.add(waterMesh);
@@ -767,13 +772,20 @@ function setNodeMatrix(n, scale) {
   const m = nodeMeshes[nodeKind(n)]; m.setMatrixAt(n.inst, _mat4); m.instanceMatrix.needsUpdate = true;
 }
 function buildNodes() {
-  const geos = { pine: treeGeo(true), oak: treeGeo(false), bush: bushGeo(), stone: rockGeo(false), ore: rockGeo(true), gold: rockGeo(true, true), fish: fishGeo() };
+  const hq = cityArtQuality() !== 'low';
+  const geos = { pine: treeGeo(true, hq), oak: treeGeo(false, hq), bush: bushGeo(), stone: rockGeo(false, false, hq), ore: rockGeo(true, false, hq), gold: rockGeo(true, true, hq), fish: fishGeo() };
   const counts = { pine: 0, oak: 0, bush: 0, stone: 0, ore: 0, gold: 0, fish: 0 };
   for (const n of nodes) n.inst = counts[nodeKind(n)]++;
   for (const k in geos) {
     const m = new THREE.InstancedMesh(geos[k], new THREE.MeshLambertMaterial({ vertexColors: true }), Math.max(1, counts[k]));
     m.castShadow = k !== 'fish'; m.receiveShadow = true; m.frustumCulled = false; nodeMeshes[k] = m; scene.add(m);
   }
+  // 1.10: každý strom, keř a kámen má trochu jiný odstín
+  const tint = new THREE.Color();
+  for (const n of nodes) { const m = nodeMeshes[nodeKind(n)]; if (!m || n.type === 'fish') continue; const v = n.v, w = hash2(n.cx, n.cy, 9);
+    if (n.type === 'tree') tint.setRGB(0.82 + v * 0.3, 0.86 + w * 0.22, 0.8 + (1 - v) * 0.24); else tint.setRGB(0.88 + w * 0.2, 0.88 + w * 0.2, 0.86 + v * 0.2);
+    m.setColorAt(n.inst, tint); }
+  for (const k in nodeMeshes) if (nodeMeshes[k].instanceColor) nodeMeshes[k].instanceColor.needsUpdate = true;
   for (const n of nodes) setNodeMatrix(n, 0.0001);
 }
 function dropEnt(e) { e.dead = true; byId.delete(e.id); scene.remove(e.mesh); if (e.isB) for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = bridgeMask[k] ? 1 : 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; } }
@@ -1625,7 +1637,7 @@ function resetWorld() {
 }
 function applyLook() {
   const r = G.real;
-  renderer.toneMapping = r ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; renderer.toneMappingExposure = 1.3;
+  renderer.toneMapping = r ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping; renderer.toneMappingExposure = 0.92;
   for (const m of [unitMat, sickMat, bldMat, farmMat]) m.needsUpdate = true;
   const sz = G.coarse ? 1024 : r ? 4096 : 2048;
   if (sun.shadow.mapSize.x !== sz) { sun.shadow.mapSize.set(sz, sz); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
@@ -1641,6 +1653,7 @@ function newGame(diff, sv) {
   G.seed = makeWorld(sv ? sv.seed : G.match.seed); G.baseNodes = nodes.length;
   buildTerrain();
   if(typeof frontierBuild==='function')frontierBuild(G.seed,!!(sv&&!Array.isArray(sv.frontier)));
+  if (typeof lookBuild === 'function') lookBuild();
   if (sv) { loadState(sv); return; }
   buildNodes();
   STARTS.forEach((s, t) => {

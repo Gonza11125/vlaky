@@ -70,41 +70,51 @@ function frontierBox(group,w,h,d,x,y,z,material){
 }
 function frontierLandmarkMesh(site){
   frontierInitMesh();
-  const g=new THREE.Group();
+  // 1.10: podrobné modely z jedné sloučené geometrie (doškové střechy, studna, stany, jeřáb, výheň…)
+  const g=new THREE.Group(),p=[],W=0xe2d6bc,TH=0xc7a75a,TL=0x9c4a32,S=0xa39d8f,SD=0x7f796c,WD=0x7a5a3c,WK=0x56402c;
   g.position.set(site.x,heightAt(site.x,site.z),site.z);
-  const house=(x,z)=>{
-    frontierBox(g,2.1,1.5,1.8,x,0.75,z,'stone');
-    const roof=new THREE.Mesh(FRONTIER.roof,FRONTIER.mat.roof);
-    roof.scale.set(1.65,1.2,1.6);roof.rotation.y=Math.PI/4;
-    roof.position.set(x,1.98,z);g.add(roof);
+  const house=(x,z,ry,w,d,wall,roof)=>{
+    const c=Math.cos(ry),s2=Math.sin(ry),at=(lx,lz)=>[x+lx*c+lz*s2,z-lx*s2+lz*c];
+    p.push(P(box(w,1.3,d),wall,x,0.65,z,0,ry,0));
+    p.push(P(cyl(w/1.732*1.15,w/1.732*1.15,d+0.35,3),roof,x,1.3+0.55,z,-Math.PI/2,ry,0,1,1,0.62));
+    const [dx,dz]=at(0,d/2+0.01);p.push(P(box(0.42,0.75,0.05),WK,dx,0.38,dz,0,ry,0));
+    for(const sx of [-1,1]){const [wx,wz]=at(sx*w*0.3,d/2+0.01);p.push(P(box(0.3,0.28,0.05),0x3b4a55,wx,0.85,wz,0,ry,0));}
   };
+  const fence=(x0,z0,x1,z1)=>{const n=Math.max(2,Math.round(Math.hypot(x1-x0,z1-z0)/0.8));for(let i=0;i<=n;i++){const t=i/n;p.push(P(box(0.1,0.6,0.1),WD,x0+(x1-x0)*t,0.3,z0+(z1-z0)*t));}
+    const a=Math.atan2(x1-x0,z1-z0),L=Math.hypot(x1-x0,z1-z0);for(const y of [0.25,0.5])p.push(P(box(0.05,0.06,L),WD,(x0+x1)/2,y,(z0+z1)/2,0,a,0));};
   if(site.kind==='village'){
-    house(-1.9,0.3);house(1.7,-1);
-    frontierBox(g,1.4,0.12,0.5,0.3,0.4,1.7,'wood');
-    frontierBox(g,0.35,1.5,0.35,-0.5,0.75,-2,'wood');
+    house(-1.9,0.2,0.2,2.1,1.7,W,TH);house(1.7,-1.1,-0.35,1.9,1.6,W,TH);house(0.5,2.1,1.4,1.6,1.4,0xd8c9a6,TH);
+    p.push(P(cyl(0.45,0.5,0.6,10),S,-0.2,0.3,-1.6),P(cyl(0.36,0.36,0.08,10),0x2c4a5a,-0.2,0.6,-1.6),P(box(0.08,1.0,0.08),WD,-0.6,0.9,-1.6),P(box(0.08,1.0,0.08),WD,0.2,0.9,-1.6),P(cyl(0.05,0.55,0.4,4),TL,-0.2,1.55,-1.6,0,Math.PI/4,0));
+    p.push(P(cyl(0.45,0.6,0.7,8),0xd9bf6a,2.6,0.35,1.4),P(cyl(0,0.45,0.35,8),0xcfb35e,2.6,0.87,1.4));
+    fence(-3.2,-2.6,-0.9,-3.1);fence(2.9,-2.4,3.2,0.4);
   } else if(site.kind==='ruins'){
-    for(const [x,z,h] of [[-1.3,-1.2,2.0],[1.3,-1,1.4],[-1.2,1.2,0.8],[1.2,1.3,1.7]])
-      frontierBox(g,0.63,h,0.63,x,h/2,z,'stone');
-    frontierBox(g,3.9,0.45,3.8,0,0.15,0,'stone');
-    frontierBox(g,1.3,0.25,0.5,0,1.1,-1,'gold');
+    p.push(P(box(4.2,0.3,3.9),SD,0,0.12,0));
+    for(const [x,z,h] of [[-1.4,-1.3,2.4],[1.4,-1.2,1.5],[-1.3,1.3,0.9],[1.3,1.4,2.0],[0,-1.4,1.2]])p.push(P(cyl(0.3,0.34,h,9),S,x,h/2+0.25,z),P(box(0.75,0.18,0.75),SD,x,0.3,z));
+    p.push(P(box(3.0,0.32,0.62),S,-0.1,2.65,-1.3,0,0,-0.06),P(box(0.7,0.5,0.6),S,0.9,0.5,0.3,0.4,0.6,0.2),P(box(0.5,0.35,1.1),SD,-0.7,0.42,0.6,0,0.9,0.3));
+    p.push(P(box(1.2,0.25,0.4),0xe4c17a,0.1,0.42,-0.2),P(cyl(0.2,0.2,0.4,8),0x6d8f4a,-1.6,0.45,0.1));
   } else if(site.kind==='tower'){
-    for(const [x,z] of [[-1,-1],[1,-1],[-1,1],[1,1]])
-      frontierBox(g,0.36,3.5,0.36,x,1.75,z,'wood');
-    frontierBox(g,2.7,0.35,2.7,0,3.5,0,'stone');
-    frontierBox(g,0.25,1.35,0.25,0,4.3,0,'wood');
+    for(const [x,z] of [[-1,-1],[1,-1],[-1,1],[1,1]])p.push(P(cyl(0.13,0.17,3.6,6),WD,x,1.8,z,x*0.05,0,-z*0.05));
+    p.push(P(box(2.8,0.22,2.8),WD,0,3.55,0),P(box(0.1,0.1,2.0),WK,0,1.3,0,0,0.78,0.6),P(box(0.1,0.1,2.0),WK,0,2.4,0,0,-0.78,-0.6));
+    for(const s2 of [-1,1]){p.push(P(box(2.8,0.08,0.08),WK,0,4.1,s2*1.35),P(box(0.08,0.08,2.8),WK,s2*1.35,4.1,0));}
+    for(const [x,z] of [[-1.3,-1.3],[1.3,-1.3],[-1.3,1.3],[1.3,1.3]])p.push(P(box(0.1,1.2,0.1),WK,x,4.2,z));
+    p.push(P(cyl(0.05,2.25,1.2,4),TL,0,5.4,0,0,Math.PI/4,0),P(box(0.1,3.6,0.6),WD,1.55,1.8,0,0,0,0.12));
   } else if(site.kind==='quarry'){
-    for(let i=0;i<5;i++) frontierBox(g,1.2+0.24*i,0.5+0.14*i,1.1,Math.sin(i*2.5)*1.7,0.4,Math.cos(i*2.5)*1.5,'stone');
-    frontierBox(g,0.2,2,0.2,-2,1,0,'wood');
+    for(let i=0;i<6;i++)p.push(P(box(1.1+0.2*i,0.45+0.12*i,1.0),i%2?S:SD,Math.sin(i*2.3)*1.7,0.25+i*0.04,Math.cos(i*2.3)*1.5,0,i*0.7,0));
+    p.push(P(box(0.15,2.6,0.15),WD,-2.1,1.3,0),P(box(1.8,0.12,0.12),WD,-1.3,2.55,0,0,0,-0.15),P(box(0.03,1.2,0.03),0x2a2622,-0.5,1.95,0),P(box(0.4,0.3,0.3),S,-0.5,1.25,0));
+    p.push(P(box(1.1,0.35,0.7),WD,1.9,0.5,1.6),P(cyl(0.3,0.3,0.1,8),WK,1.5,0.3,1.95,Math.PI/2,0,0),P(cyl(0.3,0.3,0.1,8),WK,2.3,0.3,1.95,Math.PI/2,0,0));
   } else if(site.kind==='camp'){
-    house(-1.4,0.8);
-    frontierBox(g,0.65,0.30,0.65,1.8,0.15,-0.4,'stone');
-    frontierBox(g,0.45,0.55,0.45,1.8,0.5,-0.4,'gold');
-    frontierBox(g,0.25,1.8,0.25,2,0.9,1.7,'wood');
+    for(const [x,z,c] of [[-1.5,0.9,0xd8cba8],[1.4,1.2,0xc9b48c],[0.2,-1.6,0xb98f65]])p.push(P(cyl(0.05,1.15,1.6,6),c,x,0.8,z),P(box(0.06,1.8,0.06),WK,x,0.9,z));
+    for(let i=0;i<6;i++){const a=i*1.05;p.push(P(cyl(0.07,0.07,0.8,5),WK,Math.cos(a)*0.3,0.12,Math.sin(a)*0.3,Math.PI/2,a,0));}
+    p.push(P(blob(0.26),0xff9a3a,0,0.3,0,0,0,0,1,1.4,1),P(cyl(0.6,0.7,0.12,10),SD,0,0.06,0));
+    p.push(P(box(1.1,0.4,0.8),WD,2.4,0.55,-0.9),P(cyl(0.32,0.32,0.1,8),WK,2.0,0.32,-0.5,Math.PI/2,0,0),P(cyl(0.32,0.32,0.1,8),WK,2.8,0.32,-0.5,Math.PI/2,0,0));
   } else {
-    house(0,0);
-    frontierBox(g,2.1,0.25,0.6,2.3,0.9,1.1,'wood');
-    frontierBox(g,0.9,0.55,0.8,-2.1,0.4,1.1,'stone');
+    house(0,0,0,2.4,2.0,0x9d9682,TL);
+    p.push(P(box(0.55,2.6,0.55),SD,0.75,1.3,-0.5),P(box(0.7,0.3,0.7),S,0.75,2.65,-0.5));
+    p.push(P(box(0.5,0.3,0.28),0x3a3d42,2.0,0.55,1.1),P(box(0.25,0.4,0.2),0x3a3d42,2.0,0.25,1.1),P(box(1.6,0.12,0.7),WD,2.1,0.9,-0.6));
+    for(const [x,z] of [[-2.0,1.0],[-2.3,0.3],[-1.6,1.5]])p.push(P(cyl(0.28,0.28,0.65,10),WD,x,0.33,z),P(cyl(0.29,0.29,0.06,10),0x3a3d42,x,0.45,z));
   }
+  const mesh=new THREE.Mesh(merge(p),bldMat||new THREE.MeshLambertMaterial({vertexColors:true}));
+  mesh.castShadow=true;mesh.receiveShadow=true;g.add(mesh);
   g.visible=false;scene.add(g);FRONTIER.groups.push(g);site.mesh=g;
 }
 function frontierBridges(){

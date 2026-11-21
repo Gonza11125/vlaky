@@ -304,6 +304,8 @@ function humanParts(kind) {
     P(box(0.64, 0.78, 0.44), 'T', 0, 1.08, 0),
     P(sph(0.25), C.skin, 0, 1.7, 0),
   ];
+  // 1.10: pásek, boty a krk – postavy působí méně jako kvádry
+  p.push(P(box(0.67, 0.1, 0.47), 0x3a2c22, 0, 0.72, 0), P(box(0.22, 0.14, 0.34), 0x2c241e, -0.13, 0.07, 0.03), P(box(0.22, 0.14, 0.34), 0x2c241e, 0.13, 0.07, 0.03), P(cyl(0.1, 0.12, 0.14, 6), C.skin, 0, 1.5, 0));
   if (kind === 'vil') { p.push(P(cyl(0.05, 0.42, 0.22, 8), C.straw, 0, 1.92, 0)); p.push(P(box(0.66, 0.2, 0.46), C.plaster, 0, 0.8, 0)); }
   if (kind === 'spear') { p.push(P(cyl(0.04, 0.04, 2.5, 5), C.wood, 0.42, 1.35, 0.1)); p.push(P(cyl(0, 0.08, 0.3, 5), C.steel, 0.42, 2.75, 0.1)); p.push(P(cyl(0.36, 0.36, 0.07, 10), 'TD', -0.36, 1.1, 0.2, Math.PI / 2, 0, 0)); }
   if (kind === 'sword') { p.push(P(box(0.08, 0.95, 0.05), C.steel, 0.44, 1.5, 0.3, 0.5, 0, 0)); p.push(P(box(0.08, 0.7, 0.55), C.steel, -0.4, 1.1, 0.15)); p.push(P(cyl(0.27, 0.29, 0.22, 8), C.steel, 0, 1.86, 0)); }
@@ -577,15 +579,34 @@ function buildingGeo(type, team, era = 0) {
   return merge(buildingDetails(type, w, p, era), team);
 }
 
-function treeGeo(pine) {
-  if (pine) return merge([P(cyl(0.12, 0.16, 0.9, 5), 0x5c4530, 0, 0.45, 0), P(cyl(0, 0.95, 1.5, 6), 0x2f5d38, 0, 1.5, 0), P(cyl(0, 0.75, 1.3, 6), 0x386b40, 0, 2.3, 0), P(cyl(0, 0.5, 1.1, 6), 0x43794a, 0, 3.0, 0)]);
-  return merge([P(cyl(0.14, 0.2, 1.3, 5), 0x6b4f35, 0, 0.65, 0), P(new THREE.IcosahedronGeometry(1.05, 0), 0x4f8a3c, 0, 2.1, 0), P(new THREE.IcosahedronGeometry(0.7, 0), 0x629c45, 0.5, 2.7, 0.2)]);
+// 1.10: oblé těleso z málo ploch – normály míří od středu, takže světlo ho kreslí hladce
+function blob(r, kind) { const g = kind === 'd' ? new THREE.DodecahedronGeometry(r, 0) : new THREE.IcosahedronGeometry(r, 0); const n = g.attributes.normal, p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i), z = p.getZ(i), l = Math.hypot(x, y, z) || 1; n.setXYZ(i, x / l, y / l, z / l); } return g; }
+const cone = (r, h, seg) => new THREE.ConeGeometry(r, h, seg || 8, 1, true);
+function treeGeo(pine, hq) {
+  if (!hq) {
+    if (pine) return merge([P(cyl(0.12, 0.16, 0.9, 5), 0x5c4530, 0, 0.45, 0), P(cyl(0, 0.95, 1.5, 6), 0x2f5d38, 0, 1.5, 0), P(cyl(0, 0.75, 1.3, 6), 0x386b40, 0, 2.3, 0), P(cyl(0, 0.5, 1.1, 6), 0x43794a, 0, 3.0, 0)]);
+    return merge([P(cyl(0.14, 0.2, 1.3, 5), 0x6b4f35, 0, 0.65, 0), P(new THREE.IcosahedronGeometry(1.05, 0), 0x4f8a3c, 0, 2.1, 0), P(new THREE.IcosahedronGeometry(0.7, 0), 0x629c45, 0.5, 2.7, 0.2)]);
+  }
+  // 1.10: hustší a oblejší stromy – smrk z pěti pater, listnáč s větvemi a několika korunami
+  if (pine) {
+    const p = [P(cyl(0.1, 0.19, 1.2, 7), 0x5a412c, 0, 0.6, 0)];
+    const tiers = [[1.15, 1.2, 0.95, 0x24502f], [0.98, 1.1, 1.55, 0x2a5a34], [0.8, 1.0, 2.1, 0x316439], [0.6, 0.9, 2.6, 0x386d3f], [0.38, 0.8, 3.05, 0x427846]];
+    for (const [r, h, y, c] of tiers) p.push(P(cone(r, h, 8), c, 0, y + h / 2 - 0.25, 0, 0, y, 0));
+    return merge(p);
+  }
+  const p = [P(cyl(0.11, 0.22, 1.6, 7), 0x654a32, 0, 0.8, 0), P(cyl(0.05, 0.08, 0.9, 5), 0x654a32, 0.32, 1.55, 0.05, 0, 0, -0.7), P(cyl(0.05, 0.08, 0.8, 5), 0x654a32, -0.28, 1.6, -0.1, 0.2, 0, 0.75)];
+  for (const [x, y, z, r, c, sy] of [[0, 2.15, 0, 0.95, 0x4a8237, 0.85], [0.62, 2.0, 0.18, 0.62, 0x548f3d, 0.9], [-0.55, 2.05, -0.2, 0.66, 0x3f7531, 0.9], [0.1, 2.7, -0.25, 0.6, 0x5f9b45, 0.85], [-0.2, 1.75, 0.5, 0.5, 0x467c35, 0.9]])
+    p.push(P(blob(r), c, x, y, z, 0, 0, 0, 1, sy, 1));
+  return merge(p);
 }
 function bushGeo() { const p = [P(new THREE.IcosahedronGeometry(0.6, 0), 0x3f7a35, 0, 0.45, 0), P(new THREE.IcosahedronGeometry(0.45, 0), 0x4c8a3d, 0.45, 0.35, 0.2)]; for (const [x, y, z] of [[0.2, 0.9, 0.3], [-0.3, 0.7, 0.4], [0.5, 0.65, -0.2], [-0.1, 0.8, -0.4], [0.7, 0.5, 0.4]]) p.push(P(sph(0.11), 0xb3242e, x, y, z)); return merge(p); }
-function rockGeo(ore, gold) {
-  const a = gold ? 0x7d7468 : ore ? 0x5d5148 : 0x9a968c, b = gold ? 0x8f8676 : ore ? 0x6b5d50 : 0xb3aea2;
-  const p = [P(new THREE.DodecahedronGeometry(0.75, 0), a, 0, 0.4, 0, 0.3, 0.2, 0), P(new THREE.DodecahedronGeometry(0.5, 0), b, 0.6, 0.3, 0.3, 0, 0.5, 0.4), P(new THREE.DodecahedronGeometry(0.4, 0), a, -0.5, 0.25, 0.4)];
-  if (ore) for (const [x, y, z] of [[0.2, 0.95, 0.2], [-0.35, 0.7, 0.1], [0.7, 0.6, 0.4], [0.1, 0.6, 0.65]]) p.push(P(new THREE.OctahedronGeometry(gold ? 0.2 : 0.16, 0), gold ? 0xf2c230 : 0xc9792e, x, y, z));
+function rockGeo(ore, gold, hq) {
+  const a = gold ? 0x7d7468 : ore ? 0x5d5148 : 0x9a968c, b = gold ? 0x8f8676 : ore ? 0x6b5d50 : 0xb3aea2, D = r => hq ? blob(r, 'd') : new THREE.DodecahedronGeometry(r, 0);
+  // 1.10: oblejší balvany se zploštěním a mechem na vrchu
+  const p = [P(D(0.75), a, 0, 0.35, 0, 0.3, 0.2, 0, 1.1, 0.8, 1), P(D(0.5), b, 0.6, 0.28, 0.3, 0, 0.5, 0.4, 1, 0.85, 1.1), P(D(0.4), a, -0.5, 0.22, 0.4, 0, 0, 0, 1.2, 0.7, 1)];
+  if (hq && !ore) p.push(P(new THREE.DodecahedronGeometry(0.42, 0), 0x6f8a4a, 0.05, 0.72, -0.05, 0, 0, 0, 1.3, 0.28, 1.2));
+  if (ore) for (const [x, y, z] of [[0.2, 0.95, 0.2], [-0.35, 0.7, 0.1], [0.7, 0.6, 0.4], [0.1, 0.6, 0.65]]) p.push(P(new THREE.OctahedronGeometry(gold ? 0.2 : 0.16, 0), gold ? 0xf2c230 : 0xc9792e, x, y * 0.9, z));
   return merge(p);
 }
 function fishGeo() {

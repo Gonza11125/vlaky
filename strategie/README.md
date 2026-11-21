@@ -6,8 +6,15 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0**, **1.7.1**, **1.8.0** a **1.9.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0**, **1.7.1**, **1.8.0**, **1.9.0** a **1.10.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 1.10.0 – Nový vzhled
+
+Čistě grafická aktualizace: pestřejší terén se svahy a mokrým pískem, tráva
+a květiny, plnější stromy a oblé balvany s jemnými odstíny, vlnící se voda,
+podrobnější postavy a nové modely všech neutrálních lokalit. Modul `look.js`
+se kopíruje do vydání jako volitelný herní soubor. Úsporná kvalita zůstává lehká.
 
 ## Novinky ve 1.9.0 – Válka a obrana
 
@@ -210,7 +217,7 @@ Z kořene repozitáře spusť:
 python -m http.server 8000 --bind 0.0.0.0
 ```
 
-Hra je na cestě `/strategie/`. Pracovní zdroje jsou pět souborů `.js` přímo
+Hra je na cestě `/strategie/`. Pracovní zdroje jsou herní soubory `.js` přímo
 ve `strategie/` a `strategie/play.html`. Cesta `/strategie/play.html` spouští
 vývojovou verzi s vlastním uložením, aby vývoj nepřepisoval hráčova vydání.
 Není potřeba sestavení ani instalace balíčků. Three.js **0.128.0** se načítá

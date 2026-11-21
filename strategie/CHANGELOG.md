@@ -1,5 +1,16 @@
 # Vydání Věku pokroku
 
+## 1.10.0 – Nový vzhled
+
+- **Krajina:** velké skvrny světlejší a sušší louky, kamenité svahy podle sklonu, mokrý písek u vody a tmavší hlubiny; jemná textura trávy v obou režimech.
+- **Tráva a květiny:** tisíce trsů trávy a lučních květin (bílé, žluté, fialové, červené, modré); mizí pod stavbami, poli a v neprozkoumaném území.
+- **Stromy a kameny:** smrky z pěti pater, listnáče s větvemi a několika oblými korunami, oblé balvany s mechem; každý strom a kámen má trochu jiný odstín.
+- **Voda:** tmavší, lesklejší hladina s pohyblivými vlnkami.
+- **Postavy:** pásek, boty a krk u všech lidí a vojáků.
+- **Neutrální lokality:** nové podrobné modely: ves s doškovými střechami, studnou a stohem, ruiny se sloupy a padlým kladím, dřevěná strážní věž se střechou a žebříkem, lom s jeřábem a vozíkem, tábor se stany a ohništěm, kovárna s komínem, kovadlinou a sudy.
+- **Realistický režim:** nižší expozice, barvy už nejsou vybledlé.
+- **Výkon:** oblé tvary z málo ploch; úsporná kvalita (výchozí na telefonech) kreslí původní jednoduché stromy a méně trávy. Pravidla hry, uložení ani síť se nemění.
+
 ## 1.9.0 – Válka a obrana
 
 - **8 nových druhů vojáků:** Zvěd (rychlý průzkumník ze Sídla, vidí daleko), Prakovník (levný střelec doby kamenné), Sekerník (dvojnásobné poškození budov), Pikenýr (trojnásobek proti jízdě), Válečný vůz (rozjede střelce), Jízdní lučištník, Dragoun (karabina ze sedla) a Beranidlo (brány a hradby, šípy se od něj odrážejí). Všichni mají vlastní 3D model.

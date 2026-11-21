@@ -996,6 +996,7 @@ function frame(now) {
   }
   cityArtAnimate(t, dt);
   frontierFrame();
+  if (typeof lookFrame === 'function') lookFrame(dt);
   for (let i = markers.length - 1; i >= 0; i--) { const k = markers[i]; k.t -= dt; if (k.t <= 0) { scene.remove(k.m); markers.splice(i, 1); } else { k.m.scale.setScalar(0.4 + k.t * 1.6); k.m.material.opacity = k.t / 0.6; } }
   updateCamera();
   atmoFrame(now,dt,t);

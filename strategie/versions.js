@@ -46,5 +46,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.9.0",
     "description": "Válka a obrana: 8 nových druhů vojáků, 10 vojenských výzkumů, postoje jednotek, opevněné mosty a chytřejší soupeř."
+  },
+  {
+    "id": "1.10.0",
+    "description": "Nový vzhled: bohatší krajina s trávou a květinami, plnější stromy, vlnící se voda a podrobné neutrální lokality."
   }
 ];
