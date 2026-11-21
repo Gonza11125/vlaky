@@ -318,6 +318,13 @@ function buildCmd() {
     if (own.some(u => u.type === 'vil')) for (const type of BUILD_ORDER) { const d = BUILDINGS[type]; if (!hasReq(T, d)) continue; addBtn({ label: d.name, cost: d.cost, time: d.time, desc: d.desc, cls: placing && placing.type === type ? 'on' : '', fn: () => startPlacing(type) }); }
     if (own.some(isSoldier)) addBtn({ label: 'Útočný přesun', cls: amoveMode ? 'on' : '', desc: 'Jednotky dojdou na místo a cestou napadnou každého nepřítele. Pak ukaž cíl na mapě. (S myší také Ctrl + pravé tlačítko.)', fn: () => { amoveMode = !amoveMode; } });
     if (own.some(u => u.type === 'caravan')) addBtn({ label: 'Obnovit obchodní trasu', desc: UNITS.caravan.desc, fn: () => act(['route', ids(own.filter(u => u.type === 'caravan')), -1]) });
+    const soldiers = own.filter(isSoldier);
+    if (soldiers.length) {
+      const st = soldiers[0].stance || 0;
+      addBtn({ label: (st === 0 ? '✓ ' : '') + 'Útočný postoj', desc: 'Vojáci pronásledují nepřítele, kterého uvidí.', fn: () => { act(['stance', ids(soldiers), 0]); cmdSig = ''; } });
+      addBtn({ label: (st === 1 ? '✓ ' : '') + 'Obranný postoj', desc: 'Zaútočí jen na blízkého nepřítele a po krátké honičce se vrátí na místo.', fn: () => { act(['stance', ids(soldiers), 1]); cmdSig = ''; } });
+      addBtn({ label: (st === 2 ? '✓ ' : '') + 'Držet pozici', desc: 'Nehnou se z místa; bojují jen s tím, na koho dosáhnou. Hodí se na mosty, brány a hradby.', fn: () => { act(['stance', ids(soldiers), 2]); cmdSig = ''; } });
+    }
     addBtn({ label: 'Stát', fn: () => act(['stop', ids(own)]) });
     addBtn({ label: 'Zrušit výběr', fn: () => setSel([]) });
   } else if (b && b.isB && b.team === MY) {
@@ -414,7 +421,7 @@ function refreshUI() {
     else if (e.isNode) h = '<h2>' + e.def.name + '</h2><p class="stat">Zbývá ' + Math.ceil(e.amt) + ' (' + RES_NAME[e.def.res].toLowerCase() + ')</p>' + (e.def.req && !T.tech[e.def.req] ? '<p>K těžbě potřebuješ Hornictví a tavení.</p>' : '');
     else if (e.isU) {
       const o = e.order, task = !o ? 'čeká' : o.type === 'gather' ? 'sbírá: ' + RES_NAME[o.node.def.res].toLowerCase() : TASK[o.type];
-      h = '<h2>' + e.def.name + (e.team !== MY ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Životy ' + Math.ceil(e.hp) + '/' + e.maxHp + ' · útok ' + atkOf(e) + ' · zbroj ' + armorOf(e) + (e.def.range ? ' · dostřel ' + e.def.range : '') + '</p>' +
+      h = '<h2>' + e.def.name + (e.team !== MY ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Životy ' + Math.ceil(e.hp) + '/' + e.maxHp + ' · útok ' + atkOf(e) + ' · zbroj ' + armorOf(e) + (e.def.range ? ' · dostřel ' + (e.isU ? rangeOf(e) : e.def.range) : '') + (e.isU && e.team === MY && isSoldier(e) ? ' · postoj ' + ['útočný', 'obranný', 'drží pozici'][e.stance || 0] : '') + '</p>' +
         (e.team === MY ? (e.type==='vil'&&G.real?'<p>Odbornost: '+ECON_SKILLS.map(k=>({gather:'Sběr',farm:'Zemědělství',build:'Stavění',craft:'Řemeslo'})[k]+' '+professionLevel(e,k)).join(' · ')+'</p>':'')+'<p>Teď ' + task + (e.carry >= 1 ? ', nese ' + Math.floor(e.carry) + ' (' + RES_NAME[e.ctype].toLowerCase() + ')' : '') + '.</p>' : '');
     } else {
       h = '<h2>' + e.def.name + (e.team !== MY ? ' (nepřítel)' : '') + '</h2>' + hpBar(e) + '<p class="stat">Odolnost ' + Math.ceil(e.hp) + '/' + e.maxHp + (e.done ? '' : ' · rozestavěno ' + Math.floor(e.prog * 100) + ' %') + '</p>';

@@ -310,6 +310,17 @@ function humanParts(kind) {
   if (kind === 'archer') { p.push(P(new THREE.TorusGeometry(0.5, 0.035, 4, 8, Math.PI), C.wood, -0.4, 1.2, 0.2, 0, Math.PI / 2, Math.PI / 2)); p.push(P(cyl(0.2, 0.27, 0.2, 8), 0x4d6b3a, 0, 1.9, 0)); p.push(P(box(0.16, 0.6, 0.16), C.wood, 0.15, 1.3, -0.28, 0, 0, 0.3)); }
   if (kind === 'xbow') { p.push(P(box(0.8, 0.07, 0.07), C.steel, 0, 1.15, 0.55)); p.push(P(box(0.08, 0.08, 0.7), C.wood, 0, 1.15, 0.35)); p.push(P(cyl(0.27, 0.3, 0.2, 8), C.steel, 0, 1.88, 0)); }
   if (kind === 'musket') { p.push(P(cyl(0.04, 0.05, 1.7, 6), C.iron, 0.3, 1.5, 0.3, 0.9, 0, 0)); p.push(P(cyl(0.48, 0.48, 0.05, 10), 0x2a2622, 0, 1.9, 0)); p.push(P(cyl(0.22, 0.26, 0.22, 8), 0x2a2622, 0, 2.0, 0)); p.push(P(box(0.66, 0.12, 0.46), C.white, 0, 1.2, 0, 0, 0, 0.5)); }
+  // 1.9: noví pěšáci
+  if (kind === 'slinger') { p.push(P(box(0.66, 0.08, 0.46), 0x7a5a3a, 0, 1.92, 0)); p.push(P(box(0.03, 0.75, 0.03), 0x7a5a3a, 0.45, 1.25, 0.15, 0, 0, 0.5)); p.push(P(sph(0.1), C.stoneD, 0.62, 0.92, 0.15)); p.push(P(box(0.3, 0.3, 0.2), 0x7a5a3a, -0.32, 0.85, -0.15)); }
+  if (kind === 'axe') { p.push(P(cyl(0.035, 0.04, 1.15, 5), C.wood, 0.45, 1.35, 0.2, 0.35, 0, 0)); p.push(P(box(0.08, 0.36, 0.3), C.steel, 0.45, 1.86, 0.42, 0.35, 0, 0)); p.push(P(cyl(0.26, 0.28, 0.18, 8), 0x6b4f35, 0, 1.88, 0)); p.push(P(box(0.68, 0.14, 0.48), 0x6b4f35, 0, 0.82, 0)); }
+  if (kind === 'pike') { p.push(P(cyl(0.035, 0.035, 4.2, 5), C.wood, 0.42, 2.1, 0.25, 0.12, 0, 0)); p.push(P(cyl(0, 0.07, 0.35, 5), C.steel, 0.42, 4.25, 0.5, 0.12, 0, 0)); p.push(P(cyl(0.28, 0.3, 0.2, 8), C.steel, 0, 1.88, 0)); p.push(P(cyl(0.42, 0.42, 0.04, 10), C.steel, 0, 1.98, 0)); p.push(P(box(0.68, 0.5, 0.48), C.steel, 0, 1.15, 0)); }
+  return p;
+}
+// 1.9: jezdci podle druhu – zvěd, jízdní lučištník a dragoun
+function riderGear(kind, p) {
+  if (kind === 'scout') { p.push(P(cyl(0.2, 0.27, 0.16, 8), 0x4d6b3a, 0, 2.8, -0.1)); p.push(P(box(0.05, 0.05, 0.6), C.wood, 0.4, 2.1, 0.3)); }
+  if (kind === 'horsearcher') { p.push(P(new THREE.TorusGeometry(0.45, 0.03, 4, 8, Math.PI), C.wood, -0.4, 2.0, 0, 0, Math.PI / 2, Math.PI / 2)); p.push(P(box(0.14, 0.5, 0.14), C.wood, 0.25, 2.1, -0.4, 0, 0, 0.3)); p.push(P(cyl(0.21, 0.28, 0.2, 8), 0x8a5a2a, 0, 2.8, -0.1)); }
+  if (kind === 'dragoon') { p.push(P(cyl(0.035, 0.045, 1.3, 6), C.iron, 0.36, 2.15, 0.25, 1.0, 0, 0)); p.push(P(cyl(0.44, 0.44, 0.05, 10), 0x2a2622, 0, 2.82, -0.1)); p.push(P(cyl(0.21, 0.25, 0.22, 8), 0x2a2622, 0, 2.92, -0.1)); }
   return p;
 }
 function horseParts(knight) {
@@ -329,6 +340,23 @@ function horseParts(knight) {
 function unitGeo(type, team) {
   let p;
   if (type === 'rider') p = horseParts(false);
+  else if (type === 'scout' || type === 'horsearcher' || type === 'dragoon') {
+    p = horseParts(false).filter((x, i) => i !== 10);   // bez meče
+    if (type === 'scout') p = p.map(x => { x.g.scale(0.88, 0.88, 0.88); return x; });
+    riderGear(type, p);
+  }
+  else if (type === 'chariot') {
+    p = [P(box(1.5, 0.2, 1.3), C.woodD, 0, 0.75, -0.6), P(box(1.5, 0.55, 0.1), C.wood, 0, 1.1, -0.0), P(box(0.1, 0.55, 1.2), C.wood, 0.72, 1.1, -0.6), P(box(0.1, 0.55, 1.2), C.wood, -0.72, 1.1, -0.6),
+      P(box(0.08, 0.08, 1.6), C.woodD, 0, 0.85, 0.85)];
+    for (const x of [-0.85, 0.85]) p.push(P(cyl(0.55, 0.55, 0.1, 12), C.woodD, x, 0.55, -0.6, 0, 0, Math.PI / 2));
+    for (const x of [-0.35, 0.35]) { p.push(P(box(0.4, 0.55, 1.3), C.horse, x, 1.05, 1.5)); p.push(P(box(0.22, 0.5, 0.3), C.horse, x, 1.5, 2.15, 0.5, 0, 0)); for (const z of [1.0, 2.0]) p.push(P(box(0.12, 0.7, 0.12), 0x4a3220, x, 0.35, z)); }
+    p.push(P(box(0.5, 0.7, 0.36), 'T', 0, 1.6, -0.6)); p.push(P(sph(0.22), C.skin, 0, 2.15, -0.6)); p.push(P(cyl(0.03, 0.03, 2, 5), C.wood, 0.4, 1.9, -0.4, 0.4, 0, 0));
+  }
+  else if (type === 'ram') {
+    p = [P(box(1.5, 0.25, 3.0), C.woodD, 0, 0.6, 0), gable(1.9, 3.1, 1.0, 'TD', 1.3), P(cyl(0.22, 0.22, 3.6, 8), C.wood, 0, 1.05, 0.35, Math.PI / 2, 0, 0), P(cyl(0.27, 0.27, 0.35, 8), C.iron, 0, 1.05, 2.1, Math.PI / 2, 0, 0)];
+    for (const x of [-0.85, 0.85]) for (const z of [-1.0, 1.0]) p.push(P(cyl(0.42, 0.42, 0.14, 10), C.woodD, x, 0.42, z, 0, 0, Math.PI / 2));
+    for (const x of [-0.7, 0.7]) for (const z of [-1.3, 1.3]) p.push(P(box(0.14, 0.9, 0.14), C.woodD, x, 1.05, z));
+  }
   else if (type === 'knight') p = horseParts(true);
   else if (type === 'caravan') {
     p = [P(box(1.5, 0.25, 2.6), C.woodD, 0, 0.65, 0), P(box(1.5, 0.8, 2.4), C.wood, 0, 1.1, 0), P(cyl(0.85, 0.85, 2.5, 8), 'T', 0, 1.8, 0, Math.PI / 2, 0, 0), P(box(0.5, 0.5, 0.5), C.straw, 0, 1.4, 1.4)];

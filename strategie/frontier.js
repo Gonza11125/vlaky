@@ -28,7 +28,8 @@ function frontierSpotOK(cx,cy,found) {
 function frontierFindSpot(want,found,seed){
   const offset=Math.floor(hash2(want.cx,want.cy,seed)*5)-2;
   const cx0=want.cx+offset,cy0=want.cy-offset;
-  for(let rad=0;rad<=22;rad++){
+  // 1.9: širší hledání (dřív 22), aby se lokalita vešla i vedle počátečních staveb
+  for(let rad=0;rad<=36;rad++){
     for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
       if(rad && Math.max(Math.abs(dx),Math.abs(dy))!==rad)continue;
       const cx=cx0+dx,cy=cy0+dy;
@@ -234,9 +235,14 @@ function frontierAiScout(mine){
     const free=v=>!v.dead&&(!v.order||v.order.type==='move'||v.order.type==='amove');
     const army=mine.filter(v=>isSoldier(v)&&v.def.cls!=='siege'&&free(v));
     const vils=mine.filter(v=>v.type==='vil');
-    u=army.find(v=>v.def.cls==='cav')||army.find(v=>v.def.cls==='inf'||v.def.cls==='arch')||
+    u=army.find(v=>v.type==='scout')||army.find(v=>v.def.cls==='cav')||army.find(v=>v.def.cls==='inf'||v.def.cls==='arch')||
       (visit.length&&vils.length>=[14,11,8][G.diff]?vils.find(v=>!v.order||v.order.type==='gather'):null);
-    if(!u){AI.scoutNext=G.time+15;return;}
+    if(!u){
+      // 1.9: se Stopaři si soupeř vycvičí lehkého zvěda v Sídle
+      const tc=frontierTcOf(1);
+      if(tc&&T.tech.scouting&&!tc.queue.some(q=>q.id==='scout')&&!mine.some(v=>v.type==='scout')&&T.res.food>=140)enqueue(tc,'u','scout');
+      AI.scoutNext=G.time+15;return;
+    }
     AI.scout=u.id;
   }
   // zvěd stojí na lokalitě a obsazuje ji: nech ho stát

@@ -42,5 +42,9 @@ window.VEK_RELEASES = [
   {
     "id": "1.8.0",
     "description": "Živý svět: obsazování lokalit, spojenectví s osadami, obchodníci, uprchlíci a lapkové, 8 nových výzkumů."
+  },
+  {
+    "id": "1.9.0",
+    "description": "Válka a obrana: 8 nových druhů vojáků, 10 vojenských výzkumů, postoje jednotek, opevněné mosty a chytřejší soupeř."
   }
 ];

@@ -726,7 +726,7 @@ function updateFog() {
   else {
     vis.fill(0);
     const extra = teams[MY] && teams[MY].tech.scouting ? 2 : 0;
-    for (const u of units) if (u.team === MY) reveal(cellOf(u.x), cellOf(u.z), SIGHT[u.def.cls] + extra);
+    for (const u of units) if (u.team === MY) reveal(cellOf(u.x), cellOf(u.z), (u.def.sight || SIGHT[u.def.cls]) + extra);
     for (const b of blds) if (b.team === MY) reveal(cellOf(b.x), cellOf(b.z), !b.done ? 2 + b.size : b.type === 'tower' ? 10 : b.type === 'tc' ? 9 : b.def.wall ? 3 : 4 + b.size);
     if (typeof frontierVision === 'function') frontierVision(MY);
   }
@@ -776,7 +776,7 @@ function buildNodes() {
   }
   for (const n of nodes) setNodeMatrix(n, 0.0001);
 }
-function dropEnt(e) { e.dead = true; byId.delete(e.id); scene.remove(e.mesh); if (e.isB) for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; } }
+function dropEnt(e) { e.dead = true; byId.delete(e.id); scene.remove(e.mesh); if (e.isB) for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = bridgeMask[k] ? 1 : 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; } }
 function depleteNode(n) { if (G.mode === 'host') NET.log.push([0, n.id]); n.amt = 0; nodeAt[cidx(n.cx, n.cy)] = -1; if (n.mesh) scene.remove(n.mesh); else setNodeMatrix(n, 0.0001); }
 // ---------- zvěř ----------
 let deerG, meatG;
@@ -818,7 +818,8 @@ function nearestNode(type, x, z, maxD) {
 function geoFor(kind, type, team) { const era = kind === 'b' && teams[team] ? teams[team].era : 0; const k = kind + type + team + (kind === 'b' ? era : ''); return geoCache[k] || (geoCache[k] = kind === 'u' ? unitGeo(type, TEAM_COLORS[team]) : buildingGeo(type, TEAM_COLORS[team], era)); }
 function addUnit(team, type, x, z) {
   const def = UNITS[type];
-  const u = { id: nextId++, exp: { gather: 0, farm: 0, build: 0, craft: 0 }, isU: true, team, type, def, x, z, hp: def.hp, maxHp: def.hp, order: null, path: null, pi: 0, cd: 0, carry: 0, ctype: null, face: Math.random() * 6, moving: false, working: false, scan: Math.random() * 0.5, dead: false };
+  const hp0 = Math.round(def.hp * ((def.cls === 'cav' || def.mount) && teams[team].tech.chivalry ? 1.2 : 1));
+  const u = { id: nextId++, exp: { gather: 0, farm: 0, build: 0, craft: 0 }, isU: true, team, type, def, x, z, hp: hp0, maxHp: hp0, stance: 0, order: null, path: null, pi: 0, cd: 0, carry: 0, ctype: null, face: Math.random() * 6, moving: false, working: false, scan: Math.random() * 0.5, dead: false };
   u.mesh = new THREE.Mesh(geoFor('u', type, team), unitMat); u.mesh.castShadow = true;
   u.mesh.position.set(x, heightAt(x, z), z); scene.add(u.mesh);
   units.push(u); byId.set(u.id, u); teams[team].pop++;
@@ -828,15 +829,20 @@ function canPlace(type, cx, cy) {
   const s = BUILDINGS[type].size;
   for (let j = cy; j < cy + s; j++) for (let i = cx; i < cx + s; i++) {
     if (!inMap(i, j)) return false; const k = cidx(i, j);
-    if (!walk[k] || resv[k] || nodeAt[k] >= 0) return false;
+    if (!walk[k] || nodeAt[k] >= 0) return false;
+    if (resv[k] && !(bridgeMask[k] && !occ[k] && (BUILDINGS[type].wall || type === 'tower'))) return false;
   }
   return true;
 }
+// 1.9: zesílení budov výzkumy (zdivo pro všechny, opevňování pro hradby, brány, palisády a věže)
+function bldMaxHp(T, def) { return Math.round(def.hp * (T.tech.masonry ? 1.25 : 1) * (T.tech.fortify && (def.wall || def === BUILDINGS.tower) ? 1.4 : 1)); }
+// 1.9: postoje – 0 útočný (pronásleduje), 1 obranný (krátce a vrátí se), 2 držet pozici (jen co dosáhne)
+function stanceReach(u) { const r = rangeOf(u); return u.stance === 2 ? (r || 1.6) + 0.5 : u.stance === 1 ? (r ? r + 1 : 6) : (r ? r + 3 : 10); }
 function placeBuilding(team, type, cx, cy, instant) {
   const def = BUILDINGS[type], s = def.size, T = teams[team];
-  const maxHp = Math.round(def.hp * (T.tech.masonry ? 1.25 : 1));
+  const maxHp = bldMaxHp(T, def);
   const b = { id: nextId++, priority: 2, target: 0, isB: true, team, type, def, cx, cy, size: s, x: (cx + s / 2) * CS, z: (cy + s / 2) * CS, hp: instant ? maxHp : maxHp * 0.1, maxHp, done: !!instant, prog: instant ? 1 : 0, queue: [], rally: null, cd: 0, worker: null, dead: false, crop: 'food', enabled: true, workT: 0 };
-  b.y = flatten(cx, cy, s);
+  b.y = bridgeMask[cidx(cx, cy)] ? 1.32 : flatten(cx, cy, s);
   for (let j = cy; j < cy + s; j++) for (let i = cx; i < cx + s; i++) { const k = cidx(i, j); resv[k] = 1; bAt[k] = b.id; if (type !== 'farm') occ[k] = 1; walk[k] = 1; if (def.gate) gateT[k] = team + 1; }
   b.mesh = new THREE.Mesh(geoFor('b', type, team), type === 'farm' ? farmMat : bldMat);
   b.mesh.castShadow = type !== 'farm'; b.mesh.receiveShadow = true;
@@ -855,7 +861,7 @@ function killEnt(e, by) {
   else {
     cityArtRemoveSite(e); CITY_ART.dirty = true;
     cityRoadDirty = true;
-    for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; }
+    for (let j = e.cy; j < e.cy + e.size; j++) for (let i = e.cx; i < e.cx + e.size; i++) { const k = cidx(i, j); resv[k] = bridgeMask[k] ? 1 : 0; occ[k] = 0; bAt[k] = 0; gateT[k] = 0; }
     for (const q of e.queue) { if (q.kind === 't') delete T.busy[q.id]; }
     if (by) teams[by.team].stats.razed++;
     for (let i = 0; i < 8; i++) puff(e.x + (Math.random() - 0.5) * e.size * 1.6, e.y + 0.5 + Math.random() * 2, e.z + (Math.random() - 0.5) * e.size * 1.6, 0x8a8172, 1.2, 1.6, 1.2);
@@ -933,8 +939,13 @@ function formation(list, x, z, fn) {
 }
 
 // ---------- boj ----------
-function atkOf(u) { let a = u.def.atk; const t = teams[u.team].tech; if (u.def.cls === 'inf' || u.def.cls === 'cav') { if (t.bweap) a += 2; if (t.iron) a += 2; if (t.steel) a += 3; } return a; }
-function armorOf(u) { let a = u.def.armor; const t = teams[u.team].tech; if (u.def.cls === 'inf' || u.def.cls === 'cav') { if (t.iron) a += 1; if (t.steel) a += 1; } return a; }
+function atkOf(u) { let a = u.def.atk; const t = teams[u.team].tech; if (u.def.cls === 'inf' || u.def.cls === 'cav') { if (t.bweap) a += 2; if (t.iron) a += 2; if (t.steel) a += 3; }
+  if (u.def.cls === 'arch') { if (t.composite && u.def.proj === 'arrow') a += 1; if (t.fletching) a += 1; if (t.ballistics) a += 2; }
+  if (u.def.cls === 'siege' && t.ballistics) a += 2; return a; }
+function rangeOf(u) { const r = u.def.range; if (!r) return 0; const t = teams[u.team].tech; let x = r;
+  if (u.def.cls === 'arch') { if (t.composite && u.def.proj === 'arrow') x += 1; if (t.fletching) x += 1; }
+  if (u.def.cls === 'siege' && t.ballistics) x += 2; return x; }
+function armorOf(u) { let a = u.def.armor; const t = teams[u.team].tech; if (u.def.cls === 'inf' || u.def.cls === 'cav') { if (t.iron) a += 1; if (t.steel) a += 1; } if (u.def.cls === 'inf' && t.shields) a += 1; if (t.chainmail && (u.def.cls === 'inf' || u.def.cls === 'cav' || u.def.cls === 'arch')) a += 1; return a; }
 function hurt(t, src, base, cls, pierce, bonus) {
   if (!t || t.dead) return;
   if (t.isAnimal) { t.hp -= base; t.flee = 1.6; t.t = 0; if (t.hp <= 0) killAnimal(t); return; }
@@ -959,11 +970,11 @@ function findEnemy(e, range, wantB) {
   if (wantB) { let bb = null; bd = range; for (const b of blds) { if (b.team === e.team || b.dead) continue; const d = distEnt(e, b); if (d < bd) { bd = d; bb = b; } } if (bb) return bb; }
   return best;
 }
-const PROJ = { arrow: { sp: 28, arc: 0.12 }, shot: { sp: 80, arc: 0 }, rock: { sp: 17, arc: 0.35 }, ball: { sp: 45, arc: 0.05 } };
+const PROJ = { pebble: { sp: 24, arc: 0.16 }, arrow: { sp: 28, arc: 0.12 }, shot: { sp: 80, arc: 0 }, rock: { sp: 17, arc: 0.35 }, ball: { sp: 45, arc: 0.05 } };
 let projGeo;
 function shoot(src, t, kind, dmg, cls, pierce, bonus) {
-  if (!projGeo) projGeo = { arrow: box(0.06, 0.06, 1), shot: sph(0.08), rock: new THREE.DodecahedronGeometry(0.32, 0), ball: sph(0.22),
-    mats: { arrow: new THREE.MeshBasicMaterial({ color: 0x4a3a28 }), shot: new THREE.MeshBasicMaterial({ color: 0xffe9a0 }), rock: new THREE.MeshLambertMaterial({ color: 0x8d877b }), ball: new THREE.MeshLambertMaterial({ color: 0x2a2a2e }) } };
+  if (!projGeo) projGeo = { pebble: sph(0.09), arrow: box(0.06, 0.06, 1), shot: sph(0.08), rock: new THREE.DodecahedronGeometry(0.32, 0), ball: sph(0.22),
+    mats: { pebble: new THREE.MeshLambertMaterial({ color: 0x9a9284 }), arrow: new THREE.MeshBasicMaterial({ color: 0x4a3a28 }), shot: new THREE.MeshBasicMaterial({ color: 0xffe9a0 }), rock: new THREE.MeshLambertMaterial({ color: 0x8d877b }), ball: new THREE.MeshLambertMaterial({ color: 0x2a2a2e }) } };
   if (G.mode === 'host' && NET.shots.length < 40 && !t.isAnimal) NET.shots.push([src.id, t.id, kind]);
   const sy = src.isB ? src.y + (src.type === 'tower' ? 5 : 3.6) : heightAt(src.x, src.z) + 1.5;
   const m = new THREE.Mesh(projGeo[kind], projGeo.mats[kind]); scene.add(m);
@@ -1047,14 +1058,14 @@ function updateUnit(u, dt) {
         u.leisureTimer = 12 + Math.random() * 16;
       }
     }
-    if (isSoldier(u)) { u.scan -= dt; if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, u.def.range ? u.def.range + 3 : 10, u.def.cls === 'siege' ? 'prefer' : true); if (e) orderAttack(u, e, true); } }
+    if (isSoldier(u)) { u.scan -= dt; if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, stanceReach(u), u.def.cls === 'siege' ? 'prefer' : true); if (e) orderAttack(u, e, true); } }
     return;
   }
   switch (o.type) {
     case 'move': if (follow(u, dt)) u.order = null; break;
     case 'amove': {
       u.scan -= dt;
-      if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, u.def.range ? u.def.range + 3 : 10, u.def.cls === 'siege' ? 'prefer' : true); if (e) { orderAttack(u, e, true, o); break; } }
+      if (u.scan <= 0) { u.scan = 0.5; const e = findEnemy(u, rangeOf(u) ? rangeOf(u) + 3 : 10, u.def.cls === 'siege' ? 'prefer' : true); if (e) { orderAttack(u, e, true, o); break; } }
       if (!u.path) pathTo(u, o.x, o.z);
       if (follow(u, dt)) { if (Math.hypot(u.x - o.x, u.z - o.z) > 5) { const w = nearestWall(u, 5); if (w) { orderAttack(u, w, true, o); break; } } u.order = null; }
       break;
@@ -1062,7 +1073,7 @@ function updateUnit(u, dt) {
     case 'attack': {
       const t = o.target;
       if (!t || t.dead) { u.order = o.resume; u.path = null; break; }
-      const d = distEnt(u, t), R = u.def.range || 1.35;
+      const d = distEnt(u, t), R = rangeOf(u) || 1.35;
       if (d <= R) {
         u.path = null; faceTo(u, t); u.working = true;
         if (u.cd <= 0) {
@@ -1071,7 +1082,8 @@ function updateUnit(u, dt) {
           else hurt(t, u, atkOf(u), u.def.cls, u.def.pierce, u.def.bonus);
         }
       } else {
-        if (o.auto && !o.resume && Math.hypot(u.x - o.ox, u.z - o.oz) > 18) { u.order = null; u.path = null; break; }
+        if (o.auto && u.stance === 2) { u.order = o.resume || null; u.path = null; break; }   // držet pozici: nepronásleduje
+        if (o.auto && !o.resume && Math.hypot(u.x - o.ox, u.z - o.oz) > (u.stance === 1 ? 8 : 18)) { u.order = null; u.path = null; if (u.stance === 1) pathTo(u, o.ox, o.oz); break; }
         o.rt -= dt;
         if (!u.path || o.rt <= 0) { o.rt = 0.7 + Math.random() * 0.4; if (t.isB) pathToB(u, t); else pathTo(u, t.x, t.z); }
         if (follow(u, dt) && distEnt(u, t) > R + 1.5) { const w = nearestWall(u, 4.5); if (w && w !== t) orderAttack(u, w, o.auto, o); }
@@ -1179,7 +1191,7 @@ function enqueue(b, kind, id) {
   if (kind === 'u' && !hasReq(T, def)) return 'Chybí technologie.';
   if (!afford(T, def.cost)) return 'Chybí: ' + missing(T, def.cost) + '.';
   pay(T, def.cost); if (kind === 't') T.busy[id] = true;
-  b.queue.push({ kind, id, t: 0, total: def.time });
+  b.queue.push({ kind, id, t: 0, total: kind === 'u' && T.tech.conscription && def.atk > 0 && id !== 'vil' ? Math.round(def.time * 0.75) : def.time });
   return null;
 }
 function cancelQueue(b, i) { const q = b.queue[i]; if (!q) return; const T = teams[b.team]; refund(T, (q.kind === 'u' ? UNITS : TECHS)[q.id].cost); if (q.kind === 't') delete T.busy[q.id]; b.queue.splice(i, 1); }
@@ -1251,7 +1263,7 @@ function completeTech(T, id) {
   const d = TECHS[id]; T.tech[id] = true; delete T.busy[id];
   if (d.setsEra) { T.era = d.setsEra; say(T.id, 'Nová epocha: ' + ERAS[T.era] + '.', 'good'); say(1 - T.id, 'Nepřítel vstoupil do epochy ' + ERAS[T.era] + '.', 'bad'); }
   else say(T.id, 'Vyzkoumáno: ' + d.name + '.', 'good');
-  if (id === 'masonry') for (const b of blds) if (b.team === T.id) { const k = b.hp / b.maxHp; b.maxHp = Math.round(b.def.hp * 1.25); b.hp = b.maxHp * k; }
+  if (id === 'masonry' || id === 'fortify') for (const b of blds) if (b.team === T.id) { const k = b.hp / b.maxHp; b.maxHp = bldMaxHp(T, b.def); b.hp = b.maxHp * k; }
 }
 let popWarn = 0;
 function updateBuilding(b, dt) {
@@ -1261,7 +1273,7 @@ function updateBuilding(b, dt) {
   if (G.real && !def.wall && b.type !== 'tc' && b.type !== 'farm' && !(b.fire > 0))
     b.hp = Math.max(b.maxHp * 0.45, b.hp - 0.045 * dt);
   if (b.type === 'forester' || ECON_RECIPES[b.type]) productionTick(b, dt);
-  if (def.atk) { b.cd -= dt; if (b.cd <= 0) { const t = findEnemy(b, def.range + b.size, false); if (t) { b.cd = def.cd; shoot(b, t, 'arrow', def.atk + T.era, 'bld', 0, null); } else b.cd = 0.4; } }
+  if (def.atk) { b.cd -= dt; if (b.cd <= 0) { const t = findEnemy(b, def.range + b.size + (b.type === 'tower' && T.tech.fortify ? 2 : 0), false); if (t) { b.cd = def.cd; shoot(b, t, 'arrow', def.atk + T.era, 'bld', 0, null); } else b.cd = 0.4; } }
   const q = b.queue[0];
   if (q) {
     if (q.t < q.total) q.t += dt;
@@ -1281,7 +1293,7 @@ function knowRate(T) {
   if (T.tech.writing) r *= 1.2; if (T.tech.math) r *= 1.25; if (T.tech.university) r *= 1.4; if (T.tech.printing) r *= 1.5;
   return r;
 }
-function upkeepRate(T) { let s = 0; for (const u of units) if (u.team === T.id) s += u.def.upkeep; return s / 60 * (T.tech.pottery ? 0.85 : 1); }
+function upkeepRate(T) { let s = 0; for (const u of units) if (u.team === T.id) s += u.def.upkeep * (T.tech.standing && isSoldier(u) ? 0.7 : 1); return s / 60 * (T.tech.pottery ? 0.85 : 1); }
 function econ(T, dt) {
   let cap = 0, past = 0, mill = 0, mkt = 0; const cn = T.n = {};
   for (const b of blds) if (b.team === T.id && b.done) { cn[b.type] = (cn[b.type] || 0) + 1; cap += b.def.pop || 0; if (b.type === 'pasture') past++; else if (b.type === 'mill') mill++; else if (b.type === 'market') mkt++; }
@@ -1381,6 +1393,7 @@ function execCmd(team, c) {
       break;
     }
     case 'stop': U(c[1]).forEach(orderStop); break;
+    case 'stance': if ([0, 1, 2].includes(c[2])) U(c[1]).forEach(u => { if (isSoldier(u)) u.stance = c[2]; }); break;
     case 'city': {
       const city = cityState(T), key = c[1], val = c[2];
       if (key === 'auto' && typeof val === 'boolean') city.auto = val;
@@ -1434,7 +1447,7 @@ function act(c) { if (G.mode === 'guest') netCmd(c); else execCmd(MY, c); }
 
 // ---------- protivník ----------
 const AI = { acc: 0, attackAt: 0, wave: 0, launch: -999, scout: 0, scoutNext: 0 };
-const AI_TECH = ['agri', 'husbandry', 'scouting', 'era1', 'pottery', 'fishing', 'herbs', 'writing', 'cartography', 'bronze', 'wheel', 'currency', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'era2', 'iron', 'math', 'medicine', 'diplomacy', 'plow', 'roads', 'mechanics', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'guilds', 'banking', 'sanitation', 'stirrups', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
+const AI_TECH = ['agri', 'husbandry', 'scouting', 'shields', 'era1', 'pottery', 'fishing', 'herbs', 'writing', 'cartography', 'bronze', 'wheel', 'currency', 'btools', 'bweap', 'masonry', 'dikes', 'horses', 'composite', 'era2', 'iron', 'math', 'medicine', 'diplomacy', 'plow', 'roads', 'mechanics', 'chainmail', 'fletching', 'fortify', 'era3', 'steel', 'threefield', 'crossbow', 'university', 'guilds', 'banking', 'sanitation', 'stirrups', 'pikes', 'chivalry', 'conscription', 'era4', 'gunpowder', 'printing', 'blast', 'artillery'];
 function findSpot(type, ax, ay, margin) {
   const s = BUILDINGS[type].size;
   for (let r = 3; r < 22; r++) {
@@ -1533,16 +1546,18 @@ function aiTick() {
   // vojsko
   const armyT = Math.round(Math.min([18, 30, 44][D], 3 + Math.floor(G.time / 60 * [0.8, 1.2, 1.7][D])) * AGG[G.aggr]);
   if (army.length < armyT) {
-    const prefs = { barracks: ['sword', 'spear'], range: ['musket', 'xbow', 'archer'], stable: ['knight', 'rider'], workshop: ['cannon', 'catapult'] };
+    const prefs = { barracks: ['pike', 'sword', 'axe', 'spear'], range: ['musket', 'xbow', 'archer', 'slinger'], stable: ['knight', 'dragoon', 'horsearcher', 'chariot', 'rider'], workshop: ['cannon', 'catapult', 'ram'] };
     const siege = army.filter(u => u.def.cls === 'siege').length;
     for (const b of my) { const pl = prefs[b.type]; if (!pl || !b.done || b.queue.length) continue; if (b.type === 'workshop' && siege >= 3) continue;
-      for (const id of pl) { const d = UNITS[id]; if (!hasReq(T, d)) continue; if ((army.length < armyT * 0.5 ? afford(T, d.cost) : canSpend(d.cost)) && T.res.food >= (d.cost.food || 0) + 60) { enqueue(b, 'u', id); break; } } }
+      // 1.9: pestřejší vojsko – občas cvičí druhý nejlepší dostupný typ
+      const avail = pl.filter(id => hasReq(T, UNITS[id])), order = avail.length > 1 && Math.random() < 0.35 ? [avail[1], avail[0], ...avail.slice(2)] : avail;
+      for (const id of order) { const d = UNITS[id]; if (!hasReq(T, d)) continue; if ((army.length < armyT * 0.5 ? afford(T, d.cost) : canSpend(d.cost)) && T.res.food >= (d.cost.food || 0) + 60) { enqueue(b, 'u', id); break; } } }
   }
   // útok a obrana
   const home = { x: tc.x + (teams[0].tcx - tc.x) * 0.12, z: tc.z + (teams[0].tcz - tc.z) * 0.12 };
   const attacking = G.time - AI.launch < 200;
   if (!peaceActive() && G.aggr > 0 && G.time >= AI.attackAt && army.length >= Math.min(armyT * 0.7, 5 + AI.wave * 3)) {
-    AI.attackAt = G.time + [260, 210, 170][D] * AGT[G.aggr]; AI.wave++; AI.launch = G.time;
+    AI.attackAt = G.time + [260, 210, 170][D] * AGT[G.aggr]; AI.wave++; AI.launch = G.time; AI.launchSize = army.length;
     const tgt = aiTarget(tc);
     if (tgt) { formation(army, tgt.x, tgt.z, (u, x, z) => orderMove(u, x, z, true)); say(0, 'Zvědové hlásí: nepřátelské vojsko vyrazilo k tvé osadě!', 'bad'); }
   } else {
@@ -1553,6 +1568,15 @@ function aiTick() {
       if (attacking) { const t = aiTarget(u); if (t) orderMove(u, t.x, t.z, true); }
       else if (Math.hypot(u.x - home.x, u.z - home.z) > 14) orderMove(u, home.x + (Math.random() - 0.5) * 10, home.z + (Math.random() - 0.5) * 10, true);
     }
+  }
+  // 1.9: ustoupí, když útok vázne; lehká jízda přepadá karavany
+  if (attacking && AI.launchSize >= 4 && army.length < AI.launchSize * 0.35) {
+    AI.launch = -999; for (const u of army) orderMove(u, home.x + (Math.random() - 0.5) * 10, home.z + (Math.random() - 0.5) * 10, false);
+    say(0, 'Nepřátelské vojsko ustupuje!', 'good');
+  }
+  if (!peaceActive() && G.aggr > 0 && Math.random() < 0.15) {
+    const prey = units.find(u => u.team === 0 && u.type === 'caravan' && !u.dead);
+    if (prey) army.filter(u => u.def.cls === 'cav' && !u.order).slice(0, 2).forEach(u => orderAttack(u, prey, true));
   }
   if (typeof frontierAiScout === 'function') frontierAiScout(mine);
 }
@@ -1666,7 +1690,7 @@ function saveState() {
     amt: nodes.slice(0, G.baseNodes).map(n => Math.round(n.amt)),
     meat: nodes.slice(G.baseNodes).map(n => [n.cx, n.cy, r1(n.x), r1(n.z), Math.round(n.amt), r1(n.v)]),
     blds: blds.filter(b => !b.dead).map(b => ({ id: b.id, team: b.team, type: b.type, cx: b.cx, cy: b.cy, hp: r1(b.hp), maxHp: b.maxHp, done: b.done, prog: b.prog, queue: b.queue, seen: !!b.seen, fire: b.fire || 0, crop: b.crop, enabled: b.enabled, priority: b.priority, target: b.target, workT: b.workT, rally: b.rally ? { x: r1(b.rally.x), z: r1(b.rally.z), n: b.rally.node ? b.rally.node.id : -1 } : null })),
-    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, exp: professionExp(u), face: r1(u.face), sick: u.sick || 0, imm: u.imm || 0, homeMarket: u.homeMarket, o: packOrder(u.order) })),
+    units: units.filter(u => !u.dead).map(u => ({ id: u.id, team: u.team, type: u.type, x: r1(u.x), z: r1(u.z), hp: r1(u.hp), carry: r1(u.carry), ctype: u.ctype, exp: professionExp(u), face: r1(u.face), sick: u.sick || 0, imm: u.imm || 0, homeMarket: u.homeMarket, stance: u.stance || 0, o: packOrder(u.order) })),
     animals: animals.filter(a => !a.dead).map(a => [a.id, r1(a.x), r1(a.z), r1(a.hx), r1(a.hz), a.hp]),
   };
 }
@@ -1686,7 +1710,7 @@ function loadState(sv) {
   const anim = new Map();
   for (const a of sv.animals) { nextId = a[0]; const an = addAnimal(a[1], a[2]); an.hx = a[3]; an.hz = a[4]; an.hp = a[5]; anim.set(an.id, an); }
   const pend = [];
-  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype;u.exp=s.exp||{};professionExp(u); u.face = s.face; u.sick = s.sick || 0; u.imm = s.imm || 0; u.homeMarket = s.homeMarket; pend.push([u, s.o]); }
+  for (const s of sv.units) { nextId = s.id; const u = addUnit(s.team, s.type, s.x, s.z); u.hp = s.hp; u.carry = s.carry; u.ctype = s.ctype;u.exp=s.exp||{};professionExp(u); u.face = s.face; u.sick = s.sick || 0; u.imm = s.imm || 0; u.homeMarket = s.homeMarket; u.stance = [0, 1, 2].includes(s.stance) ? s.stance : 0; pend.push([u, s.o]); }
   for (const [u, p] of pend) {
     const o = u.order = unpackOrder(u, p, anim); if (!o) continue;
     if (o.type === 'move') pathTo(u, o.x, o.z);

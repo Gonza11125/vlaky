@@ -1,5 +1,14 @@
 # Vydání Věku pokroku
 
+## 1.9.0 – Válka a obrana
+
+- **8 nových druhů vojáků:** Zvěd (rychlý průzkumník ze Sídla, vidí daleko), Prakovník (levný střelec doby kamenné), Sekerník (dvojnásobné poškození budov), Pikenýr (trojnásobek proti jízdě), Válečný vůz (rozjede střelce), Jízdní lučištník, Dragoun (karabina ze sedla) a Beranidlo (brány a hradby, šípy se od něj odrážejí). Všichni mají vlastní 3D model.
+- **10 vojenských výzkumů:** Pletené štíty, Skládaný luk, Kroužková zbroj, Opeřené šípy, Opevňování (hradby a věže +40 % životů, věže dostřel +2), Píky, Rytířství (jízda +20 % životů), Odvody (výcvik −25 %), Balistika a Stálé vojsko (vojsko jí o 30 % méně).
+- **Postoje jednotek:** útočný, obranný (krátká honička a návrat) a držet pozici (voják se nehne). Postoj se ukládá.
+- **Opevněné mosty:** na říčních mostech jde postavit palisádu, hradbu, bránu nebo věž.
+- **Chytřejší soupeř:** cvičí pestřejší vojsko včetně nových jednotek, zkoumá vojenské technologie, ustoupí, když útok vázne, lehkou jízdou přepadá karavany a cvičí si zvěda.
+- Nové testy jednotek, výzkumů, mostů a postojů.
+
 ## 1.8.0 – Živý svět
 
 - **Lokality, které jde držet:** navštívenou lokalitu obsadíš, když u ní tvoje jednotky vydrží 9 s bez soupeře; osadu a poutnický tábor jen vojáci (16 s). Když jsou u místa oba, nikdo nepostupuje. Držitel dostává každou sezónu příjem: osada jídlo a dřevo, tábor jídlo a dřevo, lom kámen, kovárna kov, ruiny vědění, hláska zlato a daleký výhled. Nad drženou lokalitou vlaje vlajka v barvě týmu a minimapa ji obarví.
