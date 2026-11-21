@@ -54,5 +54,9 @@ window.VEK_RELEASES = [
   {
     "id": "2.0.0",
     "description": "Kampaň: šest misí s vlastními cíli, 12 odznaků a graf průběhu partie."
+  },
+  {
+    "id": "2.1.0",
+    "description": "Spolu i proti sobě: spolupráce proti počítači, pozvánka odkazem, obnovení spojení a uložení síťové partie."
   }
 ];

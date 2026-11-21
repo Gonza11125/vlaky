@@ -6,8 +6,14 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0**, **1.7.1**, **1.8.0**, **1.9.0**, **1.10.0** a **2.0.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0**, **1.7.1**, **1.8.0**, **1.9.0**, **1.10.0**, **2.0.0** a **2.1.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 2.1.0 – Spolu i proti sobě
+
+Síťová hra umí **spolupráci proti počítači** (oba hráči jedna osada), přímé
+spojení jde navázat **odkazem**, po výpadku ho jde **obnovit** z Menu a hostitel
+může síťovou partii **uložit** a později v ní pokračovat.
 
 ## Novinky ve 2.0.0 – Kampaň
 

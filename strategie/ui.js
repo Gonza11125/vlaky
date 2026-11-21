@@ -487,7 +487,7 @@ function openMenu() {
   menuWasPaused = G.paused;
   if (G.mode === 'ai') restorePause(true);
   $('b-return').textContent = G.mode === 'ai' ? 'Uložit a zpět do nabídky' : 'Odpojit a zpět do nabídky';
-  $('pause-menu').hidden = false;
+  $('pause-menu').hidden = false; $('b-net-save').hidden = G.mode !== 'host'; netRejoinUi();
   $('b-resume').focus();
 }
 function closeMenu(restore = true) {
@@ -793,7 +793,7 @@ $('b-atmo-sound').onclick=async()=>{
   if(!$('city-panel').hidden)renderCity();
 };
 $('b-sound').onclick=async()=>{await atmoSetSound(!ATMOS.sound);$('b-sound').textContent=ATMOS.sound?'Zvuk ✓':'Zvuk';};
-const OPT = { diff: 1, aggr: 2, real: 0 };
+const OPT = { diff: 1, aggr: 2, real: 0, coop: 0 };
 for (const row of document.querySelectorAll('.opts')) row.onclick = e => { const b = e.target.closest('.pick'); if (!b) return; for (const x of row.children) x.classList.toggle('on', x === b); OPT[row.dataset.k] = +b.dataset.d; };
 function selectedMatch() {
   return matchOptions({ map: $('match-map').value, resources: +$('match-resources').value, stocks: +$('match-stocks').value,
@@ -807,8 +807,8 @@ const MAP_HINTS = { balanced: 'Louky, lesy i kopce v rovnováze.', forest: 'Hodn
 function syncMapPicks() { const v = $('match-map').value; for (const b of $('map-picks').children) b.classList.toggle('on', b.dataset.map === v); $('map-hint').textContent = MAP_HINTS[v] + ' Další volby partie najdeš v sekci Mapa a pravidla partie.'; }
 $('map-picks').onclick = e => { const b = e.target.closest('[data-map]'); if (!b) return; $('match-map').value = b.dataset.map; syncMapPicks(); describeMatch(); };
 $('match-map').addEventListener('change', syncMapPicks); syncMapPicks();
-function applyOpts() { if (!matchFormValid()) return false; G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; G.match = selectedMatch(); return true; }
-$('b-start').onclick = () => { if (!applyOpts()) return; G.campaign = null; netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
+function applyOpts() { if (!matchFormValid()) return false; G.diff = OPT.diff; G.aggr = OPT.aggr; G.real = !!OPT.real; G.coop = !!OPT.coop; G.match = selectedMatch(); return true; }
+$('b-start').onclick = () => { if (!applyOpts()) return; G.campaign = null; NET.resume = null; netReset(); netRemember(false); p2pClose(); G.mode = 'ai'; MY = 0; startFresh(); $('start').hidden = true; G.paused = false; msg('Začni jídlem a dřevem: keře, lov jelenů, ryby u břehu. V Sídle vyzkoumej Zemědělství, než přijde zima.'); };
 $('b-again').onclick = () => { $('end').hidden = true; netReset(); netStatus(); G.mode = 'ai'; MY = 0; G.campaign = null; startFresh(); $('start').hidden = false; G.paused = true; if (typeof renderCampaign === 'function') renderCampaign(); };
 // 2.0: spuštění mise z úvodní obrazovky i z konce partie
 function playMission(id) {
@@ -887,7 +887,8 @@ function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (_) { } 
 function makeSave() { return Object.assign(saveState(), { gameVersion: VEK_RELEASE.id, cam: { x: cam.x, z: cam.z, dist: cam.dist, yaw: cam.yaw } }); }
 let lastCloud = 0;
 function doSave(quiet) {
-  if (G.mode !== 'ai') { if (!quiet) msg('Hru po síti uložit nejde.', 'bad'); return false; }
+  if (G.mode === 'host' && !quiet) return netSaveGame();
+  if (G.mode !== 'ai') { if (!quiet) msg('Hru po síti ukládá ten, kdo ji založil.', 'bad'); return false; }
   if (G.over || !$('start').hidden) return false;
   let sv, str; try { sv = makeSave(); str = JSON.stringify(sv); } catch (e) { if (!quiet) msg('Uložení se nepovedlo.', 'bad'); return false; }
   let local = false; try { localStorage.setItem(SAVE_KEY, str); local = true; } catch (_) { }
@@ -1034,7 +1035,7 @@ function boot() {
   cityArtSetQuality(CITY_ART.quality);
   newGame(1);
   showSaveOffer();
-  $('b-host').onclick = netHost; $('b-join').onclick = netJoin; $('p2p').hidden = !window.RTCPeerConnection; $('p-host').onclick = p2pHost; $('p-guest').onclick = p2pGuest; $('p-go').onclick = p2pGo; $('p-copy').onclick = p2pCopy; netBoot();
+  $('b-host').onclick = netHost; $('b-join').onclick = netJoin; $('p2p').hidden = !window.RTCPeerConnection; $('p-host').onclick = p2pHost; $('p-guest').onclick = p2pGuest; $('p-go').onclick = p2pGo; $('p-copy').onclick = p2pCopy; $('p-link').onclick = p2pCopyLink; $('b-rejoin').onclick = netRejoin; $('b-net-save').onclick = netSaveGame; $('b-host-resume').onclick = netResumeToggle; netBoot(); netResumeUi(); setTimeout(p2pFromLink, 600); addEventListener('hashchange', () => { if (!$('start').hidden) p2pFromLink(); });
   cam.x = ME().tcx; cam.z = ME().tcz + 4; if (view.clientWidth < 760) cam.dist = 84;
   document.addEventListener('gesturestart', e => e.preventDefault());
   resize(); applySnow(0); snowShown = 0;

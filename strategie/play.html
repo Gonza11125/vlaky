@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku 2.0 – Kampaň</title>
+<title>Věk pokroku 2.1 – Spolu i proti sobě</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -288,7 +288,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
-      <p class="lead"><b>Věk pokroku 2.0:</b> kampaň o šesti misích, odznaky a graf průběhu každé partie.</p>
+      <p class="lead"><b>Věk pokroku 2.1:</b> spolupráce proti počítači, pozvánka odkazem, obnovení spojení a uložení síťové partie. Kampaň o šesti misích a odznaky.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
@@ -305,6 +305,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <li><b>Lokality a události (1.8):</b> navštívenou lokalitu obsadíš, když u ní tvoje jednotky vydrží bez soupeře (osadu a tábor jen vojáci), nebo s osadou uzavřeš spojenectví v panelu Svět (M). Držitel dostává každou sezónu suroviny, z hlásky vidí daleko. Občas přijede obchodník s nabídkou, přijdou uprchlíci nebo zaútočí lapkové z ruin.</li>
         <li><b>Vojsko (1.9):</b> Zvěd (Sídlo), Prakovník, Sekerník na stavby, Pikenýr proti jízdě, Válečný vůz proti střelcům, Jízdní lučištník, Dragoun a Beranidlo na brány. Vybraným vojákům nastavíš postoj: útočný, obranný nebo držet pozici. Na mosty jde postavit palisádu, hradbu, bránu nebo věž.</li>
         <li><b>Kampaň (2.0):</b> šest misí s vlastní mapou, soupeřem a cílem; další se odemkne po splnění předchozí. Průběh mise je v horní liště. Za úspěchy ve všech partiích sbíráš odznaky a na konci partie vidíš graf obyvatel a vojska.</li>
+        <li><b>Hra ve dvou (2.1):</b> při zakládání vyber Proti sobě nebo Spolu proti počítači. Přímé spojení jde poslat odkazem; když spadne, obnovíš ho v Menu. Hostitel může síťovou partii uložit a pokračovat v ní později.</li>
         <li><b>Svět kolem tebe:</b> během každé partie se střídá den a noc. Za soumraku se ve městě rozsvěcují světla. Zvuk spustíš tlačítkem Zvuk, vzhled i výkon měníš v panelu Město.</li>
         <li><b>Hospodářství:</b> tlačítkem Ekonomika (K) zobrazíš toky surovin, rezervy, výrobny a jejich výkon. V realistickém režimu obsazuj mlýny, pekárny a hutě řemeslníky.</li>
         <li><b>Chléb místo zeleniny.</b> Na dokončeném poli přepni plodinu na obilí. Mlýn z něj mele mouku a Pekárna s trochou dřeva vyrobí dvojnásobek jídla. Nech si i přímé zdroje jídla, než se řetězec rozběhne.</li>
@@ -360,8 +361,13 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       </div>
       <p class="hint">V obou režimech funguje správa osady, pracovní priority, automatické přidělování práce a pěšiny. Jen realistický režim přidává spokojenost obyvatel, chátrání staveb a náklady na opravy. Realistický režim má bohatší grafiku s počasím a denním světlem a přidává pohromy: povodně, nemoci, požáry, sucho, mráz a kažení zásob. K nim patří nové stavby a objevy, kterými se dá bránit.</p>
       <h2>Hra proti člověku po síti</h2>
+      <div class="row opts" data-k="coop">
+        <button class="pick on" data-d="0">Proti sobě</button><button class="pick" data-d="1">Spolu proti počítači</button>
+      </div>
+      <p class="hint">Ve spolupráci ovládáte oba jednu modrou osadu a počítač hraje za červené (obtížnost a agrese podle nastavení výše). Režim vybírá ten, kdo hru zakládá.</p>
       <div class="row" style="align-items:center">
         <button class="pick" id="b-host" disabled>Založit hru</button>
+        <button class="pick" id="b-host-resume" hidden>Pokračovat v uložené síťové partii</button>
         <label for="net-code" class="hint" style="margin:0">nebo kód soupeře:</label>
         <input id="net-code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
         <button class="pick" id="b-join" disabled>Připojit se</button>
@@ -372,7 +378,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <p class="hint">Funguje i přes veřejný odkaz a bez přihlášení, nejlíp když jste na stejné Wi-Fi. 1) Jeden klikne na <b>Vytvořit pozvánku</b> a pošle text druhému (WhatsApp, SMS). 2) Druhý klikne na <b>Mám pozvánku</b>, vloží ji, klikne na <b>Odpovědět</b> a pošle svůj text zpátky. 3) První ho vloží a klikne na <b>Spojit</b>.</p>
         <div class="row"><button class="pick" id="p-host">Vytvořit pozvánku</button><button class="pick" id="p-guest">Mám pozvánku</button></div>
         <textarea id="p-text" hidden spellcheck="false" autocomplete="off" placeholder="Sem vlož text od soupeře"></textarea>
-        <div class="row" id="p-btns" hidden><button class="pick" id="p-copy">Kopírovat / poslat</button><button class="pick on" id="p-go">Spojit</button></div>
+        <div class="row" id="p-btns" hidden><button class="pick" id="p-copy">Kopírovat / poslat</button><button class="pick" id="p-link" hidden>Poslat odkaz</button><button class="pick on" id="p-go">Spojit</button></div>
         <p class="hint" id="p-status"></p>
       </details>
       <div class="row" style="align-items:center"><button class="go" id="b-start">Začít novou hru</button><button class="go alt" id="b-continue" hidden>Pokračovat v uložené hře</button><button class="go alt" id="b-import">Nahrát hru ze souboru</button></div>
@@ -513,8 +519,10 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
       <div class="row" style="gap:12px;flex-wrap:wrap">
         <button class="go" id="b-resume">Pokračovat ve hře</button>
         <button class="go alt" id="b-return">Zpět do hlavní nabídky</button>
+        <button class="go alt" id="b-rejoin" hidden>Obnovit spojení se soupeřem</button>
+        <button class="go alt" id="b-net-save" hidden>Uložit síťovou partii</button>
       </div>
-      <p class="hint">Odchod ze síťové partie ukončí spojení se soupeřem; síťovou hru nelze uložit.</p>
+      <p class="hint">Odchod ze síťové partie ukončí spojení se soupeřem. Kdo partii založil, ji může uložit a později v ní se soupeřem pokračovat.</p>
     </div>
   </div>
 

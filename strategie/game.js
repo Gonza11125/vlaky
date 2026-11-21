@@ -5,8 +5,11 @@ let cityRoadDirty = true, cityRoadMesh = null, cityRoadCells = [];
 const G = { time: 0, speed: 1, paused: true, over: false, diff: 1, snow: 0, aggr: 2, real: false, mode: 'ai', match: matchOptions() };
 let MY = 0;                                 // tým místního hráče
 const NET = { role: null, code: '', out: [], shots: [], log: [] };
-function say(team, text, cls) { if (team === MY) msg(text, cls); else if (G.mode === 'host') NET.out.push([text, cls || '']); }
-function sayAlert(t) { if (t.team === MY) alertAttack(t.x, t.z, t.isB); else if (G.mode === 'host') NET.out.push(['!', Math.round(t.x), Math.round(t.z), t.isB ? 1 : 0]); }
+// 2.1: ve spolupráci je host i host na hostově straně (tým 0) a počítač hraje za tým 1
+const aiOn = () => G.mode === 'ai' || (G.mode === 'host' && !!G.coop);
+const peerTeam = () => G.coop ? 0 : 1;
+function say(team, text, cls) { if (team === MY) msg(text, cls); if (G.mode === 'host' && team === peerTeam()) NET.out.push([text, cls || '']); }
+function sayAlert(t) { if (t.team === MY) alertAttack(t.x, t.z, t.isB); if (G.mode === 'host' && t.team === peerTeam()) NET.out.push(['!', Math.round(t.x), Math.round(t.z), t.isB ? 1 : 0]); }
 const AGG = [0.35, 0.7, 1, 1.25], AGT = [99, 1.8, 1, 0.7];
 const aiFirstAttack = () => [600, 450, 330][G.diff] * AGT[G.aggr];
 const MAXPOP = 90;
@@ -1033,11 +1036,11 @@ function gatherRate(u, n) {
   if (n.type === 'meat' && T.tech.traps) r *= 1.3;
   if (T.hungry) r *= 0.6;
   if (u.sick > 0) r *= 0.5;
-  if (u.team === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff];
+  if (u.team === 1 && aiOn()) r *= [0.8, 1, 1.3][G.diff];
   if (G.real) r *= 0.85 + cityState(T).morale / 100 * 0.15;
   return r*professionBonus(u,'gather');
 }
-function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && G.mode === 'ai') r *= [0.8, 1, 1.3][G.diff]; if (G.real) r *= 0.85 + cityState(T).morale / 100 * 0.15; return r; }
+function farmRate(T) { let r = 0.42 * FARM_SEASON[season()]; if (T.tech.plow) r *= 1.3; if (T.tech.threefield) r *= 1.3; if (T.hungry) r *= 0.7; if (EV.drought) r *= 0.45; if (T.id === 1 && aiOn()) r *= [0.8, 1, 1.3][G.diff]; if (G.real) r *= 0.85 + cityState(T).morale / 100 * 0.15; return r; }
 function toDrop(u, o) { o.drop = nearestDrop(u); if (!o.drop) { u.order = null; return; } o.phase = 'drop'; pathToB(u, o.drop); }
 function nextNode(u, o) {
   const n = nearestNode(o.node.type, o.node.x, o.node.z, 30);
@@ -1607,7 +1610,7 @@ function simStep(dt) {
   for (const T of teams) econ(T, dt);
   for (const T of teams) cityRoutine(T, dt);
   if (G.real) realTick(dt);
-  AI.acc += dt; if (AI.acc >= 1) { AI.acc = 0; if (G.mode === 'ai') aiTick(); }
+  AI.acc += dt; if (AI.acc >= 1) { AI.acc = 0; if (aiOn()) aiTick(); }
   for (let i = units.length - 1; i >= 0; i--) if (units[i].dead) units.splice(i, 1);
   for (let i = blds.length - 1; i >= 0; i--) if (blds[i].dead) blds.splice(i, 1);
   checkVictory();
@@ -1615,7 +1618,7 @@ function simStep(dt) {
 }
 function checkVictory() {
   if (G.over) return;
-  if (G.match.goal === 'survival' && G.time >= G.match.years * SEASON_LEN * 4) endGame(G.mode === 'ai' ? 1 : -1, 'Cíl přežití splněn.');
+  if (G.match.goal === 'survival' && G.time >= G.match.years * SEASON_LEN * 4) endGame(aiOn() ? 1 : -1, 'Cíl přežití splněn.');
   if (G.match.goal === 'development') {
     const winners = teams.filter(T => T.era >= 2 && T.pop >= 20 && T.res.food >= 300 && T.res.gold >= 100);
     if (winners.length) endGame(winners.length === 2 ? -1 : 1 - winners[0].id, 'Cíl rozvoje splněn.');
@@ -1697,7 +1700,7 @@ function saveState() {
   for (let i = 0; i < N * N; i++) if (explored[i]) bytes[i >> 3] |= 1 << (i & 7);
   for (let i = 0; i < bytes.length; i++) bits += String.fromCharCode(bytes[i]);
   return {
-    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match, campaign: G.campaign || null, hist: Array.isArray(G.hist) ? G.hist : [] },
+    v: 1, seed: G.seed, saved: Date.now(), nextId, G: { time: G.time, speed: G.speed, diff: G.diff, snow: G.snow, aggr: G.aggr, real: G.real, match: G.match, campaign: G.campaign || null, coop: !!G.coop, hist: Array.isArray(G.hist) ? G.hist : [] },
     AI: { attackAt: AI.attackAt, wave: AI.wave, launch: AI.launch }, EV: Object.assign({}, EV), flood: G.flood, PRICE: Object.assign({}, PRICE), explored: btoa(bits),
     teams: teams.map(T => ({ city: cityState(T), economy: economyState(T), res: T.res, tech: T.tech, busy: T.busy, era: T.era, hungry: T.hungry, starve: T.starve, stats: T.stats, tcx: T.tcx, tcz: T.tcz })),
     frontier: typeof frontierSave==='function'?frontierSave():[],

@@ -357,7 +357,7 @@ function frontierEvent(){
       const offer=FRONTIER_OFFERS[Math.floor(Math.random()*FRONTIER_OFFERS.length)];
       const e={id:id*2+team,type:'merchant',team,give:offer.give,get:offer.get,until:G.time+75,done:false};ev.push(e);
       say(team,'Do osady dorazil putující obchodník: nabízí '+frontierList(e.get)+' za '+frontierList(e.give)+'. Obchod uzavřeš v panelu Svět (M).','good');
-      if(team===1&&G.mode==='ai'){const T=teams[1],[k]=Object.keys(e.get);if(T.res[k]<200&&Object.keys(e.give).every(g=>T.res[g]>=e.give[g]+60))frontierMerchant(1,e.id);}
+      if(team===1&&aiOn()){const T=teams[1],[k]=Object.keys(e.get);if(T.res[k]<200&&Object.keys(e.give).every(g=>T.res[g]>=e.give[g]+60))frontierMerchant(1,e.id);}
     }
   } else if(roll<0.75&&G.time>SEASON_LEN*8){
     const ruins=FRONTIER.sites.find(s=>s.kind==='ruins');

@@ -1,5 +1,13 @@
 # Vydání Věku pokroku
 
+## 2.1.0 – Spolu i proti sobě
+
+- **Spolupráce proti počítači:** při zakládání síťové hry jde vybrat „Spolu proti počítači“. Oba hráči ovládají jednu modrou osadu, počítač hraje za červené podle zvolené obtížnosti a agrese. Zprávy a varování dostávají oba.
+- **Pozvánka odkazem:** u přímého spojení stačí poslat odkaz; soupeřovi se po otevření sama připraví odpověď, kterou pošle zpátky.
+- **Obnovení spojení:** když přímé spojení spadne, v Menu je tlačítko Obnovit spojení se soupeřem. Hra běží dál a po novém propojení dostane soupeř celý aktuální stav.
+- **Uložení síťové partie:** kdo hru založil, ji uloží (tlačítko Uložit nebo Menu) a později v ní se soupeřem pokračuje tlačítkem Pokračovat v uložené síťové partii.
+- Testy spolupráce; síťový průběh ověřen ve dvou prohlížečích (odkaz, výpadek, obnovení, pokračování).
+
 ## 2.0.0 – Kampaň
 
 - **Kampaň o šesti misích:** Pazourek a oheň (přečkej první zimu), Věk bronzu (doba bronzová do 14 minut), Mosty přes řeku (drž 3 lokality), Obrana údolí (vydrž 10 minut proti útočnému soupeři), Hedvábná stezka (250 zlata z karavan) a Poslední bitva (dobytí na těžkou). Každá mise má vlastní mapu, soupeře a ochranu; další se odemkne po splnění předchozí. Pamatuje se nejlepší čas.

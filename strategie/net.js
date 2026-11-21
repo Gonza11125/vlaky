@@ -92,13 +92,19 @@ function p2pClose() { if (NET.pc) { try { NET.pc.close(); } catch (e) { } } NET.
 function p2pWire(ch, role) {
   ch.onopen = () => {
     if (NET.rtc && NET.rtc !== ch) return;
+    NET.wasP2P = true;
+    if (P2P.rejoin && NET.started && NET.role === role) {   // 2.1: obnovené spojení uprostřed partie
+      NET.rtc = ch; P2P.rejoin = false; P2P.mode = 'open'; NET.peerAt = performance.now();
+      if (role === 'guest') { NET.started = false; NET.helloT = 0; NET.hinted = true; NET.parts = null; }
+      el('start').hidden = true; G.paused = false; p2pUi('', '', null, null, false); msg('Spojení se soupeřem je obnovené.', 'good'); netRejoinUi(); return;
+    }
     NET.rtc = ch; netReset(); netRemember(false); NET.role = role; NET.code = 'VEK1'; P2P.mode = 'open';
     if (role === 'guest') { NET.helloT = 0; NET.joinAt = performance.now(); NET.hinted = true; }
     p2pUi('Spojeno! ' + (role === 'host' ? 'Hra začíná…' : 'Načítám hru…'), 'ok', null, null, false);
     netStatus('Spojeno napřímo se soupeřem.');
   };
   ch.onmessage = e => { let d = null; try { d = JSON.parse(e.data); } catch (x) { return; } netIn(d); };
-  ch.onclose = () => { if (NET.rtc !== ch) return; NET.rtc = null; if (NET.started) msg('Přímé spojení se soupeřem se přerušilo.', 'bad'); else p2pUi('Spojení se přerušilo. Zkuste to znovu od začátku.', 'bad', null, null, false); };
+  ch.onclose = () => { if (NET.rtc !== ch) return; NET.rtc = null; if (NET.started) { msg('Přímé spojení se soupeřem se přerušilo. Obnovíš ho v Menu → Obnovit spojení.', 'bad'); netRejoinUi(); } else p2pUi('Spojení se přerušilo. Zkuste to znovu od začátku.', 'bad', null, null, false); };
 }
 function p2pWatch(pc) {
   pc.onconnectionstatechange = () => { if (pc !== NET.pc) return; if (pc.connectionState === 'failed') p2pUi('Napřímo se spojit nepodařilo. Zkuste být oba na stejné Wi-Fi a začněte znovu novou pozvánkou.', 'bad', null, null, false); };
@@ -106,18 +112,19 @@ function p2pWatch(pc) {
 async function p2pHost() {
   if (!matchFormValid()) return;
   if (!window.RTCPeerConnection) { p2pUi('Tenhle prohlížeč přímé spojení neumí.', 'bad', null, null, false); return; }
-  p2pClose(); netReset(); P2P.mode = 'host'; p2pUi('Připravuji pozvánku…', '', '', null, false);
+  p2pClose(); if (!P2P.rejoin) netReset(); P2P.mode = 'host'; p2pUi('Připravuji pozvánku…', '', '', null, false);
   try {
     const pc = NET.pc = new RTCPeerConnection({ iceServers: ICE }); p2pWatch(pc); p2pWire(pc.createDataChannel('vek'), 'host');
     await pc.setLocalDescription(await pc.createOffer()); await iceDone(pc); if (pc !== NET.pc) return;
     el('p-text').readOnly = true;
-    p2pUi('1) Pošli tenhle text soupeři. 2) Až ti pošle odpověď, klikni na Vložit odpověď, vlož ji a klikni na Spojit.', '', await packSdp('o', pc.localDescription.sdp), 'Vložit odpověď', true);
+    p2pUi('1) Pošli soupeři odkaz (nebo celý text). Odkaz mu po otevření sám připraví odpověď. 2) Až ti pošle odpověď, klikni na Vložit odpověď, vlož ji a klikni na Spojit.', '', await packSdp('o', pc.localDescription.sdp), 'Vložit odpověď', true);
+    el('p-link').hidden = false;
     P2P.mode = 'hostOffer';
   } catch (e) { p2pUi('Pozvánku se nepodařilo vytvořit (' + (e && e.name || 'chyba') + ').', 'bad', null, null, false); }
 }
 function p2pGuest() {
   if (!window.RTCPeerConnection) { p2pUi('Tenhle prohlížeč přímé spojení neumí.', 'bad', null, null, false); return; }
-  p2pClose(); netReset(); P2P.mode = 'guest'; el('p-text').readOnly = false;
+  p2pClose(); if (!P2P.rejoin) netReset(); P2P.mode = 'guest'; el('p-text').readOnly = false;
   p2pUi('Vlož sem pozvánku od soupeře a klikni na Odpovědět.', '', '', 'Odpovědět', true); el('p-text').focus();
 }
 async function p2pGo() {
@@ -164,10 +171,16 @@ function netJoin() {
 }
 function hostStart() {
   G.campaign = null;
-  if (!applyOpts()) return; G.mode = 'host'; MY = 0; G.speed = 1; el('b-speed').textContent = '1×';
-  startFresh(); NET.started = true; NET.log = []; NET.out = []; NET.shots = []; NET.ack = 0; netRemember(false);
+  const resume = NET.resume; NET.resume = null;
+  if (resume) {   // 2.1: pokračování v uložené síťové partii
+    G.mode = 'host'; MY = 0; resetView();
+    try { newGame(0, resume); } catch (e) { msg('Uloženou síťovou partii se nepodařilo načíst.', 'bad'); return; }
+    if (resume.cam) Object.assign(cam, resume.cam);
+    G.speed = 1; el('b-speed').textContent = '1×';
+  } else { if (!applyOpts()) return; G.mode = 'host'; MY = 0; G.speed = 1; el('b-speed').textContent = '1×'; startFresh(); }
+  NET.started = true; NET.log = []; NET.out = []; NET.shots = []; NET.ack = 0; netRemember(false);
   el('start').hidden = true; G.paused = false;
-  msg('Soupeř se připojil. Hraješ za modré, on za červené.', 'good');
+  msg(resume ? 'Spoluhráč se připojil, pokračujete v uložené partii.' : G.coop ? 'Spoluhráč se připojil. Oba ovládáte modrou osadu proti počítači.' : 'Soupeř se připojil. Hraješ za modré, on za červené.', 'good');
 }
 function sendInit() {
   const now = performance.now(); if (now - NET.lastInit < 2500) return; NET.lastInit = now;
@@ -176,11 +189,11 @@ function sendInit() {
 }
 function guestStart(sv) {
   sv.explored = ''; for (const b of sv.blds) b.seen = false;
-  G.mode = 'guest'; MY = 1; resetView();
+  G.mode = 'guest'; MY = sv.G && sv.G.coop ? 0 : 1; resetView();
   newGame(0, sv);
   G.speed = 1; el('b-speed').textContent = '1×';
   NET.logN = sv.logN || 0; NET.started = true; NET.parts = null; NET.ug = null; NET.bg = null; netRemember(false);
-  cam.x = teams[1].tcx; cam.z = teams[1].tcz + 4; cam.yaw = 0;
+  cam.x = teams[MY].tcx; cam.z = teams[MY].tcz + 4; cam.yaw = 0;
   el('start').hidden = true; G.paused = false;
   msg('Připojeno. Hraješ za červené, soupeř za modré.', 'good');
 }
@@ -195,7 +208,7 @@ function hostIn(d) {
   if (d.t === 'hello') { NET.peerAt = performance.now(); if (!NET.started) hostStart(); sendInit(); return; }
   if (d.t !== 'c' || !NET.started || !Array.isArray(d.l)) return;
   NET.peerAt = performance.now();
-  for (const it of d.l.slice(0, 20)) { if (!Array.isArray(it) || it[0] !== NET.ack + 1 || !Array.isArray(it[1])) continue; NET.ack = it[0]; try { execCmd(1, it[1]); } catch (e) { } }
+  for (const it of d.l.slice(0, 20)) { if (!Array.isArray(it) || it[0] !== NET.ack + 1 || !Array.isArray(it[1])) continue; NET.ack = it[0]; try { execCmd(peerTeam(), it[1]); } catch (e) { } }
 }
 function guestIn(d) {
   if (d.t === 'i') {
@@ -284,8 +297,8 @@ function hostTick() {
   if (i % 10 === 1) sendChunks('b', blds, encB, 85);
   if (i % 5 === 2) netSend({
     t: 's', time: r1(G.time), fl: r1(G.flood || 0), rn: G.rain || 0, dr: EV.drought ? 1 : 0, fr: EV.frost ? 1 : 0, ack: NET.ack, over: G.over ? G.loser : -2, reason: G.endReason,
-    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, city: { auto: cityState(T).auto, maintenance: cityState(T).maintenance, priorities: cityState(T).priorities, morale: cityState(T).morale, reserves: cityState(T).reserves }, economy: economyState(T), stats: T.stats, tech: k === 1 ? Object.keys(T.tech) : undefined, busy: k === 1 ? Object.keys(T.busy) : undefined })),
-    q: blds.filter(b => b.team === 1 && b.queue.length).slice(0, 12).map(b => [b.id, b.queue.map(q => [q.kind, q.id, r1(q.t), q.total])]),
+    T: teams.map((T, k) => ({ r: RES.map(r => Math.floor(T.res[r])), era: T.era, pop: T.pop, cap: T.cap, h: T.hungry ? 1 : 0, cold: T.cold ? 1 : 0, city: { auto: cityState(T).auto, maintenance: cityState(T).maintenance, priorities: cityState(T).priorities, morale: cityState(T).morale, reserves: cityState(T).reserves }, economy: economyState(T), stats: T.stats, tech: k === peerTeam() ? Object.keys(T.tech) : undefined, busy: k === peerTeam() ? Object.keys(T.busy) : undefined })),
+    q: blds.filter(b => b.team === peerTeam() && b.queue.length).slice(0, 12).map(b => [b.id, b.queue.map(q => [q.kind, q.id, r1(q.t), q.total])]),
     frontier: frontierSave(),
     pr: { food: Math.round(PRICE.food), wood: Math.round(PRICE.wood), stone: Math.round(PRICE.stone), metal: Math.round(PRICE.metal) }, m: NET.out.splice(0, 5),
   });
@@ -310,4 +323,40 @@ function netFrame(now, dt) {
   const quiet = NET.peerAt && now - NET.peerAt > 9000;
   if (quiet && !NET.lost) { NET.lost = true; msg(NET.role === 'host' ? 'Soupeř neodpovídá. Hra běží dál.' : 'Hostitel neodpovídá. Čekám na spojení…', 'bad'); }
   else if (!quiet && NET.lost) { NET.lost = false; msg('Spojení obnoveno.', 'good'); }
+}
+
+// ---------- 2.1: odkaz s pozvánkou, obnovení spojení a uložená síťová partie ----------
+function p2pInviteLink() { const t = el('p-text').value.trim(); return /^VEKo/.test(t) ? location.href.split('#')[0] + '#vek-pozvanka=' + t : ''; }
+async function p2pCopyLink() {
+  const link = p2pInviteLink(); if (!link) return;
+  if (navigator.share) { try { await navigator.share({ text: 'Pojď si zahrát Věk pokroku: ' + link }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(link); el('p-status').textContent = 'Odkaz zkopírován. Pošli ho soupeři a počkej na jeho odpověď.'; } catch (e) { el('p-text').value = link; el('p-text').select(); el('p-status').textContent = 'Odkaz je v poli, zkopíruj ho ručně.'; }
+}
+// Soupeř otevřel odkaz s pozvánkou: připrav odpověď sám.
+function p2pFromLink() {
+  const m = /#vek-pozvanka=(VEKo[0-9A-Za-z_-]+)/.exec(location.hash || ''); if (!m || !window.RTCPeerConnection) return;
+  try { history.replaceState(null, '', location.href.split('#')[0]); } catch (e) { }
+  const box = el('p2p'); if (box) { box.open = true; box.scrollIntoView({ block: 'center' }); }
+  p2pGuest(); el('p-text').value = m[1]; p2pGo();
+}
+function netRejoinUi() { const b = el('b-rejoin'); if (b) b.hidden = !(NET.wasP2P && NET.started && !(NET.rtc && NET.rtc.readyState === 'open')); }
+function netRejoin() {
+  if (!NET.started || !NET.role) return;
+  P2P.rejoin = true; el('pause-menu').hidden = true; el('start').hidden = false;
+  const box = el('p2p'); if (box) { box.hidden = false; box.open = true; box.scrollIntoView({ block: 'center' }); }
+  if (NET.role === 'host') p2pHost(); else p2pGuest();
+  netStatus('Obnovení spojení: hra mezitím běží dál. ' + (NET.role === 'host' ? 'Pošli soupeři novou pozvánku.' : 'Vlož novou pozvánku od hostitele.'));
+}
+const NET_SAVE_KEY = () => SAVE_KEY + '-sit';
+function netSaveGame() {
+  if (G.mode !== 'host' || !NET.started || G.over) { msg('Síťovou partii ukládá jen ten, kdo ji založil.', 'bad'); return false; }
+  try { const sv = makeSave(); sv.net = true; localStorage.setItem(NET_SAVE_KEY(), JSON.stringify(sv)); msg('Síťová partie uložena v tomto prohlížeči. Pokračovat v ní můžete z úvodní obrazovky.', 'good'); netResumeUi(); return true; }
+  catch (e) { msg('Uložení síťové partie se nepovedlo.', 'bad'); return false; }
+}
+function netSavedGame() { try { const sv = JSON.parse(localStorage.getItem(NET_SAVE_KEY()) || 'null'); return sv && saveValid(sv) && saveMatchesVersion(sv) ? sv : null; } catch (e) { return null; } }
+function netResumeUi() { const b = el('b-host-resume'), sv = netSavedGame(); if (!b) return; b.hidden = !sv; if (sv) b.textContent = (NET.resume ? '✓ ' : '') + 'Pokračovat v uložené síťové partii (rok ' + (Math.floor(sv.G.time / (SEASON_LEN * 4)) + 1) + ')'; }
+function netResumeToggle() {
+  const sv = netSavedGame(); if (!sv) return;
+  NET.resume = NET.resume ? null : sv; netResumeUi();
+  netStatus(NET.resume ? 'Pokračuje se v uložené síťové partii. Teď klikni na Založit hru, nebo na Vytvořit pozvánku u přímého spojení.' : '');
 }
