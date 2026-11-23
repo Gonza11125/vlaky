@@ -84,3 +84,14 @@ test('graphics facade and rig have bounded budgets and pooled geometries',()=>{
  assert.match(code,/Math\.hypot\(u\.x-cam\.x,u\.z-cam\.z\)<range/);
  assert.match(code,/RENAISSANCE\.corpses\.length>=12/);
 });
+
+test('distant rigs can be evicted and visual budget reused without touching simulation',()=>{
+ const {run}=make();
+ // Pure range decision uses only camera position and visibility.
+ run("cam={x:5,z:5};const e={x:8,z:9,mesh:{visible:true}}");
+ assert.equal(run('renaissanceOutOfRange(e,6)'),false);
+ assert.equal(run('renaissanceOutOfRange(e,4)'),true);
+ run('e.mesh.visible=false');
+ assert.equal(run('renaissanceOutOfRange(e,100)'),true);
+ assert.equal(run("G.speed=2;RENAISSANCE.rigs=92;G.speed"),2);
+});

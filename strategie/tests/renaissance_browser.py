@@ -102,6 +102,22 @@ def main():
                     }""")
                     assert tier['hidden'] and tier['restored'] and tier['still'],tier
                     assert tier['noGameplayChange'],tier
+                    # Long sessions must recycle off-screen visual detail budgets.
+                    recycling=page.evaluate("""() => {
+                        const u=units.find(u=>u.team===0&&u.type==='vil');
+                        const b=byId.get(window.renHouse);
+                        cam.x=u.x;cam.z=u.z;
+                        renaissanceFrame(8,0.05);
+                        const old=RENAISSANCE.rigs;
+                        cam.x=100000;cam.z=100000;
+                        renaissanceFrame(9,0.05);
+                        const evicted=!u.renRig&&!b.renFacade;
+                        const released=RENAISSANCE.rigs<old;
+                        cam.x=u.x;cam.z=u.z;
+                        renaissanceFrame(10,0.05);
+                        return {evicted,released,recreated:!!u.renRig};
+                    }""")
+                    assert recycling['evicted'] and recycling['released'] and recycling['recreated'],recycling
                     page.locator('#b-city').click()
                     page.locator('#renaissance-enable').uncheck()
                     assert page.evaluate("RENAISSANCE.enabled===false")

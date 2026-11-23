@@ -364,12 +364,33 @@ function renaissanceAnimateRig(u,t,dt){
   const wanted=u.type==='vil'?(work?(['build','farm','craft','gather'].includes(kind)?kind:'gather'):null):'attack';
   for(const [key,tool] of Object.entries(r.tools))tool.visible=key===wanted;
 }
+// Modely mimo dosah musí uvolnit rozpočet pro nově objevené části mapy.
+// Bez této recyklace by při delší hře původních 92 rigů zůstalo přidělených
+// dávno vzdáleným jednotkám a blízké postavy by zůstaly bez nových animací.
+function renaissanceOutOfRange(e,distance){
+  return !e.mesh||!e.mesh.visible||Math.hypot(e.x-cam.x,e.z-cam.z)>distance;
+}
+function renaissanceRecycleDistant(high,unitRange,facadeRange){
+  // Přepnutí kvality během hry ponechá již vytvořené modely vypnuté,
+  // aby je bylo možné okamžitě vrátit; uvolňujeme jen při zapnutých detailech.
+  if(!high)return;
+  for(const u of units)if((u.renRig||u.renVehicle)&&
+    renaissanceOutOfRange(u,unitRange+16)){
+    renaissanceRemove(u);
+    if(u.mesh)u.mesh.material=u.sick>0?sickMat:unitMat;
+  }
+  for(const b of blds)if(b.renFacade&&
+    renaissanceOutOfRange(b,facadeRange+20))renaissanceRemove(b);
+}
+
 function renaissanceFrame(t,dt){
   if(!scene||!terrain||!teams.length)return;
   const motionDt=G.paused?0:dt;
   RENAISSANCE.visualTime=(RENAISSANCE.visualTime||0)+motionDt;
   t=RENAISSANCE.visualTime;
   const high=renaissanceDetail(),range=G.coarse?39:68;
+  const facadeRange=G.coarse?50:96;
+  renaissanceRecycleDistant(high,range,facadeRange);
   let activeUnits=0,activeBuildings=0;
   const sunDown=typeof atmoClock==='function'?atmoClock(G.time).day<0.35:false;
   // Jednotky: detailní procedurální rig do blízkosti kamery, jinde původní mesh.
@@ -409,7 +430,7 @@ function renaissanceFrame(t,dt){
   // Architektonické detaily jsou volitelné a časově omezené vzdáleností.
   for(const b of blds){
     if(b.dead||!b.mesh)continue;
-    const close=high&&b.done&&b.mesh.visible&&Math.hypot(b.x-cam.x,b.z-cam.z)<(G.coarse?50:96)
+    const close=high&&b.done&&b.mesh.visible&&Math.hypot(b.x-cam.x,b.z-cam.z)<facadeRange
       &&activeBuildings<Math.min(RENAISSANCE.buildingLimit,G.coarse?22:44);
     if(close){
       const era=teams[b.team]&&teams[b.team].era;
