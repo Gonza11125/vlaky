@@ -118,6 +118,21 @@ def main():
                         return {evicted,released,recreated:!!u.renRig};
                     }""")
                     assert recycling['evicted'] and recycling['released'] and recycling['recreated'],recycling
+                    # Auto quality on touch devices retains a small near-camera
+                    # visual layer; an explicit Low setting still fully disables it.
+                    lite=page.evaluate("""() => {
+                        const u=units.find(x=>x.team===0&&x.type==='vil');
+                        cam.x=u.x;cam.z=u.z;
+                        G.coarse=true;cityArtSetQuality('auto');
+                        renaissanceFrame(10.5,0.05);
+                        const auto=renaissanceDetail()&&!!u.renRig&&u.renRig.group.visible;
+                        const budget=RENAISSANCE.stats.units<=9&&RENAISSANCE.stats.buildings<=8;
+                        cityArtSetQuality('low');renaissanceFrame(10.6,0.05);
+                        const low=!renaissanceDetail()&&!u.renRig.group.visible;
+                        G.coarse=false;cityArtSetQuality('high');renaissanceFrame(10.7,0.05);
+                        return {auto,budget,low};
+                    }""")
+                    assert all(lite.values()),lite
                     page.locator('#b-city').click()
                     page.locator('#renaissance-enable').uncheck()
                     assert page.evaluate("RENAISSANCE.enabled===false")

@@ -22,7 +22,11 @@ function renaissanceSet(key,v){
   return true;
 }
 function renaissanceDetail(){
-  return RENAISSANCE.enabled&&cityArtQuality()!=='low';
+  if(!RENAISSANCE.enabled)return false;
+  if(cityArtQuality()!=='low')return true;
+  // Na dotykovém zařízení nabídni malou sadu detailních objektů
+  // i při výchozím Auto. Výslovná volba Nízká detaily stále vypne.
+  return !!G.coarse && typeof CITY_ART!=='undefined' && CITY_ART.quality==='auto';
 }
 function renaissanceUnitClass(u){
   if(u.def.cls==='siege'||u.def.cls==='cav'||u.def.cls==='trade'||u.def.mount)return 'vehicle';
@@ -388,8 +392,8 @@ function renaissanceFrame(t,dt){
   const motionDt=G.paused?0:dt;
   RENAISSANCE.visualTime=(RENAISSANCE.visualTime||0)+motionDt;
   t=RENAISSANCE.visualTime;
-  const high=renaissanceDetail(),range=G.coarse?39:68;
-  const facadeRange=G.coarse?50:96;
+  const high=renaissanceDetail(),range=G.coarse?30:68;
+  const facadeRange=G.coarse?40:96;
   renaissanceRecycleDistant(high,range,facadeRange);
   let activeUnits=0,activeBuildings=0;
   const sunDown=typeof atmoClock==='function'?atmoClock(G.time).day<0.35:false;
@@ -397,7 +401,7 @@ function renaissanceFrame(t,dt){
   for(const u of units){
     if(u.dead||!u.mesh)continue;
     const close=high&&u.mesh.visible&&Math.hypot(u.x-cam.x,u.z-cam.z)<range &&
-      activeUnits<Math.min(RENAISSANCE.unitLimit,G.coarse?28:70);
+      activeUnits<Math.min(RENAISSANCE.unitLimit,G.coarse?9:70);
     if(renaissanceUnitClass(u)==='vehicle' && close){
       if(!u.renVehicle&&RENAISSANCE.rigs<RENAISSANCE.unitLimit){
         u.renVehicle=renaissanceVehicleRig(u);RENAISSANCE.rigs++;
@@ -431,7 +435,7 @@ function renaissanceFrame(t,dt){
   for(const b of blds){
     if(b.dead||!b.mesh)continue;
     const close=high&&b.done&&b.mesh.visible&&Math.hypot(b.x-cam.x,b.z-cam.z)<facadeRange
-      &&activeBuildings<Math.min(RENAISSANCE.buildingLimit,G.coarse?22:44);
+      &&activeBuildings<Math.min(RENAISSANCE.buildingLimit,G.coarse?8:44);
     if(close){
       const era=teams[b.team]&&teams[b.team].era;
       if(b.renFacade&&b.renFacade.era!==era)renaissanceRemove(b);

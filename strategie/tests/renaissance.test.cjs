@@ -95,3 +95,13 @@ test('distant rigs can be evicted and visual budget reused without touching simu
  assert.equal(run('renaissanceOutOfRange(e,100)'),true);
  assert.equal(run("G.speed=2;RENAISSANCE.rigs=92;G.speed"),2);
 });
+
+test('tablet auto mode keeps a small detailed foreground; explicit low hides it',()=>{
+ const {run}=make();
+ run("G.coarse=true;CITY_ART={quality:'auto'};cityArtQuality=()=> 'low'");
+ assert.equal(run('renaissanceDetail()'),true);
+ run("CITY_ART.quality='low'");
+ assert.equal(run('renaissanceDetail()'),false);
+ run("CITY_ART.quality='auto';RENAISSANCE.enabled=false");
+ assert.equal(run('renaissanceDetail()'),false);
+});
