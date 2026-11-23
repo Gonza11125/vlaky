@@ -35,7 +35,7 @@ function renaissancePose(kind,t,id,working,moving,attack,hit){
   const work=working?Math.sin(phase)*0.78:0;
   const fight=attack&&working ? Math.sin(phase*1.23)*1.05 : 0;
   return {
-    leftLeg:stride,rightLeg:-stride,
+    leftLeg:moving?stride:0,rightLeg:moving?-stride:0,
     leftArm:working? -work*0.55-fight*0.35 : -stride*0.78,
     rightArm:working? work+fight : stride*0.78,
     bodyLean:working?(kind==='gather'?0.25:kind==='farm'?0.33:0.13):moving?0.08:0.018*Math.sin(phase),

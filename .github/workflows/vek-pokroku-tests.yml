@@ -50,3 +50,18 @@ jobs:
         run: python strategie/tests/browser_smoke.py
       - name: Test economy and two-player synchronization in Chromium
         run: python strategie/tests/economy_browser.py
+
+  renaissance-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install --disable-pip-version-check 'playwright==1.56.0'
+          python -m playwright install chromium
+      - name: Test Věk pokroku 2.2.0 graphical rigs directly
+        run: python strategie/tests/renaissance_browser.py
