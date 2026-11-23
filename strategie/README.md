@@ -6,8 +6,28 @@ Výběrem jiného čísla se načte jeho vlastní HTML a JavaScript, nejen jiné
 Tlačítko **Verze hry** v horní liště dovoluje změnu i během hraní.
 Před přepnutím se hra proti počítači uloží; hru po síti přepnutí ukončí.
 
-V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0**, **1.7.1**, **1.8.0**, **1.9.0**, **1.10.0**, **2.0.0** a **2.1.0**. Nový hráč dostane nejnovější
+V nabídce jsou **1.0.1**, **1.0.2**, **1.1.0**, **1.2.0**, **1.3.0**, **1.4.0**, **1.5.0**, **1.6.0**, **1.7.0**, **1.7.1**, **1.8.0**, **1.9.0**, **1.10.0**, **2.0.0**, **2.1.0** a **2.2.0**. Nový hráč dostane nejnovější
 vydání; dřívější volba se zachovává. Novinky jsou v [CHANGELOG.md](CHANGELOG.md).
+
+## Novinky ve 2.2.0 – Grafická renesance
+
+Grafika má novou volitelnou procedurální vrstvu v modulu `renaissance.js`.
+Pěší jednotky v blízkosti kamery dostávají model s oddělenými rameny,
+nohama, hlavou, oblečením a vybavením; mají různé animace pro chůzi, práci,
+boj, zranění a stání. Jezdci mají pohyblivé kopyto, ocas a plášť; vozy
+a obléhací stroje pohyblivé doplňky. Dokončené stavby získávají detaily
+fasád, okna, okenice, prapory, kouř, žár a viditelné poškození.
+
+V panelu **Město → Grafická renesance** lze obě novinky zapnout či
+vypnout, nastavení se pamatují v prohlížeči. Vzdálené objekty používají
+původní úsporné modely, detailní modely mají horní limit počtu současně
+zobrazených objektů. **Úsporná grafika** se i nadále hodí pro iPad;
+pro největší vizuální rozdíl ručně nastav **Detailní**.
+
+Toto vydání nemění žádnou herní ekonomiku, pohyb jednotek ani bojové
+výpočty. Uložení, kampaň a spolupráce více hráčů z 2.1.0 zůstávají
+zachované. Pokročilé animace jsou stylizované procedurální modely,
+nikoli ručně modelované a pohybově snímané postavy.
 
 ## Novinky ve 2.1.0 – Spolu i proti sobě
 

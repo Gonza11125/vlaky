@@ -61,6 +61,14 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn('frontier.js', release.game_files_for_html(
             (old / 'index.html').read_text(encoding='utf-8')))
 
+    def test_renaissance_module_is_versioned_without_modifying_2_1(self):
+        newest = self.root / 'versions' / '2.2.0'
+        latest_html = (newest / 'index.html').read_text(encoding='utf-8')
+        self.assertIn('renaissance.js', release.game_files_for_html(latest_html))
+        self.assertTrue((newest / 'renaissance.js').is_file())
+        old_html = (self.root / 'versions' / '2.1.0' / 'index.html').read_text(encoding='utf-8')
+        self.assertNotIn('renaissance.js', release.game_files_for_html(old_html))
+
     def test_version_numbers_compare_numerically(self):
         major = max(release.version_tuple(r['id'])[0] for r in release.read_releases(self.root)) + 1
         release.publish(self.root, str(major) + '.0.9')

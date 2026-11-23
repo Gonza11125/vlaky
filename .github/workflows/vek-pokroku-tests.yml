@@ -44,6 +44,8 @@ jobs:
         run: python strategie/tests/atmosphere_browser.py
       - name: Test Věk pokroku 1.7.0 world, bridges and expeditions in Chromium
         run: python strategie/tests/frontier_browser.py
+      - name: Test Věk pokroku 2.2.0 procedural 3D graphics in Chromium
+        run: python strategie/tests/renaissance_browser.py
       - name: Test game releases and save controls in Chromium
         run: python strategie/tests/browser_smoke.py
       - name: Test economy and two-player synchronization in Chromium

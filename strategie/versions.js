@@ -58,5 +58,9 @@ window.VEK_RELEASES = [
   {
     "id": "2.1.0",
     "description": "Spolu i proti sobě: spolupráce proti počítači, pozvánka odkazem, obnovení spojení a uložení síťové partie."
+  },
+  {
+    "id": "2.2.0",
+    "description": "Grafická renesance: nové procedurálně animované 3D postavy a profese, výzbroj, pláště, animace koní a vozů, detailní fasády a výrobní efekty, nastavení kvality pro iPad."
   }
 ];

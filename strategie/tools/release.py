@@ -11,7 +11,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = 'window.VEK_RELEASES = '
 GAME_FILES = ('data.js', 'world.js', 'game.js', 'net.js', 'ui.js')
-OPTIONAL_GAME_FILES = ('atmosphere.js', 'frontier.js', 'look.js', 'campaign.js')
+OPTIONAL_GAME_FILES = ('atmosphere.js', 'frontier.js', 'look.js', 'campaign.js', 'renaissance.js')
 
 
 def game_files_for_html(html):

@@ -555,6 +555,12 @@ function renderCity() {
   $('atmo-fps').textContent='FPS '+ATMOS.fps+' · atmosféra '+(atmoQuality()==='low'?'úsporná':'detailní');
   $('b-atmo-sound').textContent=ATMOS.sound?'Vypnout zvuk':'Zapnout zvuk';
   $('atmo-audio-hint').textContent=ATMOS.audioHint;
+  $('renaissance-enable').checked=RENAISSANCE.enabled;
+  $('renaissance-motion').checked=RENAISSANCE.motion;
+  $('renaissance-status').textContent=(renaissanceDetail()
+    ? 'Živé 3D modely aktivní: '+RENAISSANCE.stats.units+' postav, '+RENAISSANCE.stats.buildings+' detailních staveb.'
+    : 'Úsporné modely (pro živé modely vyber Detailní grafiku).')
+    +' Změny jsou pouze vizuální a ukládají se do tohoto prohlížeče.';
   $('city-art-quality').value = CITY_ART.quality;
   $('city-art-hint').textContent = 'Aktivní grafika: ' +
     (cityArtQuality() === 'low' ? 'úsporná' : 'detailní') +
@@ -592,6 +598,14 @@ $('b-city-maint').onclick = () => {
 };
 for (const select of document.querySelectorAll('[data-city-priority]'))
   select.onchange = () => act(['city', select.dataset.cityPriority, Number(select.value)]);
+$('renaissance-enable').onchange=()=>{
+  renaissanceSet('enabled',$('renaissance-enable').checked);
+  renderCity();
+};
+$('renaissance-motion').onchange=()=>{
+  renaissanceSet('motion',$('renaissance-motion').checked);
+  renderCity();
+};
 $('city-art-quality').onchange = () => {
   if (cityArtSetQuality($('city-art-quality').value)) {
     resize();
@@ -1001,14 +1015,15 @@ function frame(now) {
   for (const u of units) {
     const m = u.mesh, h = heightAt(u.x, u.z);
     if (u.team !== MY) m.visible = !!vis[cidx(cellOf(u.x), cellOf(u.z))];
-    const wm = u.sick > 0 ? sickMat : unitMat; if (m.material !== wm) m.material = wm;
+    const wm = u.sick > 0 ? sickMat : unitMat; if (!(u.renRig&&u.renRig.group.visible) && m.material !== wm) m.material = wm;
     m.position.set(u.x, h + (u.moving ? Math.abs(Math.sin(t * 9 + u.id)) * 0.13 : 0), u.z);
     let d = u.face - m.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); m.rotation.y += d * Math.min(1, dt * 12);
-    m.rotation.x = u.working && u.def.cls !== 'siege' && u.def.cls !== 'cav' ? Math.max(0, Math.sin(t * 7 + u.id)) * 0.28 : 0;
+    m.rotation.x = u.renRig&&u.renRig.group.visible ? 0 : u.working && u.def.cls !== 'siege' && u.def.cls !== 'cav' ? Math.max(0, Math.sin(t * 7 + u.id)) * 0.28 : 0;
   }
   cityArtAnimate(t, dt);
   frontierFrame();
   if (typeof lookFrame === 'function') lookFrame(dt);
+  renaissanceFrame(t,dt);
   if (typeof campaignFrame === 'function') campaignFrame();
   for (let i = markers.length - 1; i >= 0; i--) { const k = markers[i]; k.t -= dt; if (k.t <= 0) { scene.remove(k.m); markers.splice(i, 1); } else { k.m.scale.setScalar(0.4 + k.t * 1.6); k.m.material.opacity = k.t / 0.6; } }
   updateCamera();
@@ -1040,7 +1055,7 @@ function boot() {
   document.addEventListener('gesturestart', e => e.preventDefault());
   resize(); applySnow(0); snowShown = 0;
   addEventListener('resize', resize);
-  window.GAME = { G, teams, units, blds, cam, ATMOS };
+  window.GAME = { G, teams, units, blds, cam, ATMOS, RENAISSANCE };
   window.addEventListener('contextmenu', e => { if (placing) e.preventDefault(); });
   requestAnimationFrame(frame);
 }

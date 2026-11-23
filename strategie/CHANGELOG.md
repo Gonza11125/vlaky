@@ -1,5 +1,16 @@
 # Vydání Věku pokroku
 
+## 2.2.0 – Grafická renesance
+
+- **Nové detailní 3D postavy:** procedurálně sestavená kostra pěšáků a vesničanů (trup, krk a hlava, účes, pokrývky, oči, ruce, boty, opasek, plášť, barevné lemy podle hráče). Jednotlivé části se pohybují samostatně; kvalitnější model se zapíná pouze poblíž kamery.
+- **Pracovní a bojové animace:** chůze s protichůdným pohybem paží a nohou, přirozené drobné pohyby při stání, údery kladivem, seky, práce na poli, řemeslné pohyby, útok a reakce na zásah; zůstanou i krátkodobá těla padlých.
+- **Profese a vybavení:** nástroje vesničanů podle právě vykonávaného úkolu (kladivo, sekera, srp), bojové zbraně podle typu jednotky (luk, mušketová hlaveň, kopí, meč/sekera), přilba a štít u vybraných vojáků. Jde o vizuální vrstvu, vybavení nemění statistiky.
+- **Jezdci a vozy:** animovaný ocas koně, kopyta a plášť jezdce; pohybující se detaily kol a praporky u vozů a obléhacích strojů.
+- **Detailní fasády:** dodatečná architektura obytných a pracovních budov podle epochy: sokly, dveře, prosklená okna, okenice, okapy, střešní prvky, komíny, prapory a vybavení trhu. Změny denního světla, kouř, žár pece a jednoduché trhliny po poškození.
+- **Výkon a ovládání:** zapínání nové grafiky a animací v Město → Grafická renesance; automatický LOD podle vzdálenosti, limity počtu detailních postav a fasád, sdílené geometrie i materiály. Úsporná kvalita používá původní jednoduché modely, i na iPadu.
+- **Kompatibilita:** beze změny herních pravidel, map, herních příkazů, uložených partií a multiplayeru. Nové volby grafiky se ukládají pouze lokálně. Samostatné vydání má vlastní soubory, starší verze zůstávají dostupné.
+- **Testy:** animace, grafická nastavení, životní cyklus objektů, zátěžové limity, obě herní varianty a mobilní rozložení v Chromiu.
+
 ## 2.1.0 – Spolu i proti sobě
 
 - **Spolupráce proti počítači:** při zakládání síťové hry jde vybrat „Spolu proti počítači“. Oba hráči ovládají jednu modrou osadu, počítač hraje za červené podle zvolené obtížnosti a agrese. Zprávy a varování dostávají oba.

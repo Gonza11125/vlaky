@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
-<title>Věk pokroku 2.1 – Spolu i proti sobě</title>
+<title>Věk pokroku – Grafická renesance 2.2.0</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Sans+3:wght@400;600;700&display=swap">
@@ -240,6 +240,12 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 .world-events { display:grid;gap:8px;margin:8px 0; } .world-event { background:var(--panel-2);border:1px solid var(--brass);border-radius:6px;padding:10px 12px; }
 .world-event p { margin:4px 0;color:var(--fg);font-size:13.5px; } .world-event.bad { border-color:#c8402f; }
 @media(max-width:680px) { .world-sites { grid-template-columns:1fr; }.world-summary { gap:4px; }.world-card{max-height:90dvh;} }
+
+/* 2.2.0 – ovládání grafické vrstvy pro tablet i počítač */
+.renaissance-options { display:flex;flex-direction:column;gap:9px;margin:10px 0 8px; }
+.renaissance-options label { display:flex;align-items:center;gap:9px;font-size:13px;line-height:1.45; }
+.renaissance-options input { accent-color:#d9b16d;min-width:21px;min-height:21px; }
+#renaissance-status {color:var(--dim);font-variant-numeric:tabular-nums;}
 </style>
 
 <div id="app">
@@ -288,7 +294,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
   <div class="overlay" id="start">
     <div class="card">
       <h1>Věk pokroku</h1>
-      <p class="lead"><b>Věk pokroku 2.1:</b> spolupráce proti počítači, pozvánka odkazem, obnovení spojení a uložení síťové partie. Kampaň o šesti misích a odznaky.</p>
+      <p class="lead"><b>Grafická renesance 2.2:</b> procedurálně animovaní lidé, propracované budovy, pracovní nástroje, reakce na zásahy a živější osada.</p>
       <p class="lead">Veď osadu od pazourku ke střelnému prachu. Pokrok tu nejde koupit zlatem: potřebuješ jídlo na zimu, rudu a dřevo do hutě a vědění, které se rodí pomalu.</p>
       <details class="how">
         <summary>Jak se hraje a ovládá</summary>
@@ -481,6 +487,13 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
         <p class="city-note">Volní obyvatelé chodí mezi domy a pracovišti. Stavby časem chátrají, ale samotné opotřebení je nezničí. Oprava potřebuje dřevo, u hradeb a věží kámen.</p>
         <div class="city-actions"><button class="pick" id="b-city-maint">Automatické opravy</button></div>
       </section>
+      <h2>Grafická renesance – 2.2.0</h2>
+      <p class="city-note">Nové 3D postavy se samostatnými končetinami, profesními nástroji, výzbrojí a pracovními či bojovými pohyby. Domy, sklady, tržiště a dílny mají nové fasády, okna, vývěsní štíty, drobné animace a známky poškození. Při přiblížení se načítá detailní vzhled, v dálce zůstávají úsporné modely.</p>
+      <div class="renaissance-options">
+        <label><input type="checkbox" id="renaissance-enable" checked> Vylepšené modely postav a budov</label>
+        <label><input type="checkbox" id="renaissance-motion" checked> Animace chůze, práce, boje a detailů staveb</label>
+      </div>
+      <p class="city-note" id="renaissance-status"></p>
       <h2>Grafika a výkon – Živé město II</h2>
       <p class="city-note">V obou režimech jsou podrobnější budovy, lešení během stavby, animace práce, pohyblivá mlýnská kola a doplňky osady. Vizuální nastavení neovlivňuje ekonomiku ani obtížnost.</p>
       <label class="city-quality-label" for="city-art-quality">Kvalita vykreslování
@@ -569,6 +582,7 @@ details.how { margin: 4px 0 6px; } details.how summary { cursor: pointer; color:
 <script src="atmosphere.js"></script>
 <script src="frontier.js"></script>
 <script src="look.js"></script>
+<script src="renaissance.js"></script>
 <script src="campaign.js"></script>
 <script src="net.js"></script>
 <script src="ui.js"></script>

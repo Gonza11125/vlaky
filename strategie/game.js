@@ -284,6 +284,10 @@ function cityArtAnimate(now,dt) {
   let count=0;
   for (const u of units) {
     if (u.dead || u.type!=='vil' || !u.mesh) continue;
+    if(u.renRig && u.renRig.group.visible) {
+      if(u.art)u.art.left.visible=u.art.right.visible=u.art.pack.visible=false;
+      continue;
+    }
     const distance=Math.hypot(u.x-cam.x,u.z-cam.z);
     if (!u.art && distance<range && count<(low?32:80)) cityArtCreateWorker(u);
     if (!u.art) continue;
@@ -870,7 +874,10 @@ function finishBuilding(b) {
   if (!b.def.line) say(b.team, b.def.name + ' – stavba dokončena.');
 }
 function killEnt(e, by) {
-  if (e.dead) return; e.dead = true; byId.delete(e.id); scene.remove(e.mesh);
+  if (e.dead) return;
+  if (typeof renaissanceDeath === 'function') renaissanceDeath(e);
+  if (typeof renaissanceRemove === 'function') renaissanceRemove(e);
+  e.dead = true; byId.delete(e.id); scene.remove(e.mesh);
   const T = teams[e.team];
   if (e.isU) { T.pop--; T.stats.lost++; if (by) teams[by.team].stats.kills++; }
   else {
@@ -1627,6 +1634,7 @@ function checkVictory() {
 function endGame(loser, reason) { if (G.over) return; G.over = true; G.loser = loser; G.endReason = reason || 'Sídlo bylo zničeno.'; G.paused = true; showEnd(loser !== MY); }
 
 function resetWorld() {
+  if (typeof renaissanceClear === 'function') renaissanceClear();
   atmoReset();
   if(typeof frontierReset==='function')frontierReset();
   for (const c of [...scene.children]) if (c.isMesh) scene.remove(c);
